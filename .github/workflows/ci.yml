@@ -3,13 +3,22 @@ name: CI
 on:
   push:
   pull_request:
+  workflow_dispatch:
 
 permissions:
   contents: read
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   backend:
+    name: Backend checks
     runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      DOCKET_DATABASE_URL: sqlite:///${{ runner.temp }}/docket-ci.db
     defaults:
       run:
         working-directory: backend
@@ -54,7 +63,9 @@ jobs:
           PY
 
   frontend:
+    name: Frontend checks
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     defaults:
       run:
         working-directory: frontend
