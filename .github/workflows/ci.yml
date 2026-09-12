@@ -18,7 +18,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     env:
-      DOCKET_DATABASE_URL: sqlite:///${{ runner.temp }}/docket-ci.db
+      DOCKET_DATABASE_URL: sqlite:////tmp/docket-ci.db
     defaults:
       run:
         working-directory: backend
