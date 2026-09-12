@@ -105,7 +105,29 @@ npm run lint
 npm run build
 ```
 
-CI runs these checks, an API/CORS smoke check, and a Strands SDK import check.
+## GitHub Actions
+
+[CI workflow](.github/workflows/ci.yml) runs automatically after every push and
+when a pull request is opened, updated, or reopened. A local commit alone does
+not reach GitHub; push it to start the checks. You can also run CI manually from
+**Actions → CI → Run workflow** once this workflow is on the default branch.
+
+Two jobs run in parallel:
+
+- **Backend checks:** Ruff, Python unit tests, SQLite migration upgrade/check/
+  downgrade/upgrade, API/CORS smoke checks, and Strands SDK import.
+- **Frontend checks:** clean dependency installation, ESLint, TypeScript checks,
+  and the production Vite build. Frontend behavior tests have not been added yet.
+
+Each job has a 10-minute timeout. New updates cancel obsolete runs for the same
+event and branch. CI uses a temporary SQLite database; Firecrawl calls are mocked
+in tests, so no API keys or AWS credentials are required.
+
+Results appear under **Actions → CI** and in a pull request's **Checks** tab.
+A failed check marks the run red. Requiring successful checks before merging is
+a separate repository branch-protection setting; this workflow does not enable it.
+
+Deployment is not configured in this workflow.
 
 ## Working together
 
