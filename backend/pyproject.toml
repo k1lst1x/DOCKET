@@ -19,7 +19,7 @@ postgres = [
 ]
 
 [dependency-groups]
-dev = ["ruff>=0.15,<0.16", "httpx>=0.28,<0.29"]
+dev = ["ruff>=0.15,<0.17", "httpx>=0.28,<0.29"]
 
 [tool.ruff]
 target-version = "py312"
