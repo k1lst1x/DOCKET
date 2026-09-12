@@ -29,7 +29,7 @@ SQLite connection/session infrastructure and Alembic migrations are configured.
 | --- | --- |
 | Backend | Python **3.12**, FastAPI **0.141.1**, Pydantic Settings, Uvicorn |
 | Frontend | Next.js **15.5** (App Router), React **19.3.0**, TypeScript **5.9**, Tailwind **3.4** |
-| Hosting | AWS Amplify Hosting (`amplify.yml`, app root `frontend`) |
+| Hosting | GitHub Pages static demo; AWS Amplify configuration also available |
 | JavaScript runtime | Node.js **24 LTS**, npm |
 | Database | SQLite initially; SQLAlchemy 2.0 + Alembic; PostgreSQL driver optional |
 | Python tooling | uv, Ruff |
@@ -52,7 +52,7 @@ backend/                 Python API and future agent implementation
   app/db/                SQLAlchemy base and request sessions
   migrations/            Alembic schema migrations
   app/agents/            Reserved for Strands workflows
-frontend/                Next.js web application (deployed by Amplify Hosting)
+frontend/                Next.js web application
   src/                   Frontend implementation
   package-lock.json      Reproducible npm dependencies
 docs/                    Shared architecture and integration notes
@@ -128,8 +128,10 @@ Results appear under **Actions → CI** and in a pull request's **Checks** tab.
 A failed check marks the run red. Requiring successful checks before merging is
 a separate repository branch-protection setting; this workflow does not enable it.
 
-Deployment is not part of this workflow. AWS Amplify Hosting builds and deploys
-the web app from [`amplify.yml`](amplify.yml) on every push to `main`.
+On `main`, CI deploys a static frontend to GitHub Pages after both check jobs pass.
+First select **Settings → Pages → Source: GitHub Actions** in the repository.
+See [frontend deployment instructions](frontend/README.md#github-pages).
+The existing `amplify.yml` remains available for server-capable AWS hosting.
 
 ## Working together
 

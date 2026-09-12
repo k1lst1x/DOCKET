@@ -176,3 +176,6 @@ next-env.d.ts
 *.sqlite-*
 *.sqlite3
 *.sqlite3-*
+
+# Next.js static export
+/frontend/out/
