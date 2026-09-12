@@ -18,10 +18,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     env:
-<<<<<<< Updated upstream
-=======
       # The runner context is not available at job level; use an absolute /tmp path.
->>>>>>> Stashed changes
       DOCKET_DATABASE_URL: sqlite:////tmp/docket-ci.db
     defaults:
       run:
