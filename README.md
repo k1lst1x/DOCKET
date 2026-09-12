@@ -18,10 +18,13 @@ The planned Strands agent will monitor public city records in the background,
 process new meetings and decisions, identify affected neighborhoods, and prepare
 updates with evidence. This agent workflow is central to the hackathon build.
 
-**Current state:** development scaffold only. The Next.js web app and FastAPI health
-endpoint run independently. Neighborhoods, places, voting, ingestion, AI analysis,
-authentication, product data models, and the autonomous agent are not implemented yet.
-SQLite connection/session infrastructure and Alembic migrations are configured.
+**Current state:** the web app's public side is built: address lookup (US Census
+geocoder), group directory, public group pages with boundary maps, and a join flow with
+magic-link sign-in. Group boundaries are the City of Fremont's official neighborhood
+areas; groups, agenda items, votes and reading stats are **sample data** until the
+reading agent writes real records. Voting, the member feed, the Clerk, and the
+autonomous agent are not implemented yet. The FastAPI app still serves only its health
+endpoint, with SQLite sessions and Alembic migrations configured.
 
 ## Stack
 
@@ -29,7 +32,7 @@ SQLite connection/session infrastructure and Alembic migrations are configured.
 | --- | --- |
 | Backend | Python **3.12**, FastAPI **0.141.1**, Pydantic Settings, Uvicorn |
 | Frontend | Next.js **15.5** (App Router), React **19.3.0**, TypeScript **5.9**, Tailwind **3.4** |
-| Hosting | GitHub Pages static demo; AWS Amplify configuration also available |
+| Hosting | AWS Amplify Hosting (`amplify.yml`, app root `frontend`) |
 | JavaScript runtime | Node.js **24 LTS**, npm |
 | Database | SQLite initially; SQLAlchemy 2.0 + Alembic; PostgreSQL driver optional |
 | Python tooling | uv, Ruff |
@@ -128,10 +131,9 @@ Results appear under **Actions → CI** and in a pull request's **Checks** tab.
 A failed check marks the run red. Requiring successful checks before merging is
 a separate repository branch-protection setting; this workflow does not enable it.
 
-On `main`, CI deploys a static frontend to GitHub Pages after both check jobs pass.
-First select **Settings → Pages → Source: GitHub Actions** in the repository.
-See [frontend deployment instructions](frontend/README.md#github-pages).
-The existing `amplify.yml` remains available for server-capable AWS hosting.
+Deployment is not part of this workflow. The web app needs a server (route
+handlers, cookies, request-time lookups), so it is not a static export: AWS Amplify
+Hosting builds and deploys it from [`amplify.yml`](amplify.yml) on every push to `main`.
 
 ## Working together
 

@@ -1,3 +1,133 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    @apply bg-canvas font-sans text-base text-ink antialiased;
+  }
+
+  h1,
+  h2,
+  h3 {
+    text-wrap: balance;
+  }
+
+  ::selection {
+    background: #b3d6f6;
+    color: #262626;
+  }
+
+  :focus-visible {
+    outline: 3px solid #262626;
+    outline-offset: 2px;
+  }
+
+  /* Keep focus visible on dark fills and the sky gradient. */
+  .on-dark:focus-visible,
+  .btn-primary:focus-visible,
+  .btn-danger:focus-visible {
+    outline-color: #262626;
+    box-shadow: 0 0 0 2px #ffffff;
+  }
+}
+
+@layer components {
+  .skip-link {
+    @apply absolute left-4 top-3 z-50 -translate-y-24 rounded bg-ink px-4 py-2 font-semibold text-white;
+  }
+  .skip-link:focus {
+    @apply translate-y-0;
+  }
+
+  .page {
+    @apply mx-auto w-full max-w-page px-4 sm:px-6;
+  }
+
+  .btn {
+    @apply inline-flex h-12 items-center justify-center gap-2 whitespace-nowrap rounded px-6 text-base font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-60;
+  }
+  .btn-primary {
+    @apply bg-ink text-white hover:bg-black;
+  }
+  .btn-secondary {
+    @apply border border-ink bg-white text-ink hover:bg-sky-mist;
+  }
+  .btn-danger {
+    @apply bg-signal text-white hover:bg-[#8F1E18];
+  }
+  .btn-danger-outline {
+    @apply border border-signal bg-white text-signal hover:bg-signal-wash;
+  }
+
+  .link {
+    @apply font-semibold text-ink underline decoration-ink/40 underline-offset-4 hover:decoration-ink;
+  }
+
+  .field {
+    @apply block h-12 w-full rounded border border-field bg-white px-4 text-base text-ink placeholder:text-ink-muted;
+  }
+  .field:focus-visible {
+    outline-offset: 0;
+    border-color: #262626;
+  }
+
+  .label {
+    @apply mb-2 block text-base font-semibold text-ink;
+  }
+
+  .eyebrow {
+    @apply text-sm font-semibold uppercase tracking-[0.08em] text-ink-muted;
+  }
+
+  .display {
+    @apply font-serif font-semibold tracking-[-0.02em] text-ink;
+    font-variation-settings: "opsz" 60;
+  }
+
+  /* Briefs and letters are reading material. */
+  .reading {
+    @apply font-serif text-[1.0625rem] leading-[1.75] text-ink;
+    font-variation-settings: "opsz" 18;
+  }
+
+  .card {
+    @apply rounded-lg border border-rule bg-white;
+  }
+}
+
+/* Leaflet: quiet the base map so boundaries and the pin carry the meaning. */
+.docket-tiles {
+  filter: saturate(0.55) brightness(1.04);
+}
+.docket-pin span {
+  display: block;
+  width: 22px;
+  height: 22px;
+  border-radius: 9999px;
+  background: #b3261e;
+  border: 3px solid #ffffff;
+  box-shadow: 0 0 0 2px #262626;
+}
+.leaflet-container {
+  font-family: var(--font-sans), system-ui, sans-serif;
+  font-size: 0.875rem;
+  background: #eef5fa;
+}
+.leaflet-container a {
+  color: #262626;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

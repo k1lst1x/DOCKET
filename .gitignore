@@ -160,6 +160,8 @@ cython_debug/
 #.idea/
 
 # Frontend and local configuration
+# The Python template above ignores lib/; the web app keeps source there.
+!frontend/src/lib/
 node_modules/
 .next/
 next-env.d.ts
