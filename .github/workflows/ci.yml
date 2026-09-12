@@ -106,7 +106,26 @@ jobs:
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
+    outputs:
+      page_url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - name: Deploy static frontend
         id: deployment
         uses: actions/deploy-pages@v4
+
+  pages-smoke-test:
+    name: Verify deployed Pages site
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    needs: deploy-pages
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check published homepage
+        env:
+          PAGES_URL: ${{ needs.deploy-pages.outputs.page_url }}
+        run: |
+          test -n "$PAGES_URL"
+          curl --fail --silent --show-error --location \
+            --retry 5 --retry-delay 5 --retry-all-errors \
+            "$PAGES_URL" \
+            | grep -q "Docket"
