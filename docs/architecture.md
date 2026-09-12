@@ -4,7 +4,7 @@
 
 ```mermaid
 flowchart LR
-  Developer --> UI[React + TypeScript / localhost:5173]
+  Developer --> UI[Next.js + TypeScript / localhost:3000]
   Developer --> API[FastAPI / localhost:8000]
   API --> Health[GET /api/v1/health]
   API --> Schema[Swagger and OpenAPI]
@@ -46,8 +46,9 @@ not a working autonomous pipeline.
 - Current contract: `GET /health` under that prefix returns HTTP 200 with
   `{"status":"ok","service":"docket-api"}`.
 - Source of truth for implemented endpoints: FastAPI's `/openapi.json`.
-- Frontend development origin: `http://localhost:5173`.
-- Reserved frontend environment variable: `VITE_API_BASE_URL`.
+- Frontend development origin: `http://localhost:3000` (Next.js). Calls from Next.js
+  server code to the API are server-to-server and do not depend on CORS.
+- Reserved server-only web environment variable: `API_BASE_URL`.
 - Before implementing resource endpoints, agree on identifiers, pagination,
   error responses, timestamps, and source attribution. No product schemas are
   frozen in this scaffold.
