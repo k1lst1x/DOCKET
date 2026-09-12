@@ -28,7 +28,8 @@ SQLite connection/session infrastructure and Alembic migrations are configured.
 | Component | Choice |
 | --- | --- |
 | Backend | Python **3.12**, FastAPI **0.141.1**, Pydantic Settings, Uvicorn |
-| Frontend | React **19.3.0**, TypeScript **5.9**, Vite **8.3.0** |
+| Frontend | Next.js **15.5** (App Router), React **19.3.0**, TypeScript **5.9**, Tailwind **3.4** |
+| Hosting | AWS Amplify Hosting (`amplify.yml`, app root `frontend`) |
 | JavaScript runtime | Node.js **24 LTS**, npm |
 | Database | SQLite initially; SQLAlchemy 2.0 + Alembic; PostgreSQL driver optional |
 | Python tooling | uv, Ruff |
@@ -65,11 +66,11 @@ Install Node.js 24 (with nvm, run `nvm install` and `nvm use` in `frontend/`).
 ```bash
 cd frontend
 npm ci
-cp .env.example .env
+cp .env.example .env.local
 npm run dev
 ```
 
-Open http://localhost:5173. **The backend is not required** to work on the UI.
+Open http://localhost:3000. **The backend is not required** to work on the UI.
 See [frontend instructions](frontend/README.md).
 
 ## Start the backend

@@ -1,39 +1,25 @@
-# DOCKET frontend
+# DOCKET web
 
-React + TypeScript + Vite. Use Node.js 24 LTS (`.nvmrc`).
+Next.js 15 (App Router) + TypeScript + Tailwind. Deployed with AWS Amplify Hosting
+using `amplify.yml` at the repository root (app root `frontend`).
 
 ```bash
-nvm install
-nvm use
 npm ci
-cp .env.example .env
+cp .env.example .env.local
 npm run dev
 ```
 
-If you don't use nvm, install Node.js 24 with your preferred runtime manager.
-The development URL is http://localhost:5173. The port is fixed to match the API's
-local CORS configuration. A busy port produces an error rather than silently changing it.
+The development URL is http://localhost:3000.
 
 ## Commands
 
 - `npm run dev`: development server with hot reload.
 - `npm run typecheck`: strict TypeScript checks.
-- `npm run lint`: ESLint, including React Hooks rules.
-- `npm run build`: TypeScript checks and production output in `dist/`.
-- `npm run preview`: local preview of a completed build; not a production server.
+- `npm run lint`: ESLint with the Next.js rules.
+- `npm run build`: production build in `.next/`.
+- `npm run start`: serve a completed build.
 
-## Handoff
+## Environment
 
-Start in `src/App.tsx`; global styles are in `src/index.css`. The starter intentionally
-has no backend calls. You can build UI without Python, a database, or AWS credentials.
-Add feature components and clearly labeled mock fixtures as needed. Product routes,
-UI libraries, and state management can be chosen as screens take shape.
-
-The `.env.example` reserves `VITE_API_BASE_URL=http://localhost:8000/api/v1` for later
-integration. Access it via `import.meta.env.VITE_API_BASE_URL` when adding an API
-client. Restart Vite after changing environment variables. `VITE_*` values are
-public browser configuration and must never contain credentials.
-
-Coordinate schemas with the backend developer using `/openapi.json`. Planned
-areas are neighborhoods, places, meetings, legislation, analysis, and community
-votes. These are product areas, not existing API endpoints.
+See `.env.example`. All variables are server-only; nothing is exposed to the browser
+unless it is prefixed `NEXT_PUBLIC_`, and no secret may ever use that prefix.

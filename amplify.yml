@@ -1,0 +1,24 @@
+version: 1
+applications:
+  - appRoot: frontend
+    frontend:
+      phases:
+        preBuild:
+          commands:
+            - nvm install 22
+            - nvm use 22
+            - npm ci
+        build:
+          commands:
+            # Amplify console variables are build-time only; copy the ones the
+            # Next.js server needs at runtime into .env.production.
+            - env | grep -E '^(DEMO|SESSION_SECRET|APP_URL)=' >> .env.production || true
+            - npm run build
+      artifacts:
+        baseDirectory: .next
+        files:
+          - '**/*'
+      cache:
+        paths:
+          - .next/cache/**/*
+          - node_modules/**/*
