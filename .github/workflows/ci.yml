@@ -23,6 +23,13 @@ jobs:
       - run: uv sync --locked --extra agent
       - run: uv run ruff check .
       - run: uv run ruff format --check .
+      - run: uv run python -m unittest discover -s tests
+      - name: SQLite migration checks
+        run: |
+          uv run alembic upgrade head
+          uv run alembic check
+          uv run alembic downgrade base
+          uv run alembic upgrade head
       - name: API and SDK smoke check
         run: |
           uv run python - <<'PY'

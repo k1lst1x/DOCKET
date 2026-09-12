@@ -19,7 +19,7 @@ authentication, voting rules, and agent execution. API credentials stay server-s
 ```mermaid
 flowchart LR
   Records[Public city records] --> Agent[Scheduled Strands agent]
-  Agent --> Store[(Persistence / technology TBD)]
+  Agent --> Store[(SQLite / SQLAlchemy)]
   Store --> API[FastAPI]
   API --> UI[Neighborhood React app]
   UI --> Votes[Community opinions]
@@ -32,7 +32,11 @@ source-linked analyses. Pros and cons should distinguish claims in sources from
 model inference. Adopted law, proposals, official votes, and community opinions
 must remain distinct. Uncertain items should surface for review.
 
-Background execution, database selection, authentication, and deployment (including
+SQLite is selected for initial storage, with SQLAlchemy sessions and Alembic
+migrations configured. PostgreSQL is a future option; changing the connection URL
+does not transfer existing data. Product tables are not implemented yet.
+
+Background execution, authentication, and deployment (including
 possible AgentCore Runtime) are later decisions. This diagram describes intent,
 not a working autonomous pipeline.
 

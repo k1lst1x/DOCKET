@@ -20,7 +20,8 @@ updates with evidence. This agent workflow is central to the hackathon build.
 
 **Current state:** development scaffold only. The React starter and FastAPI health
 endpoint run independently. Neighborhoods, places, voting, ingestion, AI analysis,
-authentication, persistence, and the autonomous agent are not implemented yet.
+authentication, product data models, and the autonomous agent are not implemented yet.
+SQLite connection/session infrastructure and Alembic migrations are configured.
 
 ## Stack
 
@@ -29,6 +30,7 @@ authentication, persistence, and the autonomous agent are not implemented yet.
 | Backend | Python **3.12**, FastAPI **0.141.1**, Pydantic Settings, Uvicorn |
 | Frontend | React **19.3.0**, TypeScript **5.9**, Vite **8.3.0** |
 | JavaScript runtime | Node.js **24 LTS**, npm |
+| Database | SQLite initially; SQLAlchemy 2.0 + Alembic; PostgreSQL driver optional |
 | Python tooling | uv, Ruff |
 | Agent SDK | Strands Agents **1.55.1** (optional `agent` extra) |
 | License | [MIT](LICENSE) |
@@ -46,6 +48,8 @@ See the official [FastAPI version policy](https://fastapi.tiangolo.com/deploymen
 backend/                 Python API and future agent implementation
   app/api/               HTTP routes and API response schemas
   app/core/              Application configuration
+  app/db/                SQLAlchemy base and request sessions
+  migrations/            Alembic schema migrations
   app/agents/            Reserved for Strands workflows
 frontend/                Standalone React application
   src/                   Frontend implementation
@@ -77,6 +81,7 @@ Install [uv](https://docs.astral.sh/uv/getting-started/installation/) first.
 cd backend
 uv sync --locked
 cp .env.example .env
+uv run alembic upgrade head
 uv run uvicorn app.main:app --reload --port 8000
 ```
 
@@ -84,8 +89,8 @@ uv run uvicorn app.main:app --reload --port 8000
 - Interactive API docs: http://localhost:8000/docs
 - OpenAPI schema: http://localhost:8000/openapi.json
 
-See [backend instructions](backend/README.md). No database or AWS credentials are
-needed for the scaffold.
+See [backend instructions](backend/README.md). SQLite is a local `backend/docket.db` file; no separate database server or AWS
+credentials are needed for the scaffold.
 
 ## Checks
 
@@ -93,6 +98,7 @@ needed for the scaffold.
 # From backend/
 uv run ruff check .
 uv run ruff format --check .
+uv run python -m unittest discover -s tests
 
 # From frontend/
 npm run lint

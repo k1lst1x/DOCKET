@@ -5,6 +5,7 @@ Python 3.12 + FastAPI, with uv for dependency management.
 ```bash
 uv sync --locked
 cp .env.example .env
+uv run alembic upgrade head
 uv run uvicorn app.main:app --reload --port 8000
 ```
 
@@ -22,7 +23,7 @@ This is process health only, not a database or AWS readiness probe. Swagger UI i
 at `/docs`, and the generated API schema is at `/openapi.json`.
 
 Add HTTP routes under `app/api/` and include them in `app/api/router.py`. Keep
-configuration under `app/core/`. Product services and persistence will be added
+configuration under `app/core/`. Product services and data models will be added
 when their contracts are agreed.
 
 `DOCKET_CORS_ORIGINS` is a JSON array of allowed frontend origins, configured in
@@ -45,7 +46,51 @@ introduced with that workflow. Never commit AWS credentials.
 ```bash
 uv run ruff check .
 uv run ruff format --check .
+uv run python -m unittest discover -s tests
 ```
 
 Add dependencies with `uv add <package>` (or `uv add --dev <package>`), and commit
 both `pyproject.toml` and `uv.lock`.
+
+## Database
+
+SQLite is the initial database. `DOCKET_DATABASE_URL=sqlite:///./docket.db` creates
+`backend/docket.db` when commands run from `backend/`. The file and SQLite journals
+are ignored by Git. No database server is required. Use an absolute SQLite URL if
+you need to run commands from another directory.
+
+SQLAlchemy provides the shared `Base` in `app/db/base.py` and `SessionDep` in
+`app/db/session.py`. Use `SessionDep` in synchronous routes; explicitly call
+`session.commit()` after successful writes. The dependency closes the session and
+rolls back uncommitted changes. SQLite foreign keys are enabled on every connection.
+The application disposes its engine on shutdown and does not create tables on startup.
+
+Alembic owns schema changes. The baseline only initializes migration history;
+there are no product tables yet. After defining models, import them in
+`app/db/__init__.py` so Alembic discovers their metadata, then run:
+
+```bash
+uv run alembic revision --autogenerate -m "add neighborhood models"
+# Review the generated migration before applying it.
+uv run alembic upgrade head
+uv run alembic current
+```
+
+SQLite migrations use Alembic batch mode for table alterations. Give CHECK
+constraints explicit names to match the shared metadata naming convention.
+See [Alembic batch migrations](https://alembic.sqlalchemy.org/en/latest/batch.html).
+
+### Later: PostgreSQL
+
+```bash
+uv sync --locked --extra postgres
+# Set DOCKET_DATABASE_URL in .env to your PostgreSQL connection URL, e.g.:
+# postgresql+psycopg://docket:password@localhost:5432/docket
+uv run alembic upgrade head
+```
+
+Use portable SQLAlchemy types and queries when adding models. Changing the URL
+and applying migrations creates the schema in the target database; it does **not**
+copy SQLite data. A real switch also requires a data transfer and verification of
+queries and migrations against PostgreSQL. PostgreSQL execution has not been tested
+in this scaffold.
