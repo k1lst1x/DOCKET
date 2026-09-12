@@ -1,0 +1,63 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+          cache-dependency-glob: backend/uv.lock
+      - run: uv python install 3.12
+      - run: uv sync --locked --extra agent
+      - run: uv run ruff check .
+      - run: uv run ruff format --check .
+      - name: API and SDK smoke check
+        run: |
+          uv run python - <<'PY'
+          from fastapi.testclient import TestClient
+          from strands import Agent
+          from app.main import app
+          with TestClient(app) as client:
+              response = client.get('/api/v1/health')
+              assert response.status_code == 200
+              assert response.json() == {'status': 'ok', 'service': 'docket-api'}
+              assert '/api/v1/health' in client.get('/openapi.json').json()['paths']
+              allowed = client.options('/api/v1/health', headers={
+                  'Origin': 'http://localhost:5173',
+                  'Access-Control-Request-Method': 'GET',
+              })
+              assert allowed.headers['access-control-allow-origin'] == 'http://localhost:5173'
+              denied = client.options('/api/v1/health', headers={
+                  'Origin': 'https://untrusted.example',
+                  'Access-Control-Request-Method': 'GET',
+              })
+              assert 'access-control-allow-origin' not in denied.headers
+          PY
+
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: frontend/.nvmrc
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run build
