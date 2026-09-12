@@ -6,8 +6,14 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   poweredByHeader: false,
   reactStrictMode: true,
+<<<<<<< Updated upstream
   // Pin tracing to this app so stray lockfiles in parent folders are ignored.
   outputFileTracingRoot: path.join(__dirname),
+=======
+  images: {
+    remotePatterns: [],
+  },
+>>>>>>> Stashed changes
 };
 
 export default nextConfig;
