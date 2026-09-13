@@ -71,6 +71,7 @@ class Citation:
     title: str
     locator: str
     url: str
+    date: str | None = None  # the document's Fremont date (meeting or post date), ISO; None when undated
 
 
 @dataclass
@@ -260,7 +261,11 @@ def finalize(question: str, raw_answer: str, turn: TurnEvidence) -> ChatResponse
     citations = []
     for ref in remaining:
         item = turn.by_ref[ref]
-        citations.append(Citation(number[ref], item.chunk_id, item.title, item.locator, item.url))
+        citations.append(
+            Citation(
+                number[ref], item.chunk_id, item.title, item.locator, item.url, item.local_date() or None
+            )
+        )
     return ChatResponse(
         answer=text,
         cited_chunk_ids=[citation.chunk_id for citation in citations],
