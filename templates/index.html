@@ -1,0 +1,203 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Place Finder</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIINfQvG6wR8w8Jc6KHdS6M0W5VY6pPqgZg=" crossorigin="">
+    <style>
+      :root { color-scheme: light; font-family: Arial, sans-serif; }
+      body { margin: 0; min-height: 100vh; background: #f4f7fb; color: #1f2937; }
+      main { max-width: 720px; margin: 0 auto; padding: 64px 20px; }
+      h1 { margin: 0 0 8px; font-size: 2rem; }
+      .intro { color: #5b6472; margin: 0 0 28px; }
+      .search-wrap { position: relative; }
+      form { display: flex; gap: 10px; }
+      input { flex: 1; min-width: 0; padding: 13px 14px; border: 1px solid #cbd5e1; border-radius: 8px; font: inherit; }
+      button { padding: 13px 18px; border: 0; border-radius: 8px; background: #2563eb; color: #fff; font: inherit; cursor: pointer; }
+      button:hover { background: #1d4ed8; }
+      button:disabled { background: #93a4bd; cursor: wait; }
+      #suggestions { position: absolute; z-index: 1000; top: calc(100% + 4px); left: 0; right: 94px; margin: 0; padding: 4px 0; list-style: none; background: #fff; border: 1px solid #cbd5e1; border-radius: 8px; box-shadow: 0 5px 12px #0f172a24; }
+      #suggestions:empty { display: none; }
+      .suggestion { display: block; width: 100%; padding: 10px 13px; border: 0; background: #fff; color: #1f2937; text-align: left; font: inherit; cursor: pointer; }
+      .suggestion:hover, .suggestion:focus { background: #eff6ff; color: #1d4ed8; }
+      .secondary { display: block; margin-top: 3px; color: #64748b; font-size: .85rem; }
+      #message { min-height: 24px; margin: 20px 0 10px; color: #5b6472; }
+      .error { color: #b42318 !important; }
+      .card { margin: 12px 0; padding: 18px; background: #fff; border: 1px solid #dbe3ee; border-radius: 10px; box-shadow: 0 1px 2px #0f172a0d; }
+      .card h2 { margin: 0 0 8px; font-size: 1.1rem; }
+      .card p { margin: 6px 0; line-height: 1.5; }
+      .label { color: #64748b; font-weight: 600; }
+      a { color: #1d4ed8; }
+      #map { height: 350px; margin: 24px 0; border: 1px solid #dbe3ee; border-radius: 10px; }
+      .attribution { margin: -16px 0 20px; color: #64748b; font-size: .8rem; }
+      @media (max-width: 480px) { form { flex-direction: column; } button { width: 100%; } }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Place Finder</h1>
+      <p class="intro">Type a place name or address, such as “Stanford University.”</p>
+      <div class="search-wrap">
+        <form id="search-form">
+          <input id="query" name="q" type="search" placeholder="Search for a location" autocomplete="off" required autofocus aria-autocomplete="list" aria-controls="suggestions">
+          <button id="submit-button" type="submit">Search</button>
+        </form>
+        <ul id="suggestions" role="listbox"></ul>
+      </div>
+      <p id="message" aria-live="polite"></p>
+      <div id="map" aria-label="Map of search results"></div>
+      <p class="attribution">Map data © OpenStreetMap contributors</p>
+      <section id="results" aria-live="polite"></section>
+    </main>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+    <script>
+      const form = document.querySelector('#search-form');
+      const input = document.querySelector('#query');
+      const button = document.querySelector('#submit-button');
+      const message = document.querySelector('#message');
+      const results = document.querySelector('#results');
+      const suggestionsList = document.querySelector('#suggestions');
+      const map = L.map('map').setView([20, 0], 2);
+      const markers = L.featureGroup().addTo(map);
+      let autocompleteTimer;
+
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 19,
+        attribution: '© OpenStreetMap contributors'
+      }).addTo(map);
+
+      function addText(element, label, value) {
+        if (value === null || value === undefined || value === '') return;
+        const paragraph = document.createElement('p');
+        const labelElement = document.createElement('span');
+        labelElement.className = 'label';
+        labelElement.textContent = `${label}: `;
+        paragraph.append(labelElement, document.createTextNode(value));
+        element.append(paragraph);
+      }
+
+      function renderPlaces(places) {
+        results.replaceChildren();
+        markers.clearLayers();
+        const positions = [];
+        for (const place of places) {
+          const card = document.createElement('article');
+          card.className = 'card';
+          const title = document.createElement('h2');
+          title.textContent = place.name || 'Unnamed place';
+          card.append(title);
+          addText(card, 'Address', place.address);
+          addText(card, 'Place ID', place.place_id);
+          if (place.latitude != null && place.longitude != null) {
+            addText(card, 'Coordinates', `${place.latitude}, ${place.longitude}`);
+            const popup = document.createElement('div');
+            const popupTitle = document.createElement('strong');
+            popupTitle.textContent = place.name || 'Location';
+            popup.append(popupTitle, document.createElement('br'), document.createTextNode(place.address || ''));
+            const marker = L.marker([place.latitude, place.longitude]).bindPopup(popup);
+            markers.addLayer(marker);
+            positions.push([place.latitude, place.longitude]);
+          }
+          if (place.google_maps_url) {
+            const link = document.createElement('a');
+            link.href = place.google_maps_url;
+            link.target = '_blank';
+            link.rel = 'noopener noreferrer';
+            link.textContent = 'Open in Google Maps';
+            card.append(link);
+          }
+          results.append(card);
+        }
+        if (positions.length === 1) {
+          map.setView(positions[0], 15);
+          markers.getLayers()[0].openPopup();
+        } else if (positions.length > 1) {
+          map.fitBounds(markers.getBounds(), { padding: [30, 30] });
+        }
+      }
+
+      function clearSuggestions() {
+        suggestionsList.replaceChildren();
+      }
+
+      function showSuggestions(suggestions) {
+        clearSuggestions();
+        for (const suggestion of suggestions) {
+          const item = document.createElement('li');
+          const suggestionButton = document.createElement('button');
+          suggestionButton.type = 'button';
+          suggestionButton.className = 'suggestion';
+          suggestionButton.setAttribute('role', 'option');
+          suggestionButton.textContent = suggestion.primary_text || suggestion.text;
+          if (suggestion.secondary_text) {
+            const secondary = document.createElement('span');
+            secondary.className = 'secondary';
+            secondary.textContent = suggestion.secondary_text;
+            suggestionButton.append(secondary);
+          }
+          suggestionButton.addEventListener('click', () => {
+            input.value = suggestion.text;
+            clearSuggestions();
+            form.requestSubmit();
+          });
+          item.append(suggestionButton);
+          suggestionsList.append(item);
+        }
+      }
+
+      input.addEventListener('input', () => {
+        clearTimeout(autocompleteTimer);
+        const query = input.value.trim();
+        if (query.length < 2) {
+          clearSuggestions();
+          return;
+        }
+        autocompleteTimer = setTimeout(async () => {
+          try {
+            const response = await fetch(`/places/autocomplete?q=${encodeURIComponent(query)}`);
+            const data = await response.json();
+            if (response.ok && input.value.trim() === query) showSuggestions(data.suggestions);
+          } catch (_) {
+            clearSuggestions();
+          }
+        }, 300);
+      });
+
+      input.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape') clearSuggestions();
+      });
+
+      document.addEventListener('click', (event) => {
+        if (!event.target.closest('.search-wrap')) clearSuggestions();
+      });
+
+      form.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        const query = input.value.trim();
+        if (!query) return;
+        button.disabled = true;
+        clearSuggestions();
+        results.replaceChildren();
+        message.className = '';
+        message.textContent = 'Searching…';
+        try {
+          const response = await fetch(`/places/search?q=${encodeURIComponent(query)}`);
+          const data = await response.json();
+          if (!response.ok) throw new Error(data.error || 'Search failed.');
+          if (data.count === 0) {
+            message.textContent = 'No matching places found. Try a more specific name.';
+            return;
+          }
+          message.textContent = `${data.count} result${data.count === 1 ? '' : 's'} found`;
+          renderPlaces(data.places);
+        } catch (error) {
+          message.className = 'error';
+          message.textContent = error.message;
+        } finally {
+          button.disabled = false;
+        }
+      });
+    </script>
+  </body>
+</html>
