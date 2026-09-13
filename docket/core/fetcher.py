@@ -7,6 +7,7 @@ mode only; stealth proxies are never used.
 """
 
 import hashlib
+import logging
 import time
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -18,6 +19,8 @@ from firecrawl import Firecrawl
 from firecrawl.v2.types import PDFParser
 
 from core import settings
+
+log = logging.getLogger("docket.fetcher")
 
 MIN_INTERVAL_S = 0.5  # at most 2 requests per second per host
 ROBOTS_AGENT = settings.USER_AGENT.split("/", 1)[0]
@@ -100,18 +103,28 @@ class Fetcher:
         if key in self._robots:
             return self._robots[key]
         artifact = None
+        last_error: Exception | None = None
         for attempt in range(3):  # one transient failure should not drop a whole source
             try:
                 artifact = self._get(origin + "/robots.txt", fetcher, None, None, send_user_agent)
                 break
-            except Exception:
+            except Exception as error:
+                last_error = error
                 if attempt < 2:
                     time.sleep(10)
         if artifact is None:
             # RFC 9309: an unreachable robots.txt means assume complete disallow.
+            log.warning(
+                "robots.txt unreachable for %s via %s after 3 attempts, disallowing all: %s: %s",
+                origin,
+                fetcher,
+                type(last_error).__name__,
+                str(last_error)[:200],
+            )
             rules = RobotsRules(None, disallow_all=True)
         else:
             if artifact.status is not None and artifact.status >= 500:
+                log.warning("robots.txt for %s returned %s, disallowing all", origin, artifact.status)
                 rules = RobotsRules(None, disallow_all=True)
             elif artifact.status is None or artifact.status >= 400:
                 rules = RobotsRules(None)  # RFC 9309: unavailable (4xx) means no restrictions
