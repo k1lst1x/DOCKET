@@ -106,7 +106,9 @@ def ingest_ref(conn, fetcher: Fetcher, vectors, s3, source: Source, ref: Documen
         pieces = chunk_pages(pages) if pages else chunk_markdown(text)
     embedded = []
     for piece in pieces:
-        vector, token_count = embed_text(piece.text)
+        # The title and locator give short chunks (a member card, one agenda row) retrievable
+        # context; the stored chunk text itself stays verbatim.
+        vector, token_count = embed_text(f"{ref.title}\n{piece.locator}\n\n{piece.text}")
         embedded.append(EmbeddedChunk(piece.ordinal, piece.text, piece.locator, token_count, vector))
 
     published_at = ref.published_at.replace(tzinfo=FREMONT_TZ) if ref.published_at else None

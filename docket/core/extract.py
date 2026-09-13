@@ -25,9 +25,29 @@ MEETING_PICKER_LINE = re.compile(
 )
 
 
+# Google Translate's widget sometimes renders these lines and sometimes does not, which would
+# change the content hash of an otherwise identical page.
+TRANSLATE_WIDGET_LINE = re.compile(
+    r"^\s*(?:Original text|Rate this translation|"
+    r"Your feedback will be used to help improve Google Translate)\s*$",
+    re.MULTILINE,
+)
+
+
+IQM2_NAV_END = "Print This Page"
+IQM2_FOOTER = "**Shortcut Keys:**"
+
+
 def document_text(artifact: Artifact) -> str:
     if artifact.text is not None:
-        text = artifact.text
+        text = TRANSLATE_WIDGET_LINE.sub("", artifact.text)
+        if "«Back to Main Site" in text and IQM2_NAV_END in text:
+            # IQM2 meeting page: drop the portal navigation above the meeting header and the
+            # keyboard-shortcut help and language list below the agenda.
+            text = text[text.index(IQM2_NAV_END) + len(IQM2_NAV_END) :]
+            footer = text.find(IQM2_FOOTER)
+            if footer != -1:
+                text = text[:footer]
         if MEETING_PICKER_LINE.search(text):
             # Simbli meeting page: drop the picker and the navigation above the meeting title (H1).
             text = MEETING_PICKER_LINE.sub("", text)

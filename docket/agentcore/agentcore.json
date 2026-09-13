@@ -1,0 +1,67 @@
+{
+  "$schema": "https://schema.agentcore.aws.dev/v1/agentcore.json",
+  "name": "docket",
+  "version": 1,
+  "managedBy": "CDK",
+  "tags": {
+    "agentcore:created-by": "agentcore-cli",
+    "agentcore:project-name": "docket"
+  },
+  "runtimes": [
+    {
+      "name": "docket_chat",
+      "description": "Resident chat agent for Fremont. Read-only retrieval tools; answers only from cited, scraped sources.",
+      "build": "CodeZip",
+      "entrypoint": "agentcore_chat.py",
+      "codeLocation": "./",
+      "runtimeVersion": "PYTHON_3_11",
+      "networkMode": "PUBLIC",
+      "protocol": "HTTP",
+      "instrumentation": { "enableOtel": true },
+      "envVars": [
+        { "name": "BEDROCK_MODEL_ID", "value": "openai.gpt-oss-120b-1:0" },
+        { "name": "EMBED_MODEL_ID", "value": "amazon.titan-embed-text-v2:0" },
+        { "name": "DSQL_ENDPOINT", "value": "arucmxa62xrerk4vt7b2kveetu.dsql.us-west-2.on.aws" },
+        { "name": "S3_VECTORS_BUCKET", "value": "docket-vectors-465083445156" },
+        { "name": "S3_VECTORS_INDEX", "value": "docket-chunks" },
+        { "name": "PYTHONUTF8", "value": "1" }
+      ],
+      "additionalPolicies": ["agentcore/policies/docket-chat.json"]
+    },
+    {
+      "name": "docket_pipeline",
+      "description": "Fremont ingestion and generation pipeline: crawl, extract, chunk, embed and store; verified outputs.",
+      "build": "CodeZip",
+      "entrypoint": "agentcore_pipeline.py",
+      "codeLocation": "./",
+      "runtimeVersion": "PYTHON_3_11",
+      "networkMode": "PUBLIC",
+      "protocol": "HTTP",
+      "instrumentation": { "enableOtel": true },
+      "envVars": [
+        { "name": "BEDROCK_MODEL_ID", "value": "openai.gpt-oss-120b-1:0" },
+        { "name": "EMBED_MODEL_ID", "value": "amazon.titan-embed-text-v2:0" },
+        { "name": "DSQL_ENDPOINT", "value": "arucmxa62xrerk4vt7b2kveetu.dsql.us-west-2.on.aws" },
+        { "name": "S3_BUCKET", "value": "docket-raw-465083445156-us-west-2" },
+        { "name": "S3_VECTORS_BUCKET", "value": "docket-vectors-465083445156" },
+        { "name": "S3_VECTORS_INDEX", "value": "docket-chunks" },
+        { "name": "FIRECRAWL_SECRET_ID", "value": "docket/firecrawl" },
+        { "name": "PYTHONUTF8", "value": "1" }
+      ],
+      "additionalPolicies": ["agentcore/policies/docket-pipeline.json"]
+    }
+  ],
+  "memories": [],
+  "knowledgeBases": [],
+  "credentials": [],
+  "evaluators": [],
+  "onlineEvalConfigs": [],
+  "agentCoreGateways": [],
+  "policyEngines": [],
+  "configBundles": [],
+  "abTests": [],
+  "harnesses": [],
+  "datasets": [],
+  "capacityProviders": [],
+  "payments": []
+}

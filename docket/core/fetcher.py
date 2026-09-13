@@ -67,11 +67,8 @@ class Fetcher:
         self._http = httpx.Client(
             headers={"User-Agent": settings.USER_AGENT}, timeout=60.0, follow_redirects=True
         )
-        self._firecrawl = (
-            Firecrawl(api_key=settings.FIRECRAWL_API_KEY, timeout=120, max_retries=0)
-            if settings.FIRECRAWL_API_KEY
-            else None
-        )
+        key = settings.firecrawl_api_key()
+        self._firecrawl = Firecrawl(api_key=key, timeout=120, max_retries=0) if key else None
         self._last_request: dict[str, float] = {}
         self._robots: dict[tuple[str, str, bool], RobotsRules] = {}
 

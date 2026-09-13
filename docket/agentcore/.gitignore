@@ -1,0 +1,19 @@
+# Secrets (local environment files are never committed)
+.env.local
+
+# CDK Build Artifacts
+cdk/cdk.out/
+cdk/node_modules/
+
+# Runtime code packages and dependency staging built by `agentcore package` / `agentcore deploy`
+*.zip
+*/staging/
+
+# CLI Internals
+.cli/*
+
+# Ephemeral Staging
+.cache/*
+
+# Exception: Commit the State
+!.cli/deployed-state.json

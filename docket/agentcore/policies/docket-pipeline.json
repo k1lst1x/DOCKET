@@ -1,0 +1,47 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "InvokeReasoningAndEmbeddingModels",
+      "Effect": "Allow",
+      "Action": ["bedrock:InvokeModel", "bedrock:InvokeModelWithResponseStream"],
+      "Resource": [
+        "arn:aws:bedrock:us-west-2::foundation-model/openai.gpt-oss-120b-1:0",
+        "arn:aws:bedrock:us-west-2::foundation-model/amazon.titan-embed-text-v2:0",
+        "arn:aws:bedrock:us-west-2:465083445156:inference-profile/us.openai.gpt-5.6-luna",
+        "arn:aws:bedrock:*::foundation-model/openai.gpt-5.6-luna"
+      ]
+    },
+    {
+      "Sid": "ConnectToSharedDsqlCluster",
+      "Effect": "Allow",
+      "Action": ["dsql:DbConnectAdmin"],
+      "Resource": ["arn:aws:dsql:us-west-2:465083445156:cluster/arucmxa62xrerk4vt7b2kveetu"]
+    },
+    {
+      "Sid": "ReadWriteChunkVectors",
+      "Effect": "Allow",
+      "Action": [
+        "s3vectors:QueryVectors",
+        "s3vectors:GetVectors",
+        "s3vectors:PutVectors",
+        "s3vectors:DeleteVectors"
+      ],
+      "Resource": [
+        "arn:aws:s3vectors:us-west-2:465083445156:bucket/docket-vectors-465083445156/index/docket-chunks"
+      ]
+    },
+    {
+      "Sid": "StoreRawOriginals",
+      "Effect": "Allow",
+      "Action": ["s3:PutObject"],
+      "Resource": ["arn:aws:s3:::docket-raw-465083445156-us-west-2/raw/*"]
+    },
+    {
+      "Sid": "ReadFirecrawlKey",
+      "Effect": "Allow",
+      "Action": ["secretsmanager:GetSecretValue"],
+      "Resource": ["arn:aws:secretsmanager:us-west-2:465083445156:secret:docket/firecrawl-*"]
+    }
+  ]
+}
