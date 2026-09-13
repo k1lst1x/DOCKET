@@ -167,7 +167,7 @@ export function ChatPanel({ variant, onClose, autoFocus = false }: ChatPanelProp
           <h2 id={titleId} className="text-base font-semibold leading-tight text-ink">
             Docket assistant
           </h2>
-          <p className="text-sm text-ink-muted">Preview · not connected yet</p>
+          <p className="text-sm text-ink-muted">Answers from Fremont city documents</p>
         </div>
         {onClose ? (
           <button
