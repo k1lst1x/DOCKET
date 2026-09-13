@@ -79,11 +79,16 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
       - run: npm ci
       - run: npm run lint
+      - run: npm run test
       - run: npm run build
 
       - name: Prepare static Pages landing
         if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
-        run: cp -R pages-landing out-pages
+        run: |
+          cp -R pages-landing out-pages
+          test -f out-pages/index.html
+          test -f out-pages/app.js
+          test -f out-pages/styles.css
       - name: Upload Pages artifact
         if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
         uses: actions/upload-pages-artifact@v3
