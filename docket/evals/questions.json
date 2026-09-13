@@ -1,0 +1,91 @@
+{
+  "answerable": [
+    {
+      "question": "How much Bridge Preventive Maintenance Program grant funding did the City Council accept for the Citywide Bridge Preventive Maintenance Project?",
+      "expect": "$2,384,313"
+    },
+    {
+      "question": "Which company did the City Council authorize an Indefeasible Right of Use Agreement with for the Last Mile Broadband Project?",
+      "expect": "Astound Broadband LLC"
+    },
+    {
+      "question": "Which site did the City Council rezone from Regional Commercial to Tech Industrial in July 2026?",
+      "expect": "43800 Osgood Road"
+    },
+    {
+      "question": "In the July 14, 2026 City Council minutes, which company was approved for the multi-year purchase order for trash can liners?",
+      "expect": "Unipak Corporation"
+    },
+    {
+      "question": "How much additional funding was appropriated in the Alameda County Health Fund for Point and Housing Resource Center services?",
+      "expect": "$200,438"
+    },
+    {
+      "question": "Who was appointed Fremont's Vice Mayor for July 2026 through March 2027?",
+      "expect": "appointed Councilmember Liu as the Vice Mayor"
+    },
+    {
+      "question": "What is the not-to-exceed amount of the crossing guard services agreement the City Council approved in July 2026?",
+      "expect": "$619,542"
+    },
+    {
+      "question": "How much did the City Council appropriate to mitigate impacts from the MHSA to BHSA transition?",
+      "expect": "$805,122"
+    },
+    {
+      "question": "What is the planning record number for the Warm Springs Court street vacation?",
+      "expect": "PLN2024-00163"
+    },
+    {
+      "question": "What did the City Council decide about a City charter at its July 28, 2026 special meeting?",
+      "expect": "defer consideration of a City charter to a future election"
+    },
+    {
+      "question": "Which company is named on the September 1, 2026 City Council agenda for the trash can liner purchase order?",
+      "expect": "Wardley Industrial Inc."
+    },
+    {
+      "question": "What period does the Alameda Countywide Clean Water Program successor agreement on the September 8, 2026 City Council agenda cover?",
+      "expect": "July 2027 through June 2042"
+    },
+    {
+      "question": "What did Councilmember Keng's referral on the September 8, 2026 City Council agenda ask staff to analyze?",
+      "expect": "New Community Center in North Fremont District 1"
+    },
+    {
+      "question": "What did the September 8, 2026 City Council agenda include for the security information system renewal?",
+      "expect": "$396,000"
+    },
+    {
+      "question": "What does the Conflict of Interest Code item on the September 15, 2026 City Council agenda do?",
+      "expect": "Adopt a Resolution Updating the Conflict of Interest Code for the City of Fremont"
+    },
+    {
+      "question": "Where is the Fast Fill Market CUP amendment that the Planning Commission considered on July 23, 2026?",
+      "expect": "5505 Stevenson Boulevard"
+    },
+    {
+      "question": "How many units, and how many affordable units, were in the residential project the Planning Commission approved on May 28, 2026?",
+      "expect": "140-UNIT RESIDENTIAL PROJECT INCLUDING 21 ON-SITE AFFORDABLE UNITS"
+    },
+    {
+      "question": "When were City of Fremont offices closed for Labor Day in 2026?",
+      "expect": "closed Monday, September 7"
+    },
+    {
+      "question": "Which City-owned site does the Fremont-Decoto Land Development Plan redevelop?",
+      "expect": "4178–4268 Decoto Road"
+    },
+    {
+      "question": "What new notification service did the Fremont City Manager's Office launch?",
+      "expect": "new Nixle notification feed"
+    }
+  ],
+  "refusal": [
+    { "question": "What is the population of Fremont, California?" },
+    { "question": "In what year was the City of Fremont incorporated?" },
+    { "question": "What is the sales tax rate in Fremont?" },
+    { "question": "How do I appeal a parking ticket in Fremont?" },
+    { "question": "Which high school in Fremont has the best ranking?" }
+  ]
+}
