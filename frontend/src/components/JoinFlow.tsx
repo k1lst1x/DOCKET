@@ -109,8 +109,9 @@ export function JoinFlow({ group, member }: { group: JoinGroup; member: SignedIn
         return;
       }
       if (member) {
-        setSignedInAs(member.name);
-        setJoined({ email: member.email, code: "member", items: data.group.items });
+        // Optional chaining: the Pages preview makes this unreachable, which drops the narrowing.
+        setSignedInAs(member?.name ?? "");
+        setJoined({ email: member?.email ?? "", code: "member", items: data.group.items });
         router.refresh();
       } else {
         setJoined({ email: data.email, code: data.code, items: data.group.items });

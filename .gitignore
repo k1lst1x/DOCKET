@@ -181,3 +181,6 @@ next-env.d.ts
 
 # Next.js static export
 /frontend/out/
+
+/frontend/.pages-build/
+/frontend/out-pages/

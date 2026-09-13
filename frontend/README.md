@@ -70,7 +70,31 @@ Nobody has to confirm the code before reading a group's items.
 - Members and memberships are saved in Aurora DSQL (`db/migrations/0001_core.sql`,
   `src/lib/members.ts`) once a sign-in code is confirmed. Groups and agenda items
   shown on pages still come from the sample fixtures.
+- Issues, AI analyses, polls, votes and reviews live in DSQL (`src/lib/issues.ts`).
+  `scripts/dsql-seed.ts` loads sample issues and sample neighbors' votes and reviews,
+  all marked `is_sample` and labelled "Sample" in the issue dialog.
 - `src/data/fremont-neighborhoods.json`: all 32 areas of the City of Fremont
   Neighborhoods layer, seeded into the `neighborhoods` table.
 - Geocoding uses the free US Census geocoder. Sign-in codes are sent through Amazon
   SES; while the SES account is in the sandbox, codes only reach verified addresses.
+
+## GitHub Pages preview
+
+Run `npm run build:pages` to export the original Next.js frontend to `out-pages/`.
+The build copies `src/` into ignored `.pages-build/` and applies server-only route
+adapters there; shared components, fonts, illustrations, styles and fixtures are
+used directly. Do not create a separate HTML/CSS landing page. Changes made by
+the frontend team are included automatically on the next Pages build.
+
+The default base path is `/DOCKET`; set `PAGES_BASE_PATH` to override it. CI builds
+this preview on pull requests and publishes it after successful main checks.
+Pages has no API or session server: join submissions show an unavailable message
+instead of claiming an email was sent, sign-in shows a short notice, group pages
+render without member state, and issue dialogs can't load votes. Address lookup
+runs in the browser and uses the existing unavailable view if the Census service
+rejects the request. The regular `npm run build` remains the server build for Amplify.
+
+`scripts/build-pages.mjs` patches exact lines in app files (for example the
+`export const dynamic` lines on the group and join pages). If you change those
+lines, update the matching adapter or the Pages build fails with "Pages adapter
+needs updating".
