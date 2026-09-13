@@ -1,2 +1,4 @@
 # Auto detect text files and perform LF normalization
 * text=auto
+# Bash reads CR as part of each command, so shell scripts must stay LF on Windows checkouts.
+*.sh text eol=lf
