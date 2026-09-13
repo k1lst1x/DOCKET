@@ -1,5 +1,5 @@
 import { db } from "./db";
-import type { ClaimView, IssueActionErrorCode, IssueDetail, NeighborhoodShare, PollView, TrendPoint } from "./issue-types";
+import type { ClaimView, IssueActionErrorCode, IssueDetail, IssueMarker, NeighborhoodShare, PollView, TrendPoint } from "./issue-types";
 import { moderateText } from "./moderation";
 
 // Issue pages: AI analysis, polls, votes and reviews, all in Aurora DSQL.
@@ -288,6 +288,65 @@ export async function getIssueDetail(issueId: string, memberId: string | null): 
     sample: { issue: issue.is_sample, analysis: Boolean(issue.analysis_sample), activity: sampleVotes > 0 },
     live: true,
   };
+}
+
+/** Every public issue that has a location, with its stance vote totals, for the Places map. */
+export async function listIssueMarkers(): Promise<IssueMarker[]> {
+  const { rows } = await db().query<{
+    id: string;
+    ref: string;
+    title: string;
+    topic: string | null;
+    status: IssueDetail["status"];
+    deadline: Date | null;
+    deadline_kind: string | null;
+    location: { lat: number; lng: number; label: string } | null;
+    affected_radius_m: number | null;
+    neighborhood_slugs: string[] | null;
+    is_sample: boolean;
+    group_slug: string | null;
+    group_name: string | null;
+    support: number;
+    oppose: number;
+    passes: number;
+  }>(
+    `SELECT i.id, i.ref, i.title, i.topic, i.status, i.deadline, i.deadline_kind, i.location, i.affected_radius_m,
+            i.neighborhood_slugs, i.is_sample, i.group_slug, g.name AS group_name,
+            coalesce(t.support, 0) AS support, coalesce(t.oppose, 0) AS oppose, coalesce(t.passes, 0) AS passes
+     FROM issues i
+     LEFT JOIN groups g ON g.slug = i.group_slug
+     LEFT JOIN (
+       SELECT p.issue_id,
+              sum(CASE WHEN v.choice = 'support' THEN 1 ELSE 0 END)::int AS support,
+              sum(CASE WHEN v.choice = 'oppose' THEN 1 ELSE 0 END)::int AS oppose,
+              sum(CASE WHEN v.choice = 'pass' THEN 1 ELSE 0 END)::int AS passes
+       FROM polls p JOIN votes v ON v.poll_id = p.id
+       WHERE p.kind = 'stance'
+       GROUP BY p.issue_id
+     ) t ON t.issue_id = i.id
+     WHERE i.status IN ${PUBLIC_STATUSES} AND i.location IS NOT NULL
+     ORDER BY i.deadline NULLS LAST, i.id`,
+  );
+  return rows.flatMap((r) => {
+    const loc = r.location;
+    if (!loc || typeof loc.lat !== "number" || typeof loc.lng !== "number") return [];
+    const marker: IssueMarker = {
+      id: r.id,
+      ref: r.ref,
+      title: r.title,
+      topic: r.topic,
+      status: r.status,
+      deadline: iso(r.deadline),
+      deadlineKind: r.deadline_kind,
+      location: { lat: loc.lat, lng: loc.lng, label: loc.label ?? "" },
+      affectedRadiusM: r.affected_radius_m,
+      neighborhoods: r.neighborhood_slugs ?? [],
+      group: r.group_slug && r.group_name ? { slug: r.group_slug, name: r.group_name } : null,
+      votes: { support: Number(r.support), oppose: Number(r.oppose), pass: Number(r.passes) },
+      sample: r.is_sample,
+    };
+    return [marker];
+  });
 }
 
 export async function castVote(memberId: string, issueId: string, pollId: string, choice: string): Promise<void> {

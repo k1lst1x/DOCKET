@@ -91,6 +91,25 @@ export interface IssueDetail {
   live: boolean;
 }
 
+/** A public issue with a location, for the Places map. */
+export interface IssueMarker {
+  id: string;
+  ref: string;
+  title: string;
+  topic: string | null;
+  status: IssueDetail["status"];
+  deadline: string | null;
+  deadlineKind: string | null;
+  location: { lat: number; lng: number; label: string };
+  affectedRadiusM: number | null;
+  /** Neighborhood slugs the issue affects. */
+  neighborhoods: string[];
+  group: { slug: string; name: string } | null;
+  /** Stance vote totals; null when the database can't be reached. */
+  votes: { support: number; oppose: number; pass: number } | null;
+  sample: boolean;
+}
+
 export type IssueActionErrorCode =
   | "not_signed_in"
   | "not_found"

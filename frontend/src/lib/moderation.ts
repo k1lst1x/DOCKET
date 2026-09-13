@@ -84,6 +84,23 @@ const JOIN_ENDINGS = new Set(["", "s", "es", "ed", "er", "ers", "in", "ing", "y"
 /** Everyday words and names that contain a blocked term. */
 const ALLOWED_WORDS = ["scunthorpe", "shiitake", "shitake", "shitzu", "snigger", "niggard", "damnation", "bastardiz", "bastardis", "classclown"];
 
+/**
+ * Words with legitimate civic uses ("sex offender registry", "Nazi Germany", "rape kit backlog")
+ * that are blocked only when disguised ("s*x", "p0rn", "n@ked"): hiding a word shows intent.
+ */
+const DISGUISED_ONLY: Record<string, string[]> = {
+  sex: ["", "y", "ual", "ually", "t", "ting"],
+  porn: ["", "o", "os", "s", "y", "ography"],
+  nude: ["", "s"],
+  naked: [""],
+  horny: [""],
+  rape: ["", "d", "s"],
+  rapist: ["", "s"],
+  penis: ["", "es"],
+  vagina: ["", "s"],
+  nazi: ["", "s"],
+};
+
 /** Idioms and names that contain a whole-word term, matched on plain lowercase words. */
 const IDIOMS = [
   /\bchinks? in (?:the|his|her|their|its|our|my|your|an|a) armou?r\b/g,
@@ -165,14 +182,19 @@ interface Glyph {
   repeat: boolean;
   /** Length of the run of identical characters this one is in. */
   run: number;
+  /** A deliberate mask (*, #, a digit…) that may replace a word's first or last letter. */
+  edge: boolean;
 }
+
+// Periods, commas, question and exclamation marks end sentences ("Li Shi."), so they never count.
+const EDGE_MASKS = new Set(Array.from("*#%_~^0123456789@$+§€¢©"));
 
 function glyphs(word: string): Glyph[] {
   const out: Glyph[] = Array.from(word, (ch) => {
-    if (ch >= "a" && ch <= "z") return { ch, kind: LETTER, set: LETTER_SETS[ch] ?? ch, repeat: false, run: 1 };
-    if (LEET[ch]) return { ch, kind: SUBSTITUTE, set: LEET[ch], repeat: false, run: 1 };
-    if (ch === BREAK_CH || /\p{L}/u.test(ch)) return { ch, kind: BREAK, set: "", repeat: false, run: 1 };
-    return { ch, kind: MASK, set: "", repeat: false, run: 1 };
+    if (ch >= "a" && ch <= "z") return { ch, kind: LETTER, set: LETTER_SETS[ch] ?? ch, repeat: false, run: 1, edge: EDGE_MASKS.has(ch) };
+    if (LEET[ch]) return { ch, kind: SUBSTITUTE, set: LEET[ch], repeat: false, run: 1, edge: EDGE_MASKS.has(ch) };
+    if (ch === BREAK_CH || /\p{L}/u.test(ch)) return { ch, kind: BREAK, set: "", repeat: false, run: 1, edge: EDGE_MASKS.has(ch) };
+    return { ch, kind: MASK, set: "", repeat: false, run: 1, edge: EDGE_MASKS.has(ch) };
   });
   for (let i = 0; i < out.length; ) {
     let j = i;
@@ -194,45 +216,60 @@ const decodedLetters = (g: Glyph[]) => g.map((x) => (x.kind === LETTER ? x.ch : 
 
 let current = new Int16Array(64);
 let next = new Int16Array(64);
+let currentEdge = new Int16Array(64);
+let nextEdge = new Int16Array(64);
 
 /**
  * Where `pattern` finishes matching in `g` (exclusive glyph indices).
  * States track how many real letters (typed or leetspeak) matched so far: masks may stand in for
- * letters, but only between real ones, and at least 40% of the pattern (and 2 letters) must be real.
+ * letters between real ones, as long as at least 40% of the pattern (and 2 letters) is real.
+ * A deliberate mask may also replace the first or last letter of a 4+ letter word ("4uck", "fuc*"),
+ * but then every other letter must be real; those paths are tracked separately in the *Edge arrays.
  * Anchored matches start at the first glyph, skipping leading punctuation; stretched letters then
  * need a run of 3 ("asss") so everyday double letters ("cook", "woop") stay distinct.
  */
 function scan(g: Glyph[], pattern: string, anchored: boolean, firstOnly: boolean): number[] {
   const len = pattern.length;
   const need = Math.max(2, Math.ceil(len * 0.4));
+  const edgeAllowed = len >= 4;
   const ends: number[] = [];
   current.fill(-1, 0, len + 1);
+  currentEdge.fill(-1, 0, len + 1);
   current[0] = 0;
   for (let i = 0; i < g.length; i++) {
-    const { kind, set, repeat, run } = g[i];
+    const { kind, set, repeat, run, edge } = g[i];
     next.fill(-1, 0, len + 1);
+    nextEdge.fill(-1, 0, len + 1);
     if (!anchored || (current[0] >= 0 && kind !== LETTER && kind !== BREAK)) next[0] = 0;
     if (kind !== BREAK) {
       const stretch = repeat && (!anchored || run >= 3);
-      for (let j = 0; j <= len; j++) {
-        const real = current[j];
-        if (real < 0) continue;
-        // Masks, and leetspeak used as a mask ("f#@k"), may hide one letter or be ignored between real letters.
-        if (kind !== LETTER && j > 0 && j < len) {
-          if (real > next[j]) next[j] = real;
-          if (j + 1 < len && real > next[j + 1]) next[j + 1] = real;
-        }
-        if (kind !== MASK) {
-          if (j < len && set.includes(pattern[j]) && real + 1 > next[j + 1]) next[j + 1] = real + 1;
-          if (j > 0 && stretch && set.includes(pattern[j - 1]) && real > next[j]) next[j] = real;
+      for (const [from, to] of [
+        [current, next],
+        [currentEdge, nextEdge],
+      ]) {
+        for (let j = 0; j <= len; j++) {
+          const real = from[j];
+          if (real < 0) continue;
+          // Masks, and leetspeak used as a mask ("f#@k"), may hide one letter or be ignored between real letters.
+          if (kind !== LETTER && j > 0 && j < len) {
+            if (real > to[j]) to[j] = real;
+            if (j + 1 < len && real > to[j + 1]) to[j + 1] = real;
+          }
+          // A deliberate mask standing in for the first or last letter.
+          if (edgeAllowed && edge && j < len && (j === 0 || j + 1 === len) && real > nextEdge[j + 1]) nextEdge[j + 1] = real;
+          if (kind !== MASK) {
+            if (j < len && set.includes(pattern[j]) && real + 1 > to[j + 1]) to[j + 1] = real + 1;
+            if (j > 0 && stretch && set.includes(pattern[j - 1]) && real > to[j]) to[j] = real;
+          }
         }
       }
     }
-    if (next[len] >= need) {
+    if (next[len] >= need || nextEdge[len] >= len - 1) {
       ends.push(i + 1);
       if (firstOnly) return ends;
     }
     [current, next] = [next, current];
+    [currentEdge, nextEdge] = [nextEdge, currentEdge];
   }
   return ends;
 }
@@ -268,6 +305,23 @@ function splitFlagged(a: string, b: string, idiom: boolean): boolean {
   const boundary = Array.from(a).length;
   if (JOIN_ANYWHERE.some((p) => wholeWordMatch(g, p, JOIN_ENDINGS, boundary))) return true;
   return !idiom && JOIN_WHOLE.some((w) => wholeWordMatch(g, w.pattern, w.endings, boundary));
+}
+
+const DISGUISED_PATTERNS = Object.entries(DISGUISED_ONLY).map(([word, endings]) => ({ word, pattern: fold(word), endings: new Set(endings) }));
+
+/**
+ * A DISGUISED_ONLY word written in disguise. If the word appears as typed ("sex offender"), it's
+ * allowed; if it only matches after undoing masks, leetspeak, look-alikes or spacing, it isn't.
+ * Pass `boundary` to check two words joined together ("se x").
+ */
+function disguisedFlagged(raw: string, norm: string, boundary?: number): boolean {
+  const typed = raw.toLowerCase();
+  const g = glyphs(norm);
+  const parts = boundary === undefined ? norm.split(SEGMENT_SEPARATORS).filter(Boolean) : [];
+  const candidates = parts.length > 1 ? [g, ...parts.map(glyphs)] : [g];
+  return DISGUISED_PATTERNS.some(
+    ({ word, pattern, endings }) => !typed.includes(word) && candidates.some((c) => wholeWordMatch(c, pattern, endings, boundary ?? 0)),
+  );
 }
 
 const cache = new Map<string, boolean>();
@@ -340,7 +394,7 @@ export function moderateText(text: string): ModerationResult {
   }
 
   const prepared = units.map((u) => ({ ...u, norm: u.norm.replace(ALLOWED, BREAK_CH), number: isNumber(u.norm) }));
-  const flagged = prepared.map((u) => !u.number && cachedWordFlagged(u.norm, u.idiom));
+  const flagged = prepared.map((u) => !u.number && (cachedWordFlagged(u.norm, u.idiom) || disguisedFlagged(u.raw, u.norm)));
   prepared.forEach((u, i) => {
     if (flagged[i]) matches.add(u.raw);
   });
@@ -348,7 +402,8 @@ export function moderateText(text: string): ModerationResult {
     const a = prepared[i];
     const b = prepared[i + 1];
     if (a.number || b.number || flagged[i] || flagged[i + 1]) continue;
-    if (splitFlagged(a.norm, b.norm, a.idiom || b.idiom)) matches.add(`${a.raw} ${b.raw}`);
+    const joined = `${a.raw} ${b.raw}`;
+    if (splitFlagged(a.norm, b.norm, a.idiom || b.idiom) || disguisedFlagged(joined, a.norm + b.norm, Array.from(a.norm).length)) matches.add(joined);
   }
 
   // Quote "jack@ss" rather than "jack@ss.", keeping the word as typed.

@@ -1,7 +1,7 @@
 import { GROUP_SEEDS, ITEMS } from "@/data/fixtures";
 import { ISSUE_CONTENT } from "@/data/issue-content";
 import { sampleIssueId } from "./issue-ids";
-import type { IssueDetail } from "./issue-types";
+import type { IssueDetail, IssueMarker } from "./issue-types";
 
 const slugOf = (name: string) => name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
 
@@ -47,4 +47,30 @@ export function fallbackIssueDetail(issueId: string, signedIn: boolean): IssueDe
     sample: { issue: true, analysis: true, activity: false },
     live: false,
   };
+}
+
+/** Map pins for the saved sample issues, without vote totals, when the database or API isn't available. */
+export function fallbackIssueMarkers(): IssueMarker[] {
+  return ITEMS.flatMap((item) => {
+    if (item.status !== "watching" && item.status !== "approved") return [];
+    const content = ISSUE_CONTENT.find((c) => c.itemId === item.id);
+    if (!content) return [];
+    const group = GROUP_SEEDS.find((g) => g.slug === item.groupSlug) ?? null;
+    const marker: IssueMarker = {
+      id: sampleIssueId(item.ref),
+      ref: item.ref,
+      title: item.title,
+      topic: item.topic,
+      status: item.status,
+      deadline: item.deadline,
+      deadlineKind: item.deadlineKind,
+      location: content.location,
+      affectedRadiusM: content.affectedRadiusM,
+      neighborhoods: content.neighborhoods.map(slugOf),
+      group: group ? { slug: group.slug, name: group.name } : null,
+      votes: null,
+      sample: true,
+    };
+    return [marker];
+  }).sort((a, b) => Date.parse(a.deadline ?? "") - Date.parse(b.deadline ?? ""));
 }
