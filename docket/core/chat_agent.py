@@ -273,17 +273,24 @@ def finalize(question: str, raw_answer: str, turn: TurnEvidence) -> ChatResponse
     if LEGAL_QUESTION.search(question) and "not legal advice" not in text.lower():
         text = f"{text} {DISCLAIMER}"
 
-    # Evidence numbers count every chunk returned this turn ([13] is the 13th). Renumber what the answer
-    # cites to 1..n in order of first use, so markers match the numbered source list shown to residents.
-    number = {ref: position for position, ref in enumerate(remaining, 1)}
+    # Evidence numbers count every chunk returned this turn ([13] is the 13th), and several chunks can come
+    # from one document. Number what the answer cites 1..n by each document's first use, so markers match
+    # the source list shown to residents and one meeting never appears as two sources.
+    first_ref_of_document: dict[str, int] = {}
+    number: dict[int, int] = {}
+    for ref in remaining:
+        document = turn.by_ref[ref].document_id
+        first_ref_of_document.setdefault(document, ref)
+        number[ref] = list(first_ref_of_document).index(document) + 1
 
     def renumber(match: re.Match) -> str:
         cited = dict.fromkeys(number[int(n)] for n in match.group(1).split(","))
         return f"[{', '.join(str(n) for n in cited)}]"
 
     text = MARKER.sub(renumber, text)
+    text = re.sub(r"(\[\d+(?:, \d+)*\])(?:\s*\1)+", r"\1", text)  # "[1][1]" once two chunks share a document
     citations = []
-    for ref in remaining:
+    for ref in first_ref_of_document.values():
         item = turn.by_ref[ref]
         citations.append(
             Citation(
@@ -292,7 +299,7 @@ def finalize(question: str, raw_answer: str, turn: TurnEvidence) -> ChatResponse
         )
     return ChatResponse(
         answer=text,
-        cited_chunk_ids=[citation.chunk_id for citation in citations],
+        cited_chunk_ids=[turn.by_ref[ref].chunk_id for ref in remaining],
         citations=citations,
         refused=False,
         sources_searched=searched,
