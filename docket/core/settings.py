@@ -15,6 +15,10 @@ AWS_REGION = os.getenv("AWS_REGION", "us-west-2")
 BEDROCK_MODEL_ID = os.getenv("BEDROCK_MODEL_ID", "openai.gpt-oss-120b-1:0")
 EMBED_MODEL_ID = os.getenv("EMBED_MODEL_ID", "amazon.titan-embed-text-v2:0")
 EMBED_DIMENSIONS = 1024
+# Optional: run Bedrock model calls in another AWS account by assuming this IAM role there (see
+# core/bedrock_session.py). Unset means this account's own Bedrock access.
+BEDROCK_ROLE_ARN = os.getenv("BEDROCK_ROLE_ARN", "").strip()
+BEDROCK_EXTERNAL_ID = os.getenv("BEDROCK_EXTERNAL_ID", "").strip()
 
 FIRECRAWL_API_KEY = os.getenv("FIRECRAWL_API_KEY", "").strip()
 # Deployed runtimes read the key from AWS Secrets Manager instead of a plain environment variable.

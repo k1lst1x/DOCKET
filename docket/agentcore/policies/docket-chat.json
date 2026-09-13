@@ -4,7 +4,10 @@
     {
       "Sid": "InvokeReasoningAndEmbeddingModels",
       "Effect": "Allow",
-      "Action": ["bedrock:InvokeModel", "bedrock:InvokeModelWithResponseStream"],
+      "Action": [
+        "bedrock:InvokeModel",
+        "bedrock:InvokeModelWithResponseStream"
+      ],
       "Resource": [
         "arn:aws:bedrock:us-west-2::foundation-model/openai.gpt-oss-120b-1:0",
         "arn:aws:bedrock:us-west-2::foundation-model/amazon.titan-embed-text-v2:0",
@@ -15,15 +18,32 @@
     {
       "Sid": "ConnectToSharedDsqlCluster",
       "Effect": "Allow",
-      "Action": ["dsql:DbConnectAdmin"],
-      "Resource": ["arn:aws:dsql:us-west-2:465083445156:cluster/arucmxa62xrerk4vt7b2kveetu"]
+      "Action": [
+        "dsql:DbConnectAdmin"
+      ],
+      "Resource": [
+        "arn:aws:dsql:us-west-2:465083445156:cluster/arucmxa62xrerk4vt7b2kveetu"
+      ]
     },
     {
       "Sid": "ReadChunkVectors",
       "Effect": "Allow",
-      "Action": ["s3vectors:QueryVectors", "s3vectors:GetVectors"],
+      "Action": [
+        "s3vectors:QueryVectors",
+        "s3vectors:GetVectors"
+      ],
       "Resource": [
         "arn:aws:s3vectors:us-west-2:465083445156:bucket/docket-vectors-465083445156/index/docket-chunks"
+      ]
+    },
+    {
+      "Sid": "AssumeBedrockRoleInTeamAccount",
+      "Effect": "Allow",
+      "Action": [
+        "sts:AssumeRole"
+      ],
+      "Resource": [
+        "arn:aws:iam::*:role/DocketBedrockAccess"
       ]
     }
   ]

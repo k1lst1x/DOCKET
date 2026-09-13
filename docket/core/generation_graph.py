@@ -166,7 +166,9 @@ class CodeNode(MultiAgentBase):
 
 
 def _model() -> BedrockModel:
-    return BedrockModel(model_id=settings.BEDROCK_MODEL_ID, region_name=settings.AWS_REGION)
+    from core.bedrock_session import bedrock_session
+
+    return BedrockModel(model_id=settings.BEDROCK_MODEL_ID, boto_session=bedrock_session())
 
 
 def _select(refs: list[DocumentRef], max_docs: int) -> list[DocumentRef]:

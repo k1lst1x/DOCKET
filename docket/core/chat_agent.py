@@ -24,6 +24,7 @@ from strands.hooks import AfterToolCallEvent, HookProvider, HookRegistry
 from strands.models import BedrockModel
 
 from core import retrieval, settings
+from core.bedrock_session import bedrock_session
 from core.citations import STRONG_FACT_KINDS, enforce, extract_facts, split_sentences, supports_any
 from core.db import connect, run_with_retry
 from core.geo import geocode, neighborhood_at
@@ -496,7 +497,7 @@ def recite_request(removed: list[dict]) -> str:
 
 
 def _model() -> BedrockModel:
-    return BedrockModel(model_id=settings.BEDROCK_MODEL_ID, region_name=settings.AWS_REGION)
+    return BedrockModel(model_id=settings.BEDROCK_MODEL_ID, boto_session=bedrock_session())
 
 
 def is_general(raw_answer: str) -> bool:

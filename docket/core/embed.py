@@ -7,17 +7,17 @@ import json
 import time
 from functools import cache
 
-import boto3
 from botocore.exceptions import ClientError
 
 from core import settings
+from core.bedrock_session import bedrock_session
 
 RETRYABLE = {"ThrottlingException", "ServiceUnavailableException", "ModelNotReadyException"}
 
 
 @cache
 def _bedrock():
-    return boto3.client("bedrock-runtime", region_name=settings.AWS_REGION)
+    return bedrock_session().client("bedrock-runtime")
 
 
 def embed_text(text: str, attempts: int = 5) -> tuple[list[float], int]:

@@ -4,7 +4,10 @@
     {
       "Sid": "InvokeReasoningAndEmbeddingModels",
       "Effect": "Allow",
-      "Action": ["bedrock:InvokeModel", "bedrock:InvokeModelWithResponseStream"],
+      "Action": [
+        "bedrock:InvokeModel",
+        "bedrock:InvokeModelWithResponseStream"
+      ],
       "Resource": [
         "arn:aws:bedrock:us-west-2::foundation-model/openai.gpt-oss-120b-1:0",
         "arn:aws:bedrock:us-west-2::foundation-model/amazon.titan-embed-text-v2:0",
@@ -15,8 +18,12 @@
     {
       "Sid": "ConnectToSharedDsqlCluster",
       "Effect": "Allow",
-      "Action": ["dsql:DbConnectAdmin"],
-      "Resource": ["arn:aws:dsql:us-west-2:465083445156:cluster/arucmxa62xrerk4vt7b2kveetu"]
+      "Action": [
+        "dsql:DbConnectAdmin"
+      ],
+      "Resource": [
+        "arn:aws:dsql:us-west-2:465083445156:cluster/arucmxa62xrerk4vt7b2kveetu"
+      ]
     },
     {
       "Sid": "ReadWriteChunkVectors",
@@ -34,14 +41,32 @@
     {
       "Sid": "StoreRawOriginals",
       "Effect": "Allow",
-      "Action": ["s3:PutObject"],
-      "Resource": ["arn:aws:s3:::docket-raw-465083445156-us-west-2/raw/*"]
+      "Action": [
+        "s3:PutObject"
+      ],
+      "Resource": [
+        "arn:aws:s3:::docket-raw-465083445156-us-west-2/raw/*"
+      ]
     },
     {
       "Sid": "ReadFirecrawlKey",
       "Effect": "Allow",
-      "Action": ["secretsmanager:GetSecretValue"],
-      "Resource": ["arn:aws:secretsmanager:us-west-2:465083445156:secret:docket/firecrawl-*"]
+      "Action": [
+        "secretsmanager:GetSecretValue"
+      ],
+      "Resource": [
+        "arn:aws:secretsmanager:us-west-2:465083445156:secret:docket/firecrawl-*"
+      ]
+    },
+    {
+      "Sid": "AssumeBedrockRoleInTeamAccount",
+      "Effect": "Allow",
+      "Action": [
+        "sts:AssumeRole"
+      ],
+      "Resource": [
+        "arn:aws:iam::*:role/DocketBedrockAccess"
+      ]
     }
   ]
 }
