@@ -5,12 +5,15 @@ import type { Config } from "tailwindcss";
 const config: Config = {
   content: ["./src/**/*.{ts,tsx}"],
   theme: {
+    // Soft, rounded shapes throughout: controls 12px, cards 20px, panels 28px.
     borderRadius: {
       none: "0",
-      sm: "4px",
-      DEFAULT: "6px",
-      md: "6px",
-      lg: "10px",
+      sm: "8px",
+      DEFAULT: "12px",
+      md: "12px",
+      lg: "20px",
+      xl: "24px",
+      "2xl": "28px",
       full: "9999px",
     },
     extend: {

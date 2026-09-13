@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Figtree, IBM_Plex_Mono, Source_Serif_4 } from "next/font/google";
+import { ChatWidget } from "@/components/chat/ChatWidget";
 import "./globals.css";
 
 const sans = Figtree({ subsets: ["latin"], variable: "--font-sans", display: "swap" });
@@ -38,6 +39,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           Skip to content
         </a>
         {children}
+        <ChatWidget />
       </body>
     </html>
   );
