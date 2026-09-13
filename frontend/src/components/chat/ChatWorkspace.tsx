@@ -21,6 +21,7 @@ export function ChatWorkspace() {
           <ul className="mt-2 grid gap-1.5 text-sm text-ink-soft">
             <li>City Council agendas and minutes, June to September 2026</li>
             <li>Planning Commission agendas and minutes</li>
+            <li>Fremont Unified school board agendas, May to September 2026</li>
             <li>City news, early September 2026</li>
             <li>Fremont&apos;s transportation plans</li>
           </ul>

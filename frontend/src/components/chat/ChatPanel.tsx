@@ -11,7 +11,14 @@ interface Citation {
   title: string;
   locator: string;
   url: string;
+  /** Document date (YYYY-MM-DD) when the agent knows it; tells same-titled meetings apart. */
+  date?: string | null;
 }
+
+const citationDate = (date?: string | null) =>
+  date && /^\d{4}-\d{2}-\d{2}$/.test(date)
+    ? new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" }).format(new Date(`${date}T00:00:00Z`))
+    : null;
 
 interface Message {
   id: number;
@@ -28,7 +35,7 @@ type ChatEvent =
 
 // Keep these in step with what the chat agent has actually read (see docket/ ingest).
 const GREETING =
-  "Hi, I'm Docket's assistant. Ask me about Fremont City Council and Planning Commission agendas and minutes (June to September 2026), recent city news, or the city's transportation plans. I link the documents behind every answer.";
+  "Hi, I'm Docket's assistant. Ask me about Fremont City Council and Planning Commission agendas and minutes (June to September 2026), Fremont Unified school board agendas, recent city news, or the city's transportation plans. I link the documents behind every answer.";
 const NOT_CONNECTED =
   "I'm not connected to Docket's data yet, so I can't answer that for real. Once I am, I'll answer with sources from Fremont city documents.";
 
@@ -46,6 +53,7 @@ const isHttpUrl = (url: string) => /^https?:\/\//i.test(url);
  */
 function tidy(text: string): string {
   return text
+    .replace(/^[ \t]*[*-][ \t]+/gm, "• ")
     .replace(/[    ]/g, " ")
     .replace(/[‐‑]/g, "-")
     .replace(/\*\*([^*\n]+)\*\*/g, "$1")
@@ -218,11 +226,14 @@ export function ChatPanel({ variant, onClose, autoFocus = false }: ChatPanelProp
                         href={c.url}
                         target="_blank"
                         rel="noopener noreferrer"
-                        title={c.title}
+                        title={citationDate(c.date) ? `${c.title} · ${citationDate(c.date)}` : c.title}
                         className="flex w-full min-w-0 items-center gap-2.5 overflow-hidden rounded-xl border border-rule bg-white px-3 py-2 text-sm transition-colors hover:border-ink/30 hover:bg-sky-mist"
                       >
                         <span className="shrink-0 rounded-md bg-sky-mist px-1.5 font-mono text-ink-soft">{c.ref}</span>
-                        <span className="line-clamp-2 min-w-0 flex-1 break-words font-semibold leading-snug text-ink">{c.title}</span>
+                        <span className="min-w-0 flex-1">
+                          <span className="line-clamp-2 break-words font-semibold leading-snug text-ink">{c.title}</span>
+                          {citationDate(c.date) ? <span className="block text-ink-muted">{citationDate(c.date)}</span> : null}
+                        </span>
                         <svg viewBox="0 0 16 16" aria-hidden="true" className="mt-1 h-3.5 w-3.5 shrink-0 text-ink-muted">
                           <path d="M6 3h7v7M13 3L5.5 10.5M11 9.5V13H3V5h3.5" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
                         </svg>
