@@ -1,5 +1,7 @@
 // Shared by the join form (instant feedback) and the API (the real check).
 
+import { moderateText } from "./moderation";
+
 export interface JoinFields {
   name: string;
   email: string;
@@ -36,6 +38,7 @@ export function parseJoin(
   const name = typeof b.name === "string" ? b.name.trim() : "";
   if (!name) errors.name = "Tell us what to call you.";
   else if (name.length > 80) errors.name = "Keep your name under 80 characters.";
+  else if (!moderateText(name).ok) errors.name = "Choose a name without swear words or slurs. Neighbors see it next to your reviews.";
 
   const email = typeof b.email === "string" ? b.email.trim() : "";
   if (!email) errors.email = "We need an email to send your sign-in link.";

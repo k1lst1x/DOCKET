@@ -1,5 +1,6 @@
 import { db } from "./db";
 import type { ClaimView, IssueActionErrorCode, IssueDetail, NeighborhoodShare, PollView, TrendPoint } from "./issue-types";
+import { moderateText } from "./moderation";
 
 // Issue pages: AI analysis, polls, votes and reviews, all in Aurora DSQL.
 // Rules:
@@ -220,9 +221,12 @@ export async function getIssueDetail(issueId: string, memberId: string | null): 
        LIMIT 60`,
       [issueId],
     );
-    const items = rows.map((r) => ({
+    // The filter can tighten after a review was saved: hide reviews that fail it now from everyone
+    // but their author, and don't show a name that fails it.
+    const visible = rows.filter((r) => r.member_id === memberId || moderateText(r.body).ok);
+    const items = visible.map((r) => ({
       id: r.id,
-      author: shortName(r.name),
+      author: moderateText(r.name).ok ? shortName(r.name) : "Neighbor",
       neighborhood: r.slug ? names.get(r.slug) ?? null : null,
       rating: r.rating,
       body: r.body,
@@ -326,6 +330,8 @@ export async function postReview(memberId: string, issueId: string, rating: numb
   if (!Number.isInteger(rating) || rating < 1 || rating > 5 || text.length < 10 || text.length > 2000) {
     throw new IssueActionError("invalid_review");
   }
+  // The review form runs the same check as you type; this is the one that can't be skipped.
+  if (!moderateText(text).ok) throw new IssueActionError("review_blocked");
   try {
     await db().transaction(async (client) => {
       const { rows } = await client.query<{ id: string; status: string; deadline: Date | null }>(

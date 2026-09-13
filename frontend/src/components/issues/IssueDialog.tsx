@@ -15,6 +15,9 @@ import { ItemRef } from "@/components/ItemRef";
 import { StatusPill } from "@/components/StatusPill";
 import { formatDate, formatDateTime } from "@/lib/format";
 import type { ClaimView, IssueActionErrorCode, IssueDetail, PollView } from "@/lib/issue-types";
+import { moderateText } from "@/lib/moderation";
+
+type ActionError = { path: "votes" | "reviews"; message: string };
 
 const ACTION_ERRORS: Record<IssueActionErrorCode, string> = {
   not_signed_in: "Your sign-in has expired. Sign in again to vote.",
@@ -24,6 +27,7 @@ const ACTION_ERRORS: Record<IssueActionErrorCode, string> = {
   closed: "Voting on this item has closed.",
   vote_first: "Vote or pass first, then you can write a review.",
   invalid_review: "Pick a rating and write at least 10 characters.",
+  review_blocked: "Your review includes language Docket doesn't allow, such as swear words, slurs or threats. Please rephrase it.",
   busy: "Too many actions just now. Wait a minute, then try again.",
   unavailable: "Voting is unavailable right now. Try again shortly.",
 };
@@ -47,7 +51,7 @@ export function IssueDialog({ issueId, onClose, fallbackTitle }: IssueDialogProp
   const [detail, setDetail] = useState<IssueDetail | null>(null);
   const [state, setState] = useState<LoadState>("loading");
   const [busy, setBusy] = useState(false);
-  const [actionError, setActionError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<ActionError | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
   const busyRef = useRef(false);
 
@@ -132,10 +136,10 @@ export function IssueDialog({ issueId, onClose, fallbackTitle }: IssueDialogProp
         return true;
       }
       const code = (data?.error ?? "unavailable") as IssueActionErrorCode;
-      setActionError(ACTION_ERRORS[code] ?? ACTION_ERRORS.unavailable);
+      setActionError({ path, message: ACTION_ERRORS[code] ?? ACTION_ERRORS.unavailable });
       return false;
     } catch {
-      setActionError("We couldn't reach Docket. Check your connection and try again.");
+      setActionError({ path, message: "We couldn't reach Docket. Check your connection and try again." });
       return false;
     } finally {
       busyRef.current = false;
@@ -233,7 +237,7 @@ function DialogStatus({ state, title, onRetry }: { state: LoadState; title?: str
 interface IssueViewProps {
   detail: IssueDetail;
   busy: boolean;
-  actionError: string | null;
+  actionError: ActionError | null;
   onVote: (pollId: string, choice: string) => Promise<boolean>;
   onReview: (rating: number, body: string) => Promise<boolean>;
 }
@@ -308,7 +312,7 @@ function IssueView({ detail, busy, actionError, onVote, onReview }: IssueViewPro
             <ClaimList title="Pros" tone="pro" items={detail.analysis?.pros ?? []} />
             <ClaimList title="Cons" tone="con" items={detail.analysis?.cons ?? []} />
           </div>
-          {stance && live ? <VoteCard detail={detail} stance={stance} busy={busy} actionError={actionError} onVote={onVote} /> : null}
+          {stance && live ? <VoteCard detail={detail} stance={stance} busy={busy} actionError={actionError?.path === "votes" ? actionError.message : null} onVote={onVote} /> : null}
           {live ? null : <OfflineVoteCard question={stance?.question ?? null} />}
           {(live ? choicePolls : []).map((poll) => (
             <Card key={poll.id} title="Follow-up question">
@@ -327,7 +331,9 @@ function IssueView({ detail, busy, actionError, onVote, onReview }: IssueViewPro
               </p>
             </Card>
           ))}
-          {live ? <ReviewsCard detail={detail} busy={busy} onReview={onReview} /> : null}
+          {live ? (
+            <ReviewsCard detail={detail} busy={busy} error={actionError?.path === "reviews" ? actionError.message : null} onReview={onReview} />
+          ) : null}
         </div>
 
         <aside className="grid content-start gap-6">
@@ -548,7 +554,17 @@ function VoteGate({ detail }: { detail: IssueDetail }) {
   );
 }
 
-function ReviewsCard({ detail, busy, onReview }: { detail: IssueDetail; busy: boolean; onReview: IssueViewProps["onReview"] }) {
+function ReviewsCard({
+  detail,
+  busy,
+  error,
+  onReview,
+}: {
+  detail: IssueDetail;
+  busy: boolean;
+  error: string | null;
+  onReview: IssueViewProps["onReview"];
+}) {
   if (!detail.reviews) {
     return (
       <Card title="Reviews">
@@ -577,7 +593,7 @@ function ReviewsCard({ detail, busy, onReview }: { detail: IssueDetail; busy: bo
   return (
     <Card title="Reviews" badge={reviews.items.some((r) => r.sample) ? <SampleBadge>Includes sample reviews</SampleBadge> : null}>
       <RatingBars distribution={reviews.distribution} average={reviews.average} />
-      {detail.viewer.canVote ? <ReviewForm key={reviews.mine?.body ?? "new"} mine={reviews.mine} busy={busy} onReview={onReview} /> : null}
+      {detail.viewer.canVote ? <ReviewForm key={reviews.mine?.body ?? "new"} mine={reviews.mine} busy={busy} error={error} onReview={onReview} /> : null}
       {reviews.items.length ? (
         <ul className="mt-6 grid gap-3">
           {reviews.items.map((review) => (
@@ -614,10 +630,12 @@ function ReviewsCard({ detail, busy, onReview }: { detail: IssueDetail; busy: bo
 function ReviewForm({
   mine,
   busy,
+  error,
   onReview,
 }: {
   mine: { rating: number; body: string } | null;
   busy: boolean;
+  error: string | null;
   onReview: IssueViewProps["onReview"];
 }) {
   const id = useId();
@@ -625,10 +643,13 @@ function ReviewForm({
   const [body, setBody] = useState(mine?.body ?? "");
   const [saved, setSaved] = useState(false);
   const length = body.trim().length;
+  // Same check the server runs, so people see what to change before they post.
+  const language = useMemo(() => moderateText(body), [body]);
+  const flagged = language.matches.map((m) => `“${m.length > 40 ? `${m.slice(0, 40)}…` : m}”`).join(", ");
 
   async function submit(event: FormEvent) {
     event.preventDefault();
-    if (!rating || length < 10) return;
+    if (!rating || length < 10 || !language.ok) return;
     setSaved(await onReview(rating, body));
   }
 
@@ -671,11 +692,23 @@ function ReviewForm({
           setSaved(false);
         }}
         placeholder="What should neighbors know before the deadline?"
+        aria-invalid={!language.ok}
+        aria-describedby={!language.ok ? `${id}-language` : undefined}
         className="field h-auto min-h-[7rem] rounded-xl py-3"
       />
+      {!language.ok ? (
+        <p id={`${id}-language`} role="alert" className="mt-3 rounded-xl bg-signal-wash px-4 py-2.5 text-sm text-signal">
+          <span className="font-semibold">Please rephrase before posting.</span> Reviews can&apos;t include swear words, slurs or
+          threats, even with letters swapped or hidden{flagged ? `: ${flagged}` : ""}.
+        </p>
+      ) : error ? (
+        <p role="alert" className="mt-3 rounded-xl bg-signal-wash px-4 py-2.5 text-sm font-semibold text-signal">
+          {error}
+        </p>
+      ) : null}
       <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
         <span className="text-sm text-ink-muted">{length < 10 ? `${10 - length} more characters` : `${length} / 2000`}</span>
-        <button type="submit" className="btn btn-primary rounded-full" disabled={busy || !rating || length < 10}>
+        <button type="submit" className="btn btn-primary rounded-full" disabled={busy || !rating || length < 10 || !language.ok}>
           {mine ? "Update review" : "Post review"}
         </button>
       </div>

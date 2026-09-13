@@ -99,5 +99,6 @@ export type IssueActionErrorCode =
   | "closed"
   | "vote_first"
   | "invalid_review"
+  | "review_blocked"
   | "busy"
   | "unavailable";

@@ -9,6 +9,7 @@ const STATUS: Record<IssueActionErrorCode, number> = {
   closed: 409,
   vote_first: 403,
   invalid_review: 400,
+  review_blocked: 422,
   busy: 429,
   unavailable: 503,
 };
