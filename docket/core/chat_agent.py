@@ -11,11 +11,12 @@ A chat session is only continued by the user who started it. The agent has no to
 publishes or contacts anyone.
 """
 
+import asyncio
 import json
 import logging
 import re
 import uuid
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Callable
 from dataclasses import asdict, dataclass, field
 
 from strands import Agent, tool
@@ -42,14 +43,56 @@ LEGAL_QUESTION = re.compile(
     re.IGNORECASE,
 )
 MARKER = re.compile(r"\[(\d+(?:\s*,\s*\d+)*)\]")
+# Questions unrelated to Fremont or government may be answered from general knowledge, labeled as such.
+GENERAL_TAG = re.compile(r"^\s*\[general\]\s*:?\s*", re.IGNORECASE)  # shown to clients as grounded=False
+# A question matching this is about Fremont or government, and only a cited answer from the documents is
+# allowed, whatever the model tags its reply.
+LOCAL_TOPIC = re.compile(
+    r"\b(?:"
+    # places: Fremont, its neighborhoods, the county and state
+    r"fremont|niles|irvington|mission\s+san\s+jose|warm\s+springs|centerville|ardenwood|sundale|cabrillo|"
+    r"glenmoor|kimber|parkmont|lake\s+elizabeth|newark|union\s+city|alameda\s+county|california|bay\s+area|"
+    # local and state government
+    r"city\s+(?:of|council|hall|manager|attorney|clerk|staff|budget|services?|government|ordinance|code)|"
+    r"the\s+city\b|council(?:member|man|woman|\s+member)?|mayor|planning\s+commission|meeting\s+minutes|"
+    r"agendas?|public\s+(?:meeting|hearing|comment)|board\s+(?:meeting|of\s+education)|school\s+board|"
+    r"school\s+district|fusd|superintendent|(?:council|assembly|senate|congressional)\s+district|"
+    r"legislat\w*|state\s+(?:assembly|senat\w*|law|bill)|assembly\s?member|governor|[AS]B\s?\d{1,4}|"
+    r"ordinances?|ballot|measure\s+[A-Z]{1,2}|elections?|voting|polling\s+place|"
+    # taxes, land use, housing and services residents ask the city about
+    r"tax(?:es)?|zoning|zoned|permits?|building\s+code|housing\s+element|affordable\s+housing|adu|"
+    r"accessory\s+dwelling|rent\s+(?:control|increase)|evictions?|bart|ac\s+transit|crosswalk|speed\s+limit|"
+    r"code\s+enforcement|(?:trash|garbage|recycling)\s+(?:pickup|collection|day)|"
+    # legal questions
+    r"legal\s+advice|illegal|legally|allowed\s+to|permitted\s+to|required\s+to|(?:city|local|state)\s+laws?|"
+    # street addresses
+    r"\d{2,6}\s+[a-z]+(?:\s+[a-z]+)?\s+(?:street|st|avenue|ave|boulevard|blvd|road|rd|drive|dr|way|lane|ln|"
+    r"court|ct|parkway|pkwy|place|pl)"
+    r")\b",
+    re.IGNORECASE,
+)
+GROUNDED_REQUEST = (
+    "This question is about Fremont or government, so it must be answered only from the documents. "
+    "Search with vector_search, keyword_search or search_by_address, then answer with cited evidence "
+    f"numbers, or reply exactly: {REFUSAL}"
+)
 EMPHASIS = re.compile(r"(?<![\w*])([*_])(?=\S)([^*_\n]+?)(?<=\S)\1(?![\w*])")
 
 SYSTEM_PROMPT = """You are Docket's assistant for residents of Fremont, California.
 
-Rules:
-- Answer only from evidence returned by your tools in this conversation turn. Call vector_search,
-  keyword_search or search_by_address before every factual answer. Never use your own knowledge about
-  Fremont, California law or local government.
+Two kinds of questions:
+1. Anything about Fremont or local or state government: the City Council, Planning Commission, school board,
+   agendas, minutes, city news, transportation, taxes, budgets, zoning, permits, laws, legislators,
+   neighborhoods or street addresses. For these, answer only from evidence returned by your tools in this
+   turn, following the rules below. Never use your own knowledge for these.
+2. Questions with nothing to do with Fremont or government: greetings, thanks, questions about you, jokes,
+   or general knowledge (science, history, how-to, definitions). For these, do not call tools. Start your
+   reply with the tag [general], then answer briefly and helpfully. If asked what you can do, say you answer
+   questions about Fremont city documents with linked sources and can also help with general questions.
+   Never use [general] for anything in the first kind.
+
+Rules for Fremont and government questions:
+- Call vector_search, keyword_search or search_by_address before every factual answer.
 - Cite every factual sentence with evidence numbers in square brackets, like [2] or [1, 3]. Cite only
   numbers that a tool returned in this turn.
 - Copy numbers, dollar amounts, dates, addresses, section numbers and case or request ids exactly as they
@@ -83,6 +126,7 @@ class ChatResponse:
     sources_searched: list[str]
     session_id: str = ""
     removed_sentences: list[dict] = field(default_factory=list)
+    grounded: bool = True  # False only for a labeled general-knowledge answer to a non-Fremont question
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -91,10 +135,19 @@ class ChatResponse:
 class TurnEvidence:
     """Evidence handed to the model during one turn, numbered in the order it was returned."""
 
-    def __init__(self) -> None:
+    def __init__(self, progress: Callable[[str], None] | None = None) -> None:
         self.by_ref: dict[int, retrieval.Evidence] = {}
         self.ref_of: dict[str, int] = {}
         self.retrieval_calls = 0
+        self.progress = progress
+
+    def report(self, message: str) -> None:
+        """Tell a streaming client what the agent is doing. Progress must never break an answer."""
+        if self.progress is not None:
+            try:
+                self.progress(message)
+            except Exception:
+                log.debug("progress callback failed", exc_info=True)
 
     def add(self, items: list[retrieval.Evidence]) -> str:
         blocks = []
@@ -131,11 +184,13 @@ def build_tools(turn: TurnEvidence) -> list:
     @tool
     def vector_search(query: str) -> str:
         """Semantic search over the Fremont documents Docket has scraped. Returns numbered evidence."""
+        turn.report("Searching Fremont city documents")
         return turn.add(retrieval.vector_search(query))
 
     @tool
     def keyword_search(query: str) -> str:
         """Keyword (BM25) search over the scraped Fremont documents. Use for names, ids and exact terms."""
+        turn.report("Searching Fremont city documents")
         return turn.add(retrieval.keyword_search(query))
 
     @tool
@@ -161,6 +216,7 @@ def build_tools(turn: TurnEvidence) -> list:
     @tool
     def search_by_address(address: str) -> str:
         """Find evidence about a Fremont street address and the official neighborhood it is in."""
+        turn.report("Looking up the address and its neighborhood")
         located = geocode(address)
         neighborhood = neighborhood_at(located["lat"], located["lng"]) if located else None
         items = retrieval.keyword_search(address)
@@ -276,6 +332,24 @@ def finalize(question: str, raw_answer: str, turn: TurnEvidence) -> ChatResponse
     # [1]. Provide concise answer.The agreement ..."). Those sentences are about writing the answer, never
     # part of it, and can carry supported facts and markers, so enforcement alone would let them through.
     text = strip_planning(text)
+
+    # A general-knowledge answer is allowed only for a question unrelated to Fremont or government. It is
+    # labeled, carries no citations and is marked grounded=False. An untagged reply counts as general only
+    # when no retrieval ran: once the model searched the documents, an uncited reply is not an answer.
+    tagged = bool(GENERAL_TAG.match(text))
+    if (tagged or turn.retrieval_calls == 0) and not LOCAL_TOPIC.search(question):
+        body = MARKER.sub("", GENERAL_TAG.sub("", text, count=1))
+        body = re.sub(r"\s+([.,;:!?])", r"\1", re.sub(r"[ \t]{2,}", " ", body)).strip()
+        if body:
+            return ChatResponse(
+                answer=body,
+                cited_chunk_ids=[],
+                citations=[],
+                refused=False,
+                sources_searched=[],
+                grounded=False,
+            )
+    text = GENERAL_TAG.sub("", text, count=1)
     if turn.retrieval_calls == 0 or not text:
         return refusal()
 
@@ -425,12 +499,20 @@ def _model() -> BedrockModel:
     return BedrockModel(model_id=settings.BEDROCK_MODEL_ID, region_name=settings.AWS_REGION)
 
 
+def is_general(raw_answer: str) -> bool:
+    return bool(GENERAL_TAG.match(raw_answer.replace("*", "").strip()))
+
+
 async def answer(
-    question: str, session_id: str | None = None, user_id: str | None = None, group_id: str | None = None
+    question: str,
+    session_id: str | None = None,
+    user_id: str | None = None,
+    group_id: str | None = None,
+    progress: Callable[[str], None] | None = None,
 ) -> ChatResponse:
     question = question.strip()[:MAX_QUESTION_CHARS]
     session = resolve_session(session_id, user_id)
-    turn = TurnEvidence()
+    turn = TurnEvidence(progress)
     agent = Agent(
         model=_model(),
         system_prompt=SYSTEM_PROMPT,
@@ -440,7 +522,14 @@ async def answer(
         callback_handler=None,
     )
     result = await agent.invoke_async(question)
-    response = finalize(question, final_text(result), turn)
+    raw = final_text(result)
+    if is_general(raw) and LOCAL_TOPIC.search(question):
+        # The model treated a Fremont or government question as general knowledge. Ask once to answer it from
+        # the documents; finalize never lets a general answer through for such a question.
+        log.warning("general-knowledge reply to a local question; asking for a cited answer")
+        raw = final_text(await agent.invoke_async(GROUNDED_REQUEST))
+    turn.report("Checking every fact against its source")
+    response = finalize(question, raw, turn)
     if response.refused and response.removed_sentences:
         # Nothing survived enforcement, usually because a fact was cited to the wrong evidence number or
         # facts from two documents were merged. Ask once to re-cite from the same evidence; the retry goes
@@ -462,12 +551,29 @@ async def answer(
 async def stream_answer(
     question: str, session_id: str | None = None, user_id: str | None = None, group_id: str | None = None
 ) -> AsyncIterator[dict]:
-    """Status first, then the enforced answer in small pieces, then a final event with citations.
+    """Status events while the agent works, then the checked answer in small pieces, then a final event.
 
-    Nothing the model writes is streamed before enforcement has run over the whole answer.
+    Progress is streamed live (searches, address lookups, citation checks). Nothing the model writes is
+    streamed before enforcement has run over the whole answer.
     """
-    yield {"type": "status", "message": "Searching Docket's sources"}
-    response = await answer(question, session_id, user_id, group_id)
+    loop = asyncio.get_running_loop()
+    queue: asyncio.Queue[str] = asyncio.Queue()
+
+    def progress(message: str) -> None:  # tools run in worker threads
+        loop.call_soon_threadsafe(queue.put_nowait, message)
+
+    yield {"type": "status", "message": "Reading your question"}
+    task = asyncio.create_task(answer(question, session_id, user_id, group_id, progress=progress))
+    last = None
+    while not task.done() or not queue.empty():
+        try:
+            message = await asyncio.wait_for(queue.get(), timeout=0.25)
+        except TimeoutError:
+            continue
+        if message != last:
+            last = message
+            yield {"type": "status", "message": message}
+    response = task.result()
     words = response.answer.split(" ")
     for start in range(0, len(words), 8):
         piece = " ".join(words[start : start + 8])

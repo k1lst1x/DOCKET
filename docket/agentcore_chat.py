@@ -35,13 +35,18 @@ async def invoke(payload, context):
         yield {"type": "error", "message": "prompt must be a non-empty string"}
         return
     session_id = _optional_string(payload, "session_id") or getattr(context, "session_id", None)
-    async for event in stream_answer(
-        prompt[:MAX_QUESTION_CHARS],
-        session_id,
-        _optional_string(payload, "user_id"),
-        _optional_string(payload, "group_id"),
-    ):
-        yield event
+    try:
+        async for event in stream_answer(
+            prompt[:MAX_QUESTION_CHARS],
+            session_id,
+            _optional_string(payload, "user_id"),
+            _optional_string(payload, "group_id"),
+        ):
+            yield event
+    except Exception:
+        # Without this the stream would just end and the website would show the assistant as disconnected.
+        log.exception("chat turn failed")
+        yield {"type": "error", "message": "The assistant is unavailable right now. Please try again."}
 
 
 if __name__ == "__main__":
