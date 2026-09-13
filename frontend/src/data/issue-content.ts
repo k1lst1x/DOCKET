@@ -1,5 +1,5 @@
 // SAMPLE issue analyses and polls, written by hand in the shape the reading
-// agent will produce (see supabase/migrations). Pros and cons mark whether a
+// agent will produce (see db/migrations). Pros and cons mark whether a
 // claim comes from the source document or is inference, per docs/architecture.md.
 
 export interface Claim {
