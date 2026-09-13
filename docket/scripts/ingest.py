@@ -17,7 +17,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import boto3
 
-from core import settings
+from core import legislature, settings
 from core.chunking import Chunk, chunk_markdown, chunk_pages
 from core.db import connect
 from core.discovery import DocumentRef, discover
@@ -42,12 +42,29 @@ FREMONT_TZ = ZoneInfo("America/Los_Angeles")  # city pages print local meeting t
 IMMUTABLE_TYPES = {"minutes", "agenda", "meeting_document", "news"}
 
 
+LOOKAHEAD_DAYS = 14  # meetings further out rarely have an agenda posted yet
+
+
 def select_refs(refs: list[DocumentRef], lookback_days: int, max_docs: int) -> list[DocumentRef]:
-    cutoff = datetime.now() - timedelta(days=lookback_days)
-    recent = [ref for ref in refs if ref.published_at is None or ref.published_at >= cutoff]
+    now = datetime.now()
+    cutoff, horizon = now - timedelta(days=lookback_days), now + timedelta(days=LOOKAHEAD_DAYS)
+    recent = [ref for ref in refs if ref.published_at is None or cutoff <= ref.published_at <= horizon]
     dated = sorted((r for r in recent if r.published_at), key=lambda r: r.published_at, reverse=True)
     undated = [r for r in recent if not r.published_at]
     return (dated + undated)[:max_docs]
+
+
+def inline_chunks(ref: DocumentRef, text: str) -> list[Chunk]:
+    base = ref.locator or "record"
+    return [
+        Chunk(
+            piece.ordinal,
+            piece.text,
+            base if piece.locator == "document start" else f"{base} › {piece.locator}",
+            piece.est_tokens,
+        )
+        for piece in chunk_markdown(text)
+    ]
 
 
 def ingest_ref(conn, fetcher: Fetcher, vectors, s3, source: Source, ref: DocumentRef) -> str:
@@ -78,7 +95,7 @@ def ingest_ref(conn, fetcher: Fetcher, vectors, s3, source: Source, ref: Documen
         return "skipped_same_hash"
 
     if ref.inline_text:
-        pieces = [Chunk(0, text, ref.locator or "record", 1)]
+        pieces = inline_chunks(ref, text)
     else:
         pieces = chunk_pages(pages) if pages else chunk_markdown(text)
     embedded = []
@@ -101,6 +118,18 @@ def ingest_ref(conn, fetcher: Fetcher, vectors, s3, source: Source, ref: Documen
         chunks=embedded,
     )
     return f"stored:{len(embedded)}" if document_id else "skipped_same_hash"
+
+
+def expand_bulk(fetcher: Fetcher, source: Source, refs: list[DocumentRef]) -> list[DocumentRef]:
+    expanded = []
+    for ref in refs:
+        if ref.doc_type == "bulk_pubinfo":
+            bills = legislature.expand(fetcher, source, ref)
+            print(f"  {ref.title}: {len(bills)} bill versions match Fremont's legislators or mentions")
+            expanded.extend(bills)
+        else:
+            expanded.append(ref)
+    return expanded
 
 
 def main() -> int:
@@ -129,15 +158,23 @@ def main() -> int:
                     totals["sources_robots_blocked"] += 1
                     continue
                 try:
-                    seed = fetcher.fetch(
-                        source.url, source.fetcher, source.params.get("wait_for_ms"), source.send_user_agent
-                    )
-                    refs = discover(source, seed)
+                    refs = []
+                    for _ in range(2):  # client-rendered listings sometimes finish loading after capture
+                        seed = fetcher.fetch(
+                            source.url,
+                            source.fetcher,
+                            source.params.get("wait_for_ms"),
+                            source.send_user_agent,
+                        )
+                        refs = discover(source, seed)
+                        if refs:
+                            break
                 except NotImplementedError as error:
                     print(f"  {error}")
                     totals["sources_not_built"] += 1
                     continue
                 selected = select_refs(refs, args.lookback_days, args.max_docs)
+                selected = expand_bulk(fetcher, source, selected)[: args.max_docs]
                 print(f"  discovered={len(refs)} selected={len(selected)}")
                 for ref in selected:
                     try:

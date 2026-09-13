@@ -19,11 +19,12 @@ EMBED_DIMENSIONS = 1024
 FIRECRAWL_API_KEY = os.getenv("FIRECRAWL_API_KEY", "").strip()
 
 # Shared Aurora DSQL cluster (IAM auth, no password). The agent owns only agent_* tables.
-DSQL_ENDPOINT = os.getenv("DSQL_ENDPOINT", "arucmxa62xrerk4vt7b2kveetu.dsql.us-west-2.on.aws")
+# A blank line in .env (e.g. "S3_BUCKET=") counts as unset, so these fall back to the defaults.
+DSQL_ENDPOINT = os.getenv("DSQL_ENDPOINT") or "arucmxa62xrerk4vt7b2kveetu.dsql.us-west-2.on.aws"
 # S3 for raw originals; S3 Vectors for chunk embeddings keyed by agent_chunks.id.
-S3_BUCKET = os.getenv("S3_BUCKET", "docket-raw-465083445156-us-west-2")
-S3_VECTORS_BUCKET = os.getenv("S3_VECTORS_BUCKET", "docket-vectors-465083445156")
-S3_VECTORS_INDEX = os.getenv("S3_VECTORS_INDEX", "docket-chunks")
+S3_BUCKET = os.getenv("S3_BUCKET") or "docket-raw-465083445156-us-west-2"
+S3_VECTORS_BUCKET = os.getenv("S3_VECTORS_BUCKET") or "docket-vectors-465083445156"
+S3_VECTORS_INDEX = os.getenv("S3_VECTORS_INDEX") or "docket-chunks"
 
 # LOCAL=1 runs both systems in-process without AgentCore.
 LOCAL = os.getenv("LOCAL", "0") == "1"

@@ -18,9 +18,16 @@ RELATIVE_TIME = re.compile(
 )
 
 
+# Simbli meeting pages render a picker listing every meeting ("- 03/26/2025 - 5:00 PM - Regular
+# Meeting of the Board of Education"). It grows with each new meeting, so it is page chrome.
+MEETING_PICKER_LINE = re.compile(
+    r"^(?:-\s+\d{2}/\d{2}/\d{4}\s+-\s+\d{1,2}:\d{2}\s+[AP]M\s+-\s+.*|.*--Select Meeting--.*)$", re.MULTILINE
+)
+
+
 def document_text(artifact: Artifact) -> str:
     if artifact.text is not None:
-        return artifact.text
+        return MEETING_PICKER_LINE.sub("", artifact.text)
     content_type = (artifact.content_type or "").lower()
     body = artifact.raw.decode("utf-8", "replace")
     if "html" in content_type:

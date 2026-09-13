@@ -199,6 +199,46 @@ def _senate_members(source: Source, artifact: Artifact) -> list[DocumentRef]:
     return []
 
 
+PUBINFO_ROW = re.compile(
+    r'<a href="(pubinfo_(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun)\.zip)">[^<]*</a></td><td[^>]*>'
+    r"(\d{4}-\d{2}-\d{2} \d{2}:\d{2})"
+)
+
+
+def _leginfo_pubinfo(source: Source, artifact: Artifact) -> list[DocumentRef]:
+    """The newest daily change file; core/legislature.py expands it into bill versions."""
+    page = artifact.raw.decode("utf-8", "replace")
+    files = [(_date(stamp, ("%Y-%m-%d %H:%M",)), name) for name, stamp in PUBINFO_ROW.findall(page)]
+    files = [(when, name) for when, name in files if when]
+    if not files:
+        return []
+    when, name = max(files)
+    url = source.url.rstrip("/") + "/" + name
+    return [DocumentRef(url, f"California Legislature daily changes ({name})", "bulk_pubinfo", when)]
+
+
+SIMBLI_MEETING = re.compile(
+    r'"Master_MeetingID":\s*(\d+),\s*"MM_MeetingTitle":\s*"((?:[^"\\]|\\.)*)",\s*"MM_DateTime":\s*"([^"]+)"'
+)
+
+
+def _simbli_meetings(source: Source, artifact: Artifact) -> list[DocumentRef]:
+    """Meetings from the JSON the Simbli listing page embeds (Master_MeetingID, title, date)."""
+    page = artifact.raw.decode("utf-8", "replace")
+    site = parse_qs(urlsplit(source.url).query).get("S", [""])[0]
+    base = source.url.split("/SB_Meetings/")[0]
+    refs = [
+        DocumentRef(
+            f"{base}/SB_Meetings/ViewMeeting.aspx?S={site}&MID={meeting_id}",
+            f"FUSD {' '.join(title.split())}",
+            "meeting_agenda",
+            _date(when, ("%Y-%m-%dT%H:%M:%S",)),
+        )
+        for meeting_id, title, when in SIMBLI_MEETING.findall(page)
+    ]
+    return _dedupe(refs)
+
+
 def _not_built(source: Source, artifact: Artifact) -> list[DocumentRef]:
     raise NotImplementedError(f"discovery for parser {source.parser!r} is not built yet")
 
@@ -211,8 +251,8 @@ PARSERS: dict[str, Callable[[Source, Artifact], list[DocumentRef]]] = {
     "civicplus_page": _civicplus_page,
     "assembly_members": _assembly_members,
     "senate_members": _senate_members,
-    "simbli_meetings": _not_built,
-    "leginfo_pubinfo": _not_built,
+    "simbli_meetings": _simbli_meetings,
+    "leginfo_pubinfo": _leginfo_pubinfo,
     "arcgis_featureserver": _not_built,
 }
 
