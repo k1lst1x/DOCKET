@@ -681,6 +681,7 @@ dependencies = [
     { name = "strands-agents" },
     { name = "strands-agents-tools" },
     { name = "trafilatura" },
+    { name = "tzdata" },
     { name = "uvicorn", extra = ["standard"] },
 ]
 
@@ -700,6 +701,7 @@ requires-dist = [
     { name = "strands-agents", specifier = ">=1.55.1" },
     { name = "strands-agents-tools", specifier = ">=0.8.8" },
     { name = "trafilatura", specifier = ">=2.2.0" },
+    { name = "tzdata", specifier = ">=2026.4" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.52.4" },
 ]
 

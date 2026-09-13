@@ -18,5 +18,6 @@ dependencies = [
     "strands-agents>=1.55.1",
     "strands-agents-tools>=0.8.8",
     "trafilatura>=2.2.0",
+    "tzdata>=2026.4",
     "uvicorn[standard]>=0.52.4",
 ]

@@ -15,6 +15,7 @@ from urllib.parse import urlsplit
 
 import httpx
 from firecrawl import Firecrawl
+from firecrawl.v2.types import PDFParser
 
 from core import settings
 
@@ -33,6 +34,7 @@ class Artifact:
     fetcher: str
     content_hash: str
     fetched_at: datetime
+    pages: list[tuple[int, str]] | None = None  # PDFs via Firecrawl: (physical page, markdown)
 
 
 class RobotsDisallowed(Exception):
@@ -85,11 +87,14 @@ class Fetcher:
         fetcher: str = "http",
         wait_for_ms: int | None = None,
         send_user_agent: bool = True,
+        main_content: bool = False,
     ) -> Artifact:
+        """main_content=True asks Firecrawl for main-content markdown (page chrome removed);
+        rawHtml is always the full original page."""
         allowed, delay = self.check_robots(url, fetcher, send_user_agent)
         if not allowed:
             raise RobotsDisallowed(url)
-        return self._get(url, fetcher, delay, wait_for_ms, send_user_agent)
+        return self._get(url, fetcher, delay, wait_for_ms, send_user_agent, main_content)
 
     def _robots_for(self, url: str, fetcher: str, send_user_agent: bool) -> RobotsRules:
         parts = urlsplit(url)
@@ -97,9 +102,15 @@ class Fetcher:
         key = (origin, fetcher, send_user_agent)
         if key in self._robots:
             return self._robots[key]
-        try:
-            artifact = self._get(origin + "/robots.txt", fetcher, None, None, send_user_agent)
-        except Exception:
+        artifact = None
+        for attempt in range(3):  # one transient failure should not drop a whole source
+            try:
+                artifact = self._get(origin + "/robots.txt", fetcher, None, None, send_user_agent)
+                break
+            except Exception:
+                if attempt < 2:
+                    time.sleep(10)
+        if artifact is None:
             # RFC 9309: an unreachable robots.txt means assume complete disallow.
             rules = RobotsRules(None, disallow_all=True)
         else:
@@ -134,13 +145,19 @@ class Fetcher:
         crawl_delay: float | None,
         wait_for_ms: int | None,
         send_user_agent: bool = True,
+        main_content: bool = False,
     ) -> Artifact:
         self._wait(url, crawl_delay)
         fetched_at = datetime.now(UTC)
         if fetcher == "firecrawl":
             if self._firecrawl is None:
                 raise RuntimeError("FIRECRAWL_API_KEY is not set")
-            options = dict(formats=["markdown", "rawHtml"], only_main_content=False, proxy="basic")
+            options = dict(
+                formats=["markdown", "rawHtml"],
+                only_main_content=main_content,
+                proxy="basic",
+                parsers=[PDFParser(pages=True)],  # applies to PDFs only: keeps physical pages
+            )
             if send_user_agent:
                 options["headers"] = {"User-Agent": settings.USER_AGENT}
             if wait_for_ms:
@@ -148,6 +165,7 @@ class Fetcher:
             document = self._firecrawl.scrape(url, **options)
             metadata = document.metadata
             text = document.markdown or ""
+            pages = [(page.page_number, page.markdown) for page in (document.pages or [])]
             return Artifact(
                 url=url,
                 final_url=getattr(metadata, "url", None) or url,
@@ -158,6 +176,7 @@ class Fetcher:
                 fetcher=fetcher,
                 content_hash=_sha256(text.encode("utf-8")),
                 fetched_at=fetched_at,
+                pages=pages or None,
             )
         response = self._http.get(url)
         return Artifact(
