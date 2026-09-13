@@ -10,7 +10,8 @@
     "build": "next build",
     "start": "next start",
     "typecheck": "tsc --noEmit",
-    "lint": "eslint . --max-warnings 0"
+    "lint": "eslint . --max-warnings 0",
+    "test": "vitest run"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.116.0",
@@ -30,6 +31,7 @@
     "eslint-config-next": "15.5.25",
     "postcss": "8.5.28",
     "tailwindcss": "3.4.19",
-    "typescript": "5.9.3"
+    "typescript": "5.9.3",
+    "vitest": "^3.2.4"
   }
 }

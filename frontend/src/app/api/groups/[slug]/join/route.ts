@@ -2,13 +2,17 @@ import { NextResponse } from "next/server";
 import { createMagicLink, deliverMagicLink, isSameOrigin } from "@/lib/auth";
 import { getGroup } from "@/lib/data";
 import { parseJoin } from "@/lib/join";
-import { upsertMembership } from "@/lib/store";
+import { upsertMembership, type Member } from "@/lib/store";
+import { allowJoinRequest } from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
 
 export async function POST(request: Request, { params }: { params: Promise<{ slug: string }> }) {
   if (!isSameOrigin(request)) {
     return NextResponse.json({ error: "Cross-site requests are not accepted." }, { status: 403 });
+  }
+  if (!allowJoinRequest(request)) {
+    return NextResponse.json({ error: "Too many join requests. Try again shortly." }, { status: 429, headers: { "Cache-Control": "no-store" } });
   }
 
   // The group comes from the URL, never from the request body.
@@ -27,7 +31,12 @@ export async function POST(request: Request, { params }: { params: Promise<{ slu
     return NextResponse.json({ error: "Check the highlighted fields.", fields: parsed.errors }, { status: 400 });
   }
 
-  const { member } = upsertMembership({ ...parsed.value, groupId: group.id, slug: group.slug });
+  let member: Member;
+  try {
+    ({ member } = upsertMembership({ ...parsed.value, groupId: group.id, slug: group.slug }));
+  } catch {
+    return NextResponse.json({ error: "Join requests are temporarily busy. Try again shortly." }, { status: 503, headers: { "Cache-Control": "no-store" } });
+  }
   deliverMagicLink(member.email, createMagicLink(member.id, `/g/${group.slug}`));
 
   // Same response whether or not the email was already a member, so the form
