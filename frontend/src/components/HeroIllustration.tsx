@@ -27,7 +27,7 @@ function House({ x, color }: { x: number; color: string }) {
 
 export function HeroIllustration({ className = "" }: { className?: string }) {
   return (
-    <svg viewBox="0 0 1600 640" preserveAspectRatio="xMidYMax slice" aria-hidden="true" focusable="false" className={className}>
+    <svg viewBox="0 0 1600 640" preserveAspectRatio="xMidYMax meet" aria-hidden="true" focusable="false" className={className}>
       {/* Low clouds */}
       <g fill="#FFFFFF">
         <ellipse cx="180" cy="336" rx="170" ry="36" opacity="0.9" />

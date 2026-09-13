@@ -48,7 +48,7 @@ export default function Home() {
             {stats ? <StatLine stats={stats} /> : null}
           </div>
 
-          <div className="relative mt-auto h-[34vh] min-h-[220px] w-full sm:h-[44vh] sm:min-h-[320px]">
+          <div className="relative mt-auto aspect-[5/2] w-full shrink-0">
             <HeroIllustration className="absolute inset-0 h-full w-full" />
           </div>
         </main>
