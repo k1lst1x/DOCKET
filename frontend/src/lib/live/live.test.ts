@@ -88,8 +88,8 @@ describe("USGS earthquakes", () => {
         { id: "bad", properties: { mag: null, place: "?", time: NOW }, geometry: { coordinates: [-121.9, 37.5] } },
       ],
     });
-    expect(incidents).toHaveLength(1);
-    expect(incidents[0]).toMatchObject({ id: "quake-nc75435217", title: "M2.6 earthquake", severity: "minor", magnitude: 2.56, sourceName: "USGS" });
+    expect(incidents.map((i) => i.id)).toEqual(["quake-tiny-near", "quake-nc75435217"]);
+    expect(incidents[1]).toMatchObject({ title: "M2.6 earthquake", severity: "minor", magnitude: 2.56, sourceName: "USGS" });
   });
 });
 
