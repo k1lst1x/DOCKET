@@ -72,14 +72,15 @@ export function BoundaryMap({ label, boundary, others = NO_OTHERS, point, radius
       }
 
       if (point && radiusM) {
-        const area = L.circle([point.lat, point.lng], {
+        L.circle([point.lat, point.lng], {
           radius: radiusM,
           color: "#2a78d6",
           weight: 2,
           fillColor: "#2a78d6",
           fillOpacity: 0.1,
         }).addTo(map);
-        extend(area.getBounds());
+        // circle.getBounds() needs a map view that doesn't exist yet; compute it from the radius.
+        extend(L.latLng(point.lat, point.lng).toBounds(radiusM * 2));
       }
 
       if (point) {
