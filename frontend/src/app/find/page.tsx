@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { headers } from "next/headers";
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { BoundaryMap } from "@/components/BoundaryMap";
@@ -7,6 +8,7 @@ import { EmptyState } from "@/components/EmptyState";
 import { SiteFooter, SiteHeader } from "@/components/SiteHeader";
 import { findGroups } from "@/lib/data";
 import { countWord, formatNumber } from "@/lib/format";
+import { allowLookupHeaders } from "@/lib/rate-limit";
 import type { FindResult, GeocodedPoint, NearbyGroup, UnresolvedReason } from "@/lib/types";
 
 export const metadata: Metadata = { title: "Find your group", robots: { index: false } };
@@ -16,7 +18,10 @@ type SearchParams = Promise<{ address?: string | string[] }>;
 
 export default async function FindPage({ searchParams }: { searchParams: SearchParams }) {
   const { address } = await searchParams;
-  const result = await findGroups((Array.isArray(address) ? address[0] : address) ?? "");
+  const query = (Array.isArray(address) ? address[0] : address) ?? "";
+  const result = allowLookupHeaders(await headers())
+    ? await findGroups(query)
+    : { status: "unresolved" as const, query: query.trim().replace(/\s+/g, " ").slice(0, 200), reason: "unavailable" as const };
 
   return (
     <>

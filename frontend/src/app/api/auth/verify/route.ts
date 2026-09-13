@@ -9,7 +9,7 @@ export function GET(request: NextRequest) {
   const payload = readMagicToken(request.nextUrl.searchParams.get("token") ?? "");
   const member = payload ? getMember(payload.memberId) : undefined;
 
-  if (!payload || !member || !spendMagicNonce(payload.nonce)) {
+  if (!payload || !member || !spendMagicNonce(payload.nonce, payload.exp * 1000)) {
     return NextResponse.redirect(new URL("/?signin=expired", origin), 303);
   }
 

@@ -25,11 +25,13 @@ export interface Member {
 
 interface Store {
   members: Map<string, Member>;
-  usedMagicNonces: Set<string>;
+  usedMagicNonces: Map<string, number>;
 }
 
 const globalStore = globalThis as typeof globalThis & { __docketStore?: Store };
-const store: Store = (globalStore.__docketStore ??= { members: new Map(), usedMagicNonces: new Set() });
+const MAX_MEMBERS = 10_000;
+const MAX_NONCES = 20_000;
+const store: Store = (globalStore.__docketStore ??= { members: new Map(), usedMagicNonces: new Map() });
 
 export const normalizeEmail = (email: string) => email.trim().toLowerCase();
 
@@ -61,6 +63,7 @@ export function upsertMembership(input: JoinInput): { member: Member; created: b
   const isNewMember = !member;
   if (member?.verifiedAt) return { member, created: false };
   if (!member) {
+    if (store.members.size >= MAX_MEMBERS) throw new Error("Membership sign-ups are temporarily busy.");
     member = { id: randomUUID(), name: input.name, email: normalizeEmail(input.email), createdAt: now, verifiedAt: null, memberships: [] };
     store.members.set(member.id, member);
   }
@@ -71,11 +74,17 @@ export function upsertMembership(input: JoinInput): { member: Member; created: b
   return { member, created: isNewMember || !existing };
 }
 
-/** Returns false if the nonce was already spent, so each magic link works once. */
-export function spendMagicNonce(nonce: string): boolean {
-  if (store.usedMagicNonces.has(nonce)) return false;
-  store.usedMagicNonces.add(nonce);
+/** Bounds local replay state. Production needs a shared nonce store for cross-instance use. */
+export function spendMagicNonce(nonce: string, expiresAt: number, now = Date.now()): boolean {
+  for (const [value, expiry] of store.usedMagicNonces) if (expiry < now) store.usedMagicNonces.delete(value);
+  if (store.usedMagicNonces.has(nonce) || store.usedMagicNonces.size >= MAX_NONCES) return false;
+  store.usedMagicNonces.set(nonce, expiresAt);
   return true;
+}
+
+export function resetStoreForTests(): void {
+  store.members.clear();
+  store.usedMagicNonces.clear();
 }
 
 export function markVerified(member: Member): void {
