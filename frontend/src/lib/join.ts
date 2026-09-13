@@ -12,6 +12,20 @@ export type JoinFieldErrors = Partial<Record<"name" | "email" | "otherTopic", st
 
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+/** Topics and speaker preference only: used when a signed-in member joins another group. */
+export function parsePreferences(
+  body: unknown,
+  watchlist: string[],
+): { ok: true; value: Omit<JoinFields, "name" | "email"> } | { ok: false; errors: JoinFieldErrors } {
+  const b = body && typeof body === "object" ? (body as Record<string, unknown>) : {};
+  const topics = Array.isArray(b.topics)
+    ? [...new Set(b.topics.filter((t): t is string => typeof t === "string" && watchlist.includes(t)))]
+    : [];
+  const otherTopic = typeof b.otherTopic === "string" ? b.otherTopic.trim() : "";
+  if (otherTopic.length > 120) return { ok: false, errors: { otherTopic: "Keep it under 120 characters." } };
+  return { ok: true, value: { topics, otherTopic: otherTopic || null, canSpeakEvenings: b.canSpeakEvenings === true } };
+}
+
 export function parseJoin(
   body: unknown,
   watchlist: string[],

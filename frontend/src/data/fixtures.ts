@@ -84,7 +84,7 @@ export const GROUP_SEEDS: GroupSeed[] = [
   },
 ];
 
-export const ITEMS: WatchItem[] = [
+export const ITEMS: Omit<WatchItem, "issueId">[] = [
   {
     id: "itm_niles_1",
     ref: "PLN2026-00188",

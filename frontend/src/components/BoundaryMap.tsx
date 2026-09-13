@@ -10,13 +10,18 @@ interface BoundaryMapProps {
   boundary?: LngLat[];
   others?: { name: string; boundary: LngLat[] }[];
   point?: { lat: number; lng: number; label: string };
+  /** Draws an "affected area" circle around the point. */
+  radiusM?: number | null;
   className?: string;
   interactive?: boolean;
 }
 
 const toLatLng = (ring: LngLat[]) => ring.map(([lng, lat]) => [lat, lng] as [number, number]);
 
-export function BoundaryMap({ label, boundary, others = [], point, className = "", interactive = true }: BoundaryMapProps) {
+// A stable default, so re-rendering the parent doesn't rebuild the map.
+const NO_OTHERS: { name: string; boundary: LngLat[] }[] = [];
+
+export function BoundaryMap({ label, boundary, others = NO_OTHERS, point, radiusM = null, className = "", interactive = true }: BoundaryMapProps) {
   const container = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -66,6 +71,17 @@ export function BoundaryMap({ label, boundary, others = [], point, className = "
         extend(layer.getBounds());
       }
 
+      if (point && radiusM) {
+        const area = L.circle([point.lat, point.lng], {
+          radius: radiusM,
+          color: "#2a78d6",
+          weight: 2,
+          fillColor: "#2a78d6",
+          fillOpacity: 0.1,
+        }).addTo(map);
+        extend(area.getBounds());
+      }
+
       if (point) {
         L.marker([point.lat, point.lng], {
           title: point.label,
@@ -83,7 +99,7 @@ export function BoundaryMap({ label, boundary, others = [], point, className = "
       cancelled = true;
       map?.remove();
     };
-  }, [boundary, others, point, interactive]);
+  }, [boundary, others, point, radiusM, interactive]);
 
   return <div ref={container} role="region" aria-label={label} className={`isolate z-0 w-full bg-sky-mist ${className}`} />;
 }

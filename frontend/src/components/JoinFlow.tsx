@@ -8,7 +8,7 @@ import { EmptyState } from "@/components/EmptyState";
 import { WatchItemCard } from "@/components/WatchItemCard";
 import type { CodeStatus } from "@/lib/auth-codes";
 import { formatNumber } from "@/lib/format";
-import { parseJoin, type JoinFieldErrors } from "@/lib/join";
+import { parseJoin, parsePreferences, type JoinFieldErrors } from "@/lib/join";
 import type { WatchItem } from "@/lib/types";
 
 interface JoinGroup {
@@ -19,9 +19,15 @@ interface JoinGroup {
   watchlist: string[];
 }
 
+interface SignedInMember {
+  name: string;
+  email: string;
+}
+
 interface Joined {
   email: string;
-  code: CodeStatus;
+  /** "member": a signed-in member joined in one step, no code needed. */
+  code: CodeStatus | "member";
   items: WatchItem[];
 }
 
@@ -38,7 +44,7 @@ function codeProblem(code: CodeStatus, email: string) {
   }
 }
 
-export function JoinFlow({ group }: { group: JoinGroup }) {
+export function JoinFlow({ group, member }: { group: JoinGroup; member: SignedInMember | null }) {
   const router = useRouter();
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -68,8 +74,9 @@ export function JoinFlow({ group }: { group: JoinGroup }) {
     event.preventDefault();
     setFormError(null);
 
-    const payload = { name, email, topics, otherTopic: somethingElse ? otherTopic : "", canSpeakEvenings };
-    const check = parseJoin(payload, group.watchlist);
+    const preferences = { topics, otherTopic: somethingElse ? otherTopic : "", canSpeakEvenings };
+    const payload = member ? preferences : { name, email, ...preferences };
+    const check = member ? parsePreferences(payload, group.watchlist) : parseJoin(payload, group.watchlist);
     if (!check.ok) {
       setErrors(check.errors);
       (check.errors.name ? nameRef : check.errors.email ? emailRef : otherRef).current?.focus();
@@ -79,7 +86,7 @@ export function JoinFlow({ group }: { group: JoinGroup }) {
     setSubmitting(true);
 
     try {
-      const res = await fetch(`/api/groups/${group.slug}/join`, {
+      const res = await fetch(`/api/groups/${group.slug}/${member ? "membership" : "join"}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
@@ -89,15 +96,25 @@ export function JoinFlow({ group }: { group: JoinGroup }) {
         setErrors(data.fields);
         return;
       }
+      if (member && res.status === 401) {
+        setFormError("Your sign-in has expired. Reload the page to join with your name and email.");
+        return;
+      }
       if (!res.ok || !data) {
         setFormError(
           res.status === 429
             ? "Too many join requests from this connection. Wait a minute and try again."
-            : "We couldn't add you just now. Your details are still here; try again in a moment.",
+            : "We couldn't add you just now. Your choices are still here; try again in a moment.",
         );
         return;
       }
-      setJoined({ email: data.email, code: data.code, items: data.group.items });
+      if (member) {
+        setSignedInAs(member.name);
+        setJoined({ email: member.email, code: "member", items: data.group.items });
+        router.refresh();
+      } else {
+        setJoined({ email: data.email, code: data.code, items: data.group.items });
+      }
     } catch {
       setFormError("We couldn't reach Docket. Check your connection and try again.");
     } finally {
@@ -115,7 +132,9 @@ export function JoinFlow({ group }: { group: JoinGroup }) {
 
         {signedInAs ? (
           <p role="status" className="mt-5 inline-flex rounded-2xl bg-park-wash px-4 py-3 text-base font-semibold text-park">
-            Email confirmed. You&apos;re signed in as {signedInAs}.
+            {joined.code === "member"
+              ? `Saved to your account, ${signedInAs}. You won't need to join again.`
+              : `Email confirmed. You're signed in as ${signedInAs}.`}
           </p>
         ) : joined.code === "sent" ? (
           <div className="mt-6 max-w-read rounded-2xl border border-rule bg-white p-5 sm:p-6">
@@ -133,9 +152,9 @@ export function JoinFlow({ group }: { group: JoinGroup }) {
               }}
             />
           </div>
-        ) : (
+        ) : joined.code !== "member" ? (
           <p className="mt-5 max-w-read rounded-2xl bg-white px-4 py-3 text-base text-ink-soft">{codeProblem(joined.code, joined.email)}</p>
-        )}
+        ) : null}
 
         {joined.items.length ? (
           <ol className="mt-8 grid gap-5">
@@ -152,8 +171,8 @@ export function JoinFlow({ group }: { group: JoinGroup }) {
         )}
 
         <div className="mt-8">
-          <Link href={`/g/${group.slug}`} className="btn btn-secondary rounded-full">
-            Go to the group page
+          <Link href={`/g/${group.slug}`} className="btn btn-primary rounded-full">
+            Open the group page to vote
           </Link>
         </div>
       </section>
@@ -167,7 +186,14 @@ export function JoinFlow({ group }: { group: JoinGroup }) {
       </p>
       <h1 className="display mt-2 text-[2.25rem] leading-tight sm:text-[3rem]">Join {group.name}</h1>
       <p className="mt-3 text-lg text-ink-soft">
-        One screen, no password. You&apos;ll see what the group is watching as soon as you join.
+        {member ? (
+          <>
+            You&apos;re signed in as <span className="font-semibold text-ink">{member.name}</span>, so this is one step: pick what you care
+            about and join.
+          </>
+        ) : (
+          "One screen, no password. You'll see what the group is watching as soon as you join."
+        )}
       </p>
 
       <form noValidate onSubmit={onSubmit} className="mt-8 grid gap-7">
@@ -177,48 +203,52 @@ export function JoinFlow({ group }: { group: JoinGroup }) {
           </div>
         ) : null}
 
-        <div>
-          <label htmlFor="join-name" className="label">
-            Your name
-          </label>
-          <input
-            ref={nameRef}
-            id="join-name"
-            name="name"
-            type="text"
-            autoComplete="name"
-            maxLength={80}
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            aria-invalid={Boolean(errors.name)}
-            aria-describedby={errors.name ? "join-name-error" : undefined}
-            className="field rounded-xl"
-          />
-          <FieldError id="join-name-error" message={errors.name} />
-        </div>
+        {member ? null : (
+          <>
+            <div>
+              <label htmlFor="join-name" className="label">
+                Your name
+              </label>
+              <input
+                ref={nameRef}
+                id="join-name"
+                name="name"
+                type="text"
+                autoComplete="name"
+                maxLength={80}
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                aria-invalid={Boolean(errors.name)}
+                aria-describedby={errors.name ? "join-name-error" : undefined}
+                className="field rounded-xl"
+              />
+              <FieldError id="join-name-error" message={errors.name} />
+            </div>
 
-        <div>
-          <label htmlFor="join-email" className="label">
-            Email
-          </label>
-          <input
-            ref={emailRef}
-            id="join-email"
-            name="email"
-            type="email"
-            inputMode="email"
-            autoComplete="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            aria-invalid={Boolean(errors.email)}
-            aria-describedby={`join-email-hint${errors.email ? " join-email-error" : ""}`}
-            className="field rounded-xl"
-          />
-          <p id="join-email-hint" className="mt-2 text-sm text-ink-soft">
-            We&apos;ll email a 6-digit code so you can vote later. You can read everything without it.
-          </p>
-          <FieldError id="join-email-error" message={errors.email} />
-        </div>
+            <div>
+              <label htmlFor="join-email" className="label">
+                Email
+              </label>
+              <input
+                ref={emailRef}
+                id="join-email"
+                name="email"
+                type="email"
+                inputMode="email"
+                autoComplete="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                aria-invalid={Boolean(errors.email)}
+                aria-describedby={`join-email-hint${errors.email ? " join-email-error" : ""}`}
+                className="field rounded-xl"
+              />
+              <p id="join-email-hint" className="mt-2 text-sm text-ink-soft">
+                We&apos;ll email a 6-digit code so you can vote later. You can read everything without it.
+              </p>
+              <FieldError id="join-email-error" message={errors.email} />
+            </div>
+          </>
+        )}
 
         <fieldset>
           <legend className="label">Topics you care about</legend>
@@ -275,7 +305,7 @@ export function JoinFlow({ group }: { group: JoinGroup }) {
           <button type="submit" className="btn btn-primary rounded-full" disabled={submitting} aria-busy={submitting}>
             {submitting ? "Joining…" : `Join ${group.name}`}
           </button>
-          <p className="text-sm text-ink-soft">No password. Leave any time.</p>
+          <p className="text-sm text-ink-soft">{member ? "Saved to your account." : "No password. Leave any time."}</p>
         </div>
       </form>
     </div>

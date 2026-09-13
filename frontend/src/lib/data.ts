@@ -2,6 +2,7 @@ import districtData from "@/data/fremont-districts.json";
 import { DOCUMENTS, GROUP_SEEDS, ITEMS, OUTCOMES } from "@/data/fixtures";
 import { distanceToPolygonKm, pointInPolygon } from "./geo";
 import { geocode } from "./geocode";
+import { sampleIssueId } from "./issue-ids";
 import type {
   FindResult,
   Group,
@@ -31,9 +32,9 @@ const GROUPS: Group[] = GROUP_SEEDS.map((seed) => {
 
 /** Items the public can see: surfaced to the group and still open. */
 function currentItems(slug: string, now: number): WatchItem[] {
-  return ITEMS.filter((i) => i.groupSlug === slug && PUBLIC_STATUSES.has(i.status) && Date.parse(i.deadline) > now).sort(
-    (a, b) => Date.parse(a.deadline) - Date.parse(b.deadline),
-  );
+  return ITEMS.filter((i) => i.groupSlug === slug && PUBLIC_STATUSES.has(i.status) && Date.parse(i.deadline) > now)
+    .sort((a, b) => Date.parse(a.deadline) - Date.parse(b.deadline))
+    .map((i) => ({ ...i, issueId: sampleIssueId(i.ref) }));
 }
 
 function summarize(group: Group, now: number): GroupSummary {

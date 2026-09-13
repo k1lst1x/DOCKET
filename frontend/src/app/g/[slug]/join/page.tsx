@@ -1,8 +1,12 @@
 import type { Metadata } from "next";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { JoinFlow } from "@/components/JoinFlow";
 import { SiteFooter, SiteHeader } from "@/components/SiteHeader";
+import { getSession } from "@/lib/auth";
 import { getGroup } from "@/lib/data";
+import { listMemberships } from "@/lib/members";
+
+export const dynamic = "force-dynamic";
 
 type Params = Promise<{ slug: string }>;
 
@@ -14,6 +18,18 @@ export async function generateMetadata({ params }: { params: Params }): Promise<
 export default async function JoinPage({ params }: { params: Params }) {
   const group = getGroup((await params).slug);
   if (!group) notFound();
+
+  const session = await getSession();
+  if (session) {
+    let groups = session.groups;
+    try {
+      groups = await listMemberships(session.memberId);
+    } catch {
+      // Database unavailable: fall back to the groups remembered in the session.
+    }
+    // Already a member: nothing to join again.
+    if (groups.some((g) => g.slug === group.slug)) redirect(`/g/${group.slug}`);
+  }
 
   return (
     <>
@@ -28,6 +44,7 @@ export default async function JoinPage({ params }: { params: Params }) {
               memberCount: group.memberCount,
               watchlist: group.watchlist,
             }}
+            member={session ? { name: session.name, email: session.email } : null}
           />
         </div>
       </main>

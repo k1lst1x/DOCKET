@@ -17,6 +17,8 @@ export interface SourceDocument {
 
 export interface WatchItem {
   id: string;
+  /** Row id in the issues table; opens the issue dialog. */
+  issueId: string;
   ref: string;
   groupSlug: string;
   title: string;

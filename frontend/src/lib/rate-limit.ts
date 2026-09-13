@@ -44,6 +44,19 @@ const codeGlobal = new FixedWindowLimiter(60, 1);
 const verifyByClient = new FixedWindowLimiter(10);
 const verifyGlobal = new FixedWindowLimiter(120, 1);
 
+const voteByClient = new FixedWindowLimiter(40);
+const voteGlobal = new FixedWindowLimiter(600, 1);
+const reviewByClient = new FixedWindowLimiter(6);
+const reviewGlobal = new FixedWindowLimiter(120, 1);
+
+export function allowVoteRequest(request: Request): boolean {
+  return voteByClient.allow(clientKey(request)) && voteGlobal.allow("all");
+}
+
+export function allowReviewRequest(request: Request): boolean {
+  return reviewByClient.allow(clientKey(request)) && reviewGlobal.allow("all");
+}
+
 export function allowCodeRequest(request: Request): boolean {
   return codeByClient.allow(clientKey(request)) && codeGlobal.allow("all");
 }

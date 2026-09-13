@@ -3,20 +3,19 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { BoundaryMap } from "@/components/BoundaryMap";
 import { EmptyState, Hills } from "@/components/EmptyState";
+import { IssueBoard } from "@/components/issues/IssueBoard";
 import { ItemRef } from "@/components/ItemRef";
 import { SiteFooter, SiteHeader } from "@/components/SiteHeader";
-import { WatchItemCard } from "@/components/WatchItemCard";
-import { getGroup, listGroups } from "@/lib/data";
+import { getSession } from "@/lib/auth";
+import { getGroup } from "@/lib/data";
 import { formatDate, formatNumber } from "@/lib/format";
+import { listMemberships } from "@/lib/members";
 import type { Outcome } from "@/lib/types";
 
-export const revalidate = 300;
+// Reads the signed-in member to show "You're a member" instead of Join.
+export const dynamic = "force-dynamic";
 
 type Params = Promise<{ slug: string }>;
-
-export function generateStaticParams() {
-  return listGroups().map((g) => ({ slug: g.slug }));
-}
 
 export async function generateMetadata({ params }: { params: Params }): Promise<Metadata> {
   const group = getGroup((await params).slug);
@@ -30,10 +29,21 @@ export async function generateMetadata({ params }: { params: Params }): Promise<
   };
 }
 
+async function membershipFor(slug: string): Promise<boolean> {
+  const session = await getSession();
+  if (!session) return false;
+  try {
+    return (await listMemberships(session.memberId)).some((g) => g.slug === slug);
+  } catch {
+    return session.groups.some((g) => g.slug === slug);
+  }
+}
+
 export default async function GroupPage({ params }: { params: Params }) {
   const group = getGroup((await params).slug);
   if (!group) notFound();
 
+  const isMember = await membershipFor(group.slug);
   const joinHref = `/g/${group.slug}/join`;
 
   return (
@@ -54,13 +64,24 @@ export default async function GroupPage({ params }: { params: Params }) {
                 <HeroStat label="Since" value={group.foundedOn.slice(0, 4)} />
               </dl>
               <div className="mt-8 flex flex-wrap items-center gap-x-5 gap-y-3">
-                <Link href={joinHref} className="btn btn-primary">
-                  Join {group.name}
-                </Link>
-                <span className="text-base text-ink-soft">Free. Meets {group.meets}.</span>
+                {isMember ? (
+                  <p className="inline-flex h-12 items-center gap-2 rounded-full bg-white px-5 text-base font-semibold text-park">
+                    <svg viewBox="0 0 16 16" aria-hidden="true" className="h-4 w-4">
+                      <path d="M3 8.5l3 3 7-7" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />
+                    </svg>
+                    You&apos;re a member
+                  </p>
+                ) : (
+                  <Link href={joinHref} className="btn btn-primary rounded-full">
+                    Join {group.name}
+                  </Link>
+                )}
+                <span className="text-base text-ink-soft">
+                  {isMember ? "Open any item below to vote." : "Free."} Meets {group.meets}.
+                </span>
               </div>
             </div>
-            <figure className="overflow-hidden rounded-lg border border-ink/10 bg-white">
+            <figure className="overflow-hidden rounded-2xl border border-ink/10 bg-white">
               <BoundaryMap label={`Map of the ${group.name} boundary`} boundary={group.boundary} className="h-72 sm:h-[26rem]" />
               <figcaption className="px-5 py-3 text-sm text-ink-soft">
                 Boundary: the City of Fremont&apos;s {group.district} neighborhood area.
@@ -81,14 +102,12 @@ export default async function GroupPage({ params }: { params: Params }) {
                   What we&apos;re watching
                 </h2>
               </div>
-              {group.items.length ? <p className="text-base text-ink-soft">Soonest deadline first</p> : null}
+              {group.items.length ? (
+                <p className="text-base text-ink-soft">Open an item for its summary, pros and cons, and the vote</p>
+              ) : null}
             </div>
             {group.items.length ? (
-              <ol className="mt-8 grid gap-5">
-                {group.items.map((item) => (
-                  <WatchItemCard key={item.id} item={item} />
-                ))}
-              </ol>
+              <IssueBoard items={group.items} />
             ) : (
               <EmptyState
                 className="mt-8"
@@ -107,7 +126,7 @@ export default async function GroupPage({ params }: { params: Params }) {
               Recent outcomes
             </h2>
             {group.outcomes.length ? (
-              <ul className="mt-8 divide-y divide-rule rounded-lg border border-rule bg-white">
+              <ul className="mt-8 divide-y divide-rule rounded-2xl border border-rule bg-white">
                 {group.outcomes.map((outcome) => (
                   <OutcomeRow key={outcome.id} outcome={outcome} />
                 ))}
@@ -118,19 +137,21 @@ export default async function GroupPage({ params }: { params: Params }) {
           </div>
         </section>
 
-        <section className="bg-white">
-          <div className="page py-14 sm:py-20">
-            <EmptyState
-              headline={`Join ${group.name}`}
-              body={`Free, and no password. You'll see what's coming up for ${group.district} while there's still time to write a letter or show up.`}
-              actions={
-                <Link href={joinHref} className="btn btn-primary">
-                  Join the group
-                </Link>
-              }
-            />
-          </div>
-        </section>
+        {isMember ? null : (
+          <section className="bg-white">
+            <div className="page py-14 sm:py-20">
+              <EmptyState
+                headline={`Join ${group.name}`}
+                body={`Free, and no password. You'll see what's coming up for ${group.district} while there's still time to write a letter or show up.`}
+                actions={
+                  <Link href={joinHref} className="btn btn-primary rounded-full">
+                    Join the group
+                  </Link>
+                }
+              />
+            </div>
+          </section>
+        )}
       </main>
       <SiteFooter />
     </>
