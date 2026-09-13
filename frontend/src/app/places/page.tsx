@@ -4,7 +4,8 @@ import { SiteHeader } from "@/components/SiteHeader";
 
 export const metadata: Metadata = {
   title: "Places",
-  description: "Explore schools, restaurants, salons, parks and more in every Fremont neighborhood on a live map.",
+  description:
+    "Explore schools, restaurants, salons, parks and more in every Fremont neighborhood on a live map, with real-time incidents, earthquakes, fires, outages and alerts.",
 };
 
 export default function PlacesPage() {

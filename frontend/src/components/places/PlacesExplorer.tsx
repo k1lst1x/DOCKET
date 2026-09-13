@@ -16,6 +16,10 @@ import {
   type Area,
   type PlaceCategory,
 } from "@/lib/places";
+import { kmFromFremont } from "@/lib/live/parsers";
+import { LIVE_KINDS, type LiveIncident, type LiveKind } from "@/lib/live/types";
+import { LivePanel, livePin } from "./LivePanel";
+import { useLiveIncidents } from "./useLiveIncidents";
 
 // Live Google map of a Fremont neighborhood: its boundary highlighted, the places inside it
 // from Google Places, filterable by category or a search, and every other neighborhood one
@@ -201,12 +205,19 @@ export function PlacesExplorer({ apiKey, mapId }: { apiKey: string; mapId: strin
   const [locating, setLocating] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [retryKey, setRetryKey] = useState(0);
+  const [tab, setTab] = useState<"places" | "live">("places");
+  const [liveKinds, setLiveKinds] = useState<Set<LiveKind>>(() => new Set(LIVE_KINDS.map((k) => k.kind)));
+  const [showLive, setShowLive] = useState(true);
+  const [selectedIncidentId, setSelectedIncidentId] = useState<string | null>(null);
+  const live = useLiveIncidents();
 
   const mapEl = useRef<HTMLDivElement>(null);
   const mapRef = useRef<google.maps.Map | null>(null);
   const polygonsRef = useRef(new Map<string, google.maps.Polygon>());
   const markersRef = useRef(new Map<string, google.maps.marker.AdvancedMarkerElement>());
   const resultsRef = useRef<PlaceResult[]>([]);
+  const liveMarkersRef = useRef(new Map<string, google.maps.marker.AdvancedMarkerElement>());
+  const liveIncidentsRef = useRef<LiveIncident[]>([]);
 
   const area = areaBySlug(areaSlug) ?? FREMONT;
   const category = categoryById(categoryId);
@@ -218,6 +229,12 @@ export function PlacesExplorer({ apiKey, mapId }: { apiKey: string; mapId: strin
   }, [search.results, insideOnly, area]);
   const hiddenOutside = search.results.length - visible.length;
   resultsRef.current = visible;
+
+  const liveIncidents = useMemo(() => (live.snapshot?.incidents ?? []).filter((i) => liveKinds.has(i.kind)), [live.snapshot, liveKinds]);
+  liveIncidentsRef.current = liveIncidents;
+  const liveCount = live.snapshot?.incidents.length ?? 0;
+  const topAlert = live.snapshot?.alerts[0] ?? null;
+  const moreAlerts = Math.max(0, (live.snapshot?.alerts.length ?? 0) - 1);
 
   // Starting area: the link, then the last one viewed here, then the member's home neighborhood.
   useEffect(() => {
@@ -281,6 +298,7 @@ export function PlacesExplorer({ apiKey, mapId }: { apiKey: string; mapId: strin
     const listeners: google.maps.MapsEventListener[] = [];
     const polygons = polygonsRef.current;
     const markers = markersRef.current;
+    const liveMarkers = liveMarkersRef.current;
     loadGoogleMaps(apiKey, () => {
       if (cancelled) return;
       setMapState("failed");
@@ -331,6 +349,8 @@ export function PlacesExplorer({ apiKey, mapId }: { apiKey: string; mapId: strin
       polygons.clear();
       markers.forEach((m) => (m.map = null));
       markers.clear();
+      liveMarkers.forEach((m) => (m.map = null));
+      liveMarkers.clear();
       mapRef.current = null;
     };
   }, [apiKey, mapId]);
@@ -405,6 +425,58 @@ export function PlacesExplorer({ apiKey, mapId }: { apiKey: string; mapId: strin
       marker.zIndex = selected ? 1000 : null;
     }
   }, [mapState, visible, selectedId, category]);
+
+  // Live incident pins, redrawn after every poll so new incidents appear and cleared ones disappear.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (mapState !== "ready" || !map) return;
+    const markers = liveMarkersRef.current;
+    const shown = showLive ? liveIncidents : [];
+    const wanted = new Set(shown.map((i) => i.id));
+    markers.forEach((marker, id) => {
+      if (!wanted.has(id)) {
+        marker.map = null;
+        markers.delete(id);
+      }
+    });
+    const now = Date.now();
+    for (const incident of shown) {
+      const selected = incident.id === selectedIncidentId;
+      const content = livePin(incident, selected, now);
+      let marker = markers.get(incident.id);
+      if (!marker) {
+        marker = new google.maps.marker.AdvancedMarkerElement({
+          map,
+          position: { lat: incident.lat, lng: incident.lng },
+          title: incident.subtitle ? `${incident.title}, ${incident.subtitle}` : incident.title,
+          content,
+          gmpClickable: true,
+        });
+        marker.addEventListener("gmp-click", () => {
+          setTab("live");
+          setSelectedIncidentId((current) => (current === incident.id ? null : incident.id));
+        });
+        markers.set(incident.id, marker);
+      } else {
+        marker.content = content;
+        marker.position = { lat: incident.lat, lng: incident.lng };
+      }
+      marker.zIndex = selected ? 2000 : 500;
+    }
+  }, [mapState, liveIncidents, showLive, selectedIncidentId]);
+
+  // Selecting an incident shows it on the map, zooming out for faraway quakes and fires.
+  useEffect(() => {
+    if (!selectedIncidentId) return;
+    const map = mapRef.current;
+    const incident = liveIncidentsRef.current.find((i) => i.id === selectedIncidentId);
+    if (map && incident) {
+      map.panTo({ lat: incident.lat, lng: incident.lng });
+      if (kmFromFremont(incident.lat, incident.lng) > 25 && (map.getZoom() ?? 12) > 9) map.setZoom(9);
+    }
+    const timer = window.setTimeout(() => document.getElementById(`live-${selectedIncidentId}`)?.scrollIntoView({ block: "nearest", behavior: "smooth" }), 60);
+    return () => window.clearTimeout(timer);
+  }, [selectedIncidentId]);
 
   // Selecting a place pans to it and loads hours, contact details and a photo.
   useEffect(() => {
@@ -563,6 +635,30 @@ export function PlacesExplorer({ apiKey, mapId }: { apiKey: string; mapId: strin
       </section>
 
       <section aria-label="Results" className="order-3 bg-sky-mist px-4 py-4 sm:px-6">
+        <div role="group" aria-label="Show places or live incidents" className="mb-4 grid grid-cols-2 gap-1 rounded-full bg-white p-1">
+          {(
+            [
+              ["places", "Places", visible.length],
+              ["live", "Live now", liveCount],
+            ] as const
+          ).map(([id, label, n]) => (
+            <button
+              key={id}
+              type="button"
+              aria-pressed={tab === id}
+              onClick={() => setTab(id)}
+              className={`inline-flex h-10 items-center justify-center gap-2 rounded-full text-sm font-semibold transition-colors ${
+                tab === id ? "bg-ink text-white" : "text-ink hover:bg-sky-mist"
+              }`}
+            >
+              {id === "live" ? <span aria-hidden="true" className={`h-2 w-2 rounded-full ${live.status === "live" ? "bg-[#d93025]" : "bg-ink-muted"}`} /> : null}
+              {label}
+              <span className={`rounded-full px-1.5 font-mono text-xs ${tab === id ? "bg-white/20" : "bg-sky-mist"}`}>{n}</span>
+            </button>
+          ))}
+        </div>
+        {tab === "places" ? (
+          <>
         <div className="flex flex-wrap items-center justify-between gap-2">
           <p aria-live="polite" className="text-sm font-semibold text-ink">
             {search.status === "ready"
@@ -658,13 +754,45 @@ export function PlacesExplorer({ apiKey, mapId }: { apiKey: string; mapId: strin
         {mapState === "ready" ? (
           <p className="mt-4 text-sm text-ink-muted">Places, ratings and hours from Google. Tap a place for details and directions.</p>
         ) : null}
+          </>
+        ) : (
+          <LivePanel
+            live={live}
+            kinds={liveKinds}
+            onToggleKind={(kind) =>
+              setLiveKinds((current) => {
+                const next = new Set(current);
+                if (next.has(kind)) next.delete(kind);
+                else next.add(kind);
+                return next;
+              })
+            }
+            showOnMap={showLive}
+            onShowOnMap={setShowLive}
+            selectedId={selectedIncidentId}
+            onSelect={setSelectedIncidentId}
+          />
+        )}
       </section>
       </div>
 
       <div className="relative order-2 h-[55svh] min-h-[320px] lg:col-start-2 lg:row-start-1 lg:h-auto lg:min-h-0">
         <div ref={mapEl} role="region" aria-label={`Map of places in ${area.name}`} className="absolute inset-0 bg-sky-haze" />
+        {topAlert ? (
+          <button
+            type="button"
+            onClick={() => setTab("live")}
+            className={`absolute left-3 right-16 top-3 rounded-2xl px-4 py-2.5 text-left text-sm font-semibold shadow-lg ${
+              topAlert.severity === "Extreme" || topAlert.severity === "Severe" ? "bg-signal text-white" : "bg-ochre-wash text-ochre"
+            }`}
+          >
+            <span aria-hidden="true">⚠️ </span>
+            {topAlert.event}
+            {moreAlerts ? ` and ${moreAlerts} more ${moreAlerts === 1 ? "alert" : "alerts"}` : ""} for Fremont · <span className="underline">Details</span>
+          </button>
+        ) : null}
         {mapState === "ready" && hovered ? (
-          <p aria-hidden="true" className="pointer-events-none absolute left-3 top-3 rounded-full bg-white/95 px-3 py-1.5 text-sm font-semibold text-ink shadow">
+          <p aria-hidden="true" className={`pointer-events-none absolute left-3 rounded-full bg-white/95 px-3 py-1.5 text-sm font-semibold text-ink shadow ${topAlert ? "top-[4.5rem]" : "top-3"}`}>
             {hovered}
           </p>
         ) : null}
