@@ -44,7 +44,7 @@ def _clean(line: str) -> str:
     line = re.sub(r"\[Skip to [^\]]*\]\([^)]*\)", "", line, flags=re.IGNORECASE)  # page chrome
     line = re.sub(r"!\[[^\]]*\]\([^)]*\)", "", line)  # images carry no text
     line = re.sub(r"\[([^\]]*)\]\((?:[^()]|\([^)]*\))*\)", r"\1", line)  # keep link text, drop URL
-    line = re.sub(r"\\([.\-_*#()\[\]])", r"\1", line)
+    line = re.sub(r"\\([.\-_*#()\[\]|])", r"\1", line)
     return re.sub(r"\\(?=\s|$)", "", line)
 
 

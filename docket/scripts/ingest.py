@@ -74,13 +74,19 @@ def ingest_ref(conn, fetcher: Fetcher, vectors, s3, source: Source, ref: Documen
         text, pages = ref.inline_text, None
         raw, extension, fetched_at = text.encode("utf-8"), "txt", datetime.now(UTC)
     else:
-        artifact = fetcher.fetch(
-            ref.url,
-            source.fetcher,
-            source.params.get("wait_for_ms"),
-            source.send_user_agent,
-            main_content=True,
-        )
+        for attempt in range(2):  # Firecrawl occasionally fails a page once, then succeeds
+            try:
+                artifact = fetcher.fetch(
+                    ref.url,
+                    source.fetcher,
+                    source.params.get("wait_for_ms"),
+                    source.send_user_agent,
+                    main_content=True,
+                )
+                break
+            except Exception:
+                if attempt == 1:
+                    raise
         if not artifact.status or artifact.status >= 400:
             return "http_error"
         text, pages, fetched_at = document_text(artifact), artifact.pages, artifact.fetched_at

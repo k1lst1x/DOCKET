@@ -27,7 +27,14 @@ MEETING_PICKER_LINE = re.compile(
 
 def document_text(artifact: Artifact) -> str:
     if artifact.text is not None:
-        return MEETING_PICKER_LINE.sub("", artifact.text)
+        text = artifact.text
+        if MEETING_PICKER_LINE.search(text):
+            # Simbli meeting page: drop the picker and the navigation above the meeting title (H1).
+            text = MEETING_PICKER_LINE.sub("", text)
+            title = re.search(r"^# ", text, re.MULTILINE)
+            if title:
+                text = text[title.start() :]
+        return text
     content_type = (artifact.content_type or "").lower()
     body = artifact.raw.decode("utf-8", "replace")
     if "html" in content_type:
