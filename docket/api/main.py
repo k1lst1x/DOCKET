@@ -6,12 +6,14 @@ Run locally from docket/:  uv run uvicorn api.main:app --port 8000
 import asyncio
 import json
 import logging
+import os
+import secrets
 import sys
 import uuid
 from pathlib import Path
 from typing import Literal
 
-from fastapi import FastAPI, HTTPException
+from fastapi import Depends, FastAPI, Header, HTTPException, status
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
@@ -27,6 +29,14 @@ from core.jobs import IngestFailed, run_ingest  # noqa: E402
 log = logging.getLogger("docket.api")
 app = FastAPI(title="DOCKET API", version="0.1.0")
 NO_STORE = {"Cache-Control": "no-store"}
+
+
+def require_pipeline_token(authorization: str | None = Header(default=None)) -> None:
+    """Allow expensive operational work only to a configured operator."""
+    expected = os.environ.get("DOCKET_PIPELINE_API_TOKEN")
+    supplied = authorization.removeprefix("Bearer ") if authorization else ""
+    if not expected or not secrets.compare_digest(supplied, expected):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="operator authorization required")
 
 
 class ChatRequest(BaseModel):
@@ -111,13 +121,13 @@ async def chat(request: ChatRequest) -> StreamingResponse:
 
 
 @app.post("/generate")
-async def generate(request: GenerateRequest) -> dict:
+async def generate(request: GenerateRequest, _: None = Depends(require_pipeline_token)) -> dict:
     """Runs the generation graph for one topic and returns what was verified and stored (or why not)."""
     return await run_generation(request.topic.strip(), request.kind, request.group_id, crawl=request.crawl)
 
 
 @app.post("/ingest/run")
-async def ingest_run(request: IngestRequest) -> dict:
+async def ingest_run(request: IngestRequest, _: None = Depends(require_pipeline_token)) -> dict:
     """Runs one crawl-and-ingest cycle (the same script the scheduler uses) and returns its counts."""
     try:
         return await asyncio.to_thread(run_ingest, request.sources, request.max_docs, request.lookback_days)
