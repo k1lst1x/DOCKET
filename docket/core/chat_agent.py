@@ -23,7 +23,7 @@ from strands.hooks import AfterToolCallEvent, HookProvider, HookRegistry
 from strands.models import BedrockModel
 
 from core import retrieval, settings
-from core.citations import enforce
+from core.citations import STRONG_FACT_KINDS, enforce, extract_facts, split_sentences, supports_any
 from core.db import connect, run_with_retry
 from core.geo import geocode, neighborhood_at
 
@@ -206,6 +206,30 @@ def strip_planning(text: str) -> str:
     return "\n".join(lines).strip()
 
 
+def drop_padding_citations(text: str, turn: TurnEvidence) -> str:
+    """Within a sentence citing several evidence numbers, drop the numbers whose text holds none of the
+    sentence's strong facts (amounts, dates, sections, record ids, addresses). Enforcement checks facts
+    against all cited chunks together, so an unrelated extra citation would otherwise ride along."""
+    lines = []
+    for line in text.splitlines():
+        sentences = []
+        for sentence in split_sentences(line):
+            facts = extract_facts(sentence)
+            refs = [ref for ref in _refs_in(sentence) if ref in turn.by_ref]
+            if len(refs) > 1 and any(kind in STRONG_FACT_KINDS for kind, _ in facts):
+                keep = {ref for ref in refs if supports_any(facts, turn.by_ref[ref].cited_text())}
+                if keep:
+
+                    def only_supporting(match: re.Match, keep: set[int] = keep) -> str:
+                        cited = [n.strip() for n in match.group(1).split(",") if int(n) in keep]
+                        return f"[{', '.join(cited)}]" if cited else ""
+
+                    sentence = re.sub(r"\s+(?=[.!?]?$)", "", MARKER.sub(only_supporting, sentence))
+            sentences.append(sentence)
+        lines.append(" ".join(sentences))
+    return "\n".join(lines).strip()
+
+
 def final_text(result) -> str:
     """The model's answer text only. Reasoning blocks are skipped, and leaked <reasoning> spans removed."""
     message = getattr(result, "message", None)
@@ -266,7 +290,7 @@ def finalize(question: str, raw_answer: str, turn: TurnEvidence) -> ChatResponse
 
     enforced = enforce(text, [turn.by_ref[ref].cited_text() for ref in refs])
     removed = [asdict(item) for item in enforced.removed]
-    text = enforced.text
+    text = drop_padding_citations(enforced.text, turn)
     remaining = _refs_in(text)
     if not text or not remaining:
         return refusal(removed)

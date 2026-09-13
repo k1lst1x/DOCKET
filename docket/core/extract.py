@@ -39,6 +39,9 @@ YOUTUBE_EMBED = re.compile(r"^[^\n]* - YouTube\s*$.*?^\s*Watch on\s*$", re.MULTI
 
 IQM2_NAV_END = "Print This Page"
 IQM2_FOOTER = "**Shortcut Keys:**"
+# IQM2 serves this page for meetings whose agenda is not posted yet. It has no content, so it is not a
+# document; once the agenda is posted the page text changes and is ingested normally.
+IQM2_NOT_POSTED = "The meeting is not available at this time"
 
 
 def document_text(artifact: Artifact) -> str:
@@ -52,6 +55,8 @@ def document_text(artifact: Artifact) -> str:
             footer = text.find(IQM2_FOOTER)
             if footer != -1:
                 text = text[:footer]
+            if IQM2_NOT_POSTED in text:
+                return ""
         if MEETING_PICKER_LINE.search(text):
             # Simbli meeting page: drop the picker and the navigation above the meeting title (H1).
             text = MEETING_PICKER_LINE.sub("", text)

@@ -128,6 +128,18 @@ def _supported(kind: str, value: str, corpus: str, corpus_dates: set[str]) -> bo
     return False
 
 
+STRONG_FACT_KINDS = {"dollar", "date", "section", "record_id", "address"}
+
+
+def supports_any(facts: list[tuple[str, str]], evidence_text: str) -> bool:
+    """True when the evidence contains at least one of the strong facts (not bare numbers, which match
+    almost any text). Used to tell a citation that supports its sentence from one that was only added."""
+    corpus, corpus_dates = normalize(evidence_text), dates_in(evidence_text)
+    return any(
+        kind in STRONG_FACT_KINDS and _supported(kind, value, corpus, corpus_dates) for kind, value in facts
+    )
+
+
 def enforce(text: str, evidence_texts: list[str]) -> EnforcementResult:
     """Drop every sentence with a fact not found in the cited evidence."""
     joined = " ".join(evidence_texts)
