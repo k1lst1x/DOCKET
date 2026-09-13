@@ -89,8 +89,8 @@ function eligibleGroup(groups: MemberGroup[], issue: { group_slug: string | null
   );
 }
 
-const isClosed = (status: string, deadline: Date | null) =>
-  status === "decided" || (deadline !== null && new Date(deadline).getTime() < Date.now());
+export const isClosed = (status: string, deadline: Date | null, now = Date.now()) =>
+  status === "decided" || (deadline !== null && new Date(deadline).getTime() < now);
 
 export async function getIssueDetail(issueId: string, memberId: string | null): Promise<IssueDetail | null> {
   const pool = db();
@@ -341,6 +341,7 @@ export async function postReview(memberId: string, issueId: string, rating: numb
       );
       const stance = rows[0];
       if (!stance) throw new IssueActionError("not_found");
+      if (isClosed(stance.status, stance.deadline)) throw new IssueActionError("closed");
       await client.query(
         `INSERT INTO reviews (issue_id, member_id, stance_poll_id, rating, body)
          VALUES ($1, $2, $3, $4, $5)
