@@ -6,6 +6,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from core.citations import canonical_date, enforce, extract_facts
+from core.retrieval import Evidence
 
 CHUNK = (
     "| | C. | Security Information And Management System Renewal - Authorize the City Manager or her "
@@ -45,6 +46,37 @@ def main() -> int:
     mixed = enforce("Capped at $396,000 [1]. It was approved unanimously on 9/9/2026 [1].", [CHUNK])
     print(f"\nmixed answer -> {mixed.text!r}; removed {[r.unsupported for r in mixed.removed]}")
     failures += mixed.text != "Capped at $396,000 [1]."
+    # The meeting date is only in the document title; the cited agenda row does not repeat it.
+    row = Evidence(
+        chunk_id="c1",
+        document_id="d1",
+        source_id="fremont-council-iqm2",
+        source_name="IQM2",
+        title="City Council Regular Meeting – Sep 1, 2026 7:00 PM",
+        url="https://example.invalid/2089",
+        locator="2. Consent Calendar › G. Purchase of Trash Can Liners",
+        doc_type="meeting_document",
+        published_at="2026-09-01T19:00:00-07:00",
+        text=(
+            "| G. | Purchase of Trash Can Liners - Approval of Multi-Year Purchase Order with "
+            "Wardley Industrial Inc. |"
+        ),
+    )
+    for name, sentence, should_keep in (
+        (
+            "date only in document title",
+            "The September 1, 2026 agenda lists Wardley Industrial Inc. [1].",
+            True,
+        ),
+        (
+            "date not in title either",
+            "The September 15, 2026 agenda lists Wardley Industrial Inc. [1].",
+            False,
+        ),
+    ):
+        kept = bool(enforce(sentence, [row.cited_text()]).text)
+        failures += kept != should_keep
+        print(f"{'PASS' if kept == should_keep else 'FAIL'}  {name}: kept={kept}")
     date_cases = (("Sep. 8th 2026", "2026-09-08"), ("2026-09-08", "2026-09-08"), ("Sept 2026", "2026-09"))
     for value, expected in date_cases:
         ok = canonical_date(value) == expected

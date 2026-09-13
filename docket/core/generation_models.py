@@ -117,7 +117,7 @@ def check_facts(
     claim: CandidateClaim, evidence_by_ref: dict[int, Evidence]
 ) -> tuple[bool, list[str], list[str]]:
     """Code-level check: returns (passes, unsupported facts, cited texts)."""
-    cited = [evidence_by_ref[ref].text for ref in claim.refs if ref in evidence_by_ref]
+    cited = [evidence_by_ref[ref].cited_text() for ref in claim.refs if ref in evidence_by_ref]
     if not cited:
         return False, ["no valid evidence number cited"], []
     if claim.section == "visual" and claim.value is not None:
@@ -179,7 +179,9 @@ def assemble_verified(
                 continue
             body_claims.append({"text": claim.text, "citations": _citations(claim.refs, evidence_by_ref)})
             claims.append((claim.text, [c["chunk_id"] for c in body_claims[-1]["citations"]]))
-        cited_texts = [evidence_by_ref[r].text for c in kept.values() for r in c.refs if r in evidence_by_ref]
+        cited_texts = [
+            evidence_by_ref[r].cited_text() for c in kept.values() for r in c.refs if r in evidence_by_ref
+        ]
         headline = summary.headline if summary else topic
         body["headline"] = headline if cited_texts and not enforce(headline, cited_texts).removed else topic
         body["claims"] = body_claims

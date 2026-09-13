@@ -57,6 +57,12 @@ class Evidence:
     def to_dict(self) -> dict:
         return asdict(self)
 
+    def cited_text(self) -> str:
+        """What a citation to this chunk vouches for: the chunk plus its document's title, locator and
+        date. A meeting's date is often only in the document title, not in the agenda row being cited."""
+        date = self.published_at[:10] if self.published_at else ""
+        return f"{self.title}\n{self.locator}\n{date}\n{self.text}"
+
 
 _lock = threading.Lock()
 _connection: psycopg.Connection | None = None

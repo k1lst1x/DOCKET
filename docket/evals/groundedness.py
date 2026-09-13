@@ -48,7 +48,7 @@ async def eval_answerable(item: dict) -> dict:
     question, expected = item["question"], item["expect"]
     retrieval_hit = _contains([e.text for e in hybrid_search(question)], expected)
     response = await answer(question, user_id=EVAL_USER)
-    cited_texts = [e.text for e in fetch_chunks([c.chunk_id for c in response.citations])]
+    cited_texts = [e.cited_text() for e in fetch_chunks([c.chunk_id for c in response.citations])]
     refs = {int(n) for n in re.findall(r"\[(\d+)\]", response.answer)}
     markers_ok = bool(refs) and refs <= {c.ref for c in response.citations}
     citation_valid = not response.refused and markers_ok and not enforce(response.answer, cited_texts).removed

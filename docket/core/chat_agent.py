@@ -234,7 +234,7 @@ def finalize(question: str, raw_answer: str, turn: TurnEvidence) -> ChatResponse
     if not refs:
         return refusal()
 
-    enforced = enforce(text, [turn.by_ref[ref].text for ref in refs])
+    enforced = enforce(text, [turn.by_ref[ref].cited_text() for ref in refs])
     removed = [asdict(item) for item in enforced.removed]
     text = enforced.text
     remaining = _refs_in(text)

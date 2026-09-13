@@ -45,7 +45,9 @@ FACT_PATTERNS: list[tuple[str, re.Pattern]] = [
     ("number", re.compile(r"(?<![\w$])\d[\d,]*(?:\.\d+)?%?")),
 ]
 CITATION_MARKER = re.compile(r"\[\d+(?:\s*,\s*\d+)*\]")
-SENTENCE_BREAK = re.compile(r"(?<=[.!?])\s+(?=[A-Z\"'(\[])")
+# No break before "[": a citation marker belongs to the sentence before it ("... Inc. [1]."), so it
+# can never survive alone after its sentence is removed.
+SENTENCE_BREAK = re.compile(r"(?<=[.!?])\s+(?=[A-Z\"'(])")
 DATE_FORMATS = (
     ("%B %d %Y", "%Y-%m-%d"),
     ("%b %d %Y", "%Y-%m-%d"),
