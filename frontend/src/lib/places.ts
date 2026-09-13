@@ -97,6 +97,39 @@ export const areaBySlug = (slug: string | null | undefined): Area | undefined =>
 export const neighborhoodAt = (lng: number, lat: number): Area | undefined =>
   NEIGHBORHOODS.find((n) => n.polygon && pointInPolygon([lng, lat], n.polygon));
 
+/** A Google opening-hours point: day 0 is Sunday. */
+export interface HoursPoint {
+  day: number;
+  hour: number;
+  minute: number;
+}
+
+const WEEK_MINUTES = 7 * 24 * 60;
+const weekMinute = (p: HoursPoint) => p.day * 24 * 60 + p.hour * 60 + p.minute;
+
+/**
+ * Whether a place is open at `now`, from its regular opening periods and UTC offset.
+ * Place.isOpen() is beta-only in the Maps JavaScript API, so this does the same math:
+ * a period with no close is open around the clock, and periods may cross midnight or the week end.
+ * Returns undefined when there isn't enough data to say.
+ */
+export function isOpenAt(
+  periods: { open: HoursPoint; close?: HoursPoint | null }[] | null | undefined,
+  utcOffsetMinutes: number | null | undefined,
+  now: Date = new Date(),
+): boolean | undefined {
+  if (!periods?.length || typeof utcOffsetMinutes !== "number") return undefined;
+  const local = new Date(now.getTime() + utcOffsetMinutes * 60_000);
+  const t = local.getUTCDay() * 24 * 60 + local.getUTCHours() * 60 + local.getUTCMinutes();
+  return periods.some(({ open, close }) => {
+    if (!close) return true;
+    const start = weekMinute(open);
+    let end = weekMinute(close);
+    if (end <= start) end += WEEK_MINUTES;
+    return (t >= start && t < end) || (t + WEEK_MINUTES >= start && t + WEEK_MINUTES < end);
+  });
+}
+
 const slugOf = (name: string) => name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
 
 /** A member's home neighborhood: the one their first group is in. */

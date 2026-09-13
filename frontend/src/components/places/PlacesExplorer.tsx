@@ -9,6 +9,7 @@ import {
   categoryById,
   categoryForType,
   FREMONT,
+  isOpenAt,
   neighborhoodAt,
   neighborhoodForGroups,
   NEIGHBORHOODS,
@@ -39,6 +40,7 @@ interface PlaceDetail {
   id: string;
   failed: boolean;
   openNow?: boolean;
+  closedTemporarily?: boolean;
   todayHours: string | null;
   phone: string | null;
   website: string | null;
@@ -137,9 +139,10 @@ async function loadDetail(id: string): Promise<PlaceDetail> {
   const { Place } = (await google.maps.importLibrary("places")) as google.maps.PlacesLibrary;
   const place = new Place({ id });
   await place.fetchFields({
-    fields: ["regularOpeningHours", "utcOffsetMinutes", "nationalPhoneNumber", "websiteURI", "photos", "editorialSummary"],
+    fields: ["businessStatus", "regularOpeningHours", "utcOffsetMinutes", "nationalPhoneNumber", "websiteURI", "photos", "editorialSummary"],
   });
-  const openNow = place.regularOpeningHours ? await place.isOpen().catch(() => undefined) : undefined;
+  const closedTemporarily = String(place.businessStatus ?? "") === "CLOSED_TEMPORARILY";
+  const openNow = closedTemporarily ? false : isOpenAt(place.regularOpeningHours?.periods, place.utcOffsetMinutes);
   // Google lists opening hours Monday first.
   const todayHours = place.regularOpeningHours?.weekdayDescriptions?.[(new Date().getDay() + 6) % 7] ?? null;
   const photo = place.photos?.[0];
@@ -148,6 +151,7 @@ async function loadDetail(id: string): Promise<PlaceDetail> {
     id,
     failed: false,
     openNow,
+    closedTemporarily,
     todayHours,
     phone: place.nationalPhoneNumber ?? null,
     website: place.websiteURI ?? null,
@@ -462,8 +466,12 @@ export function PlacesExplorer({ apiKey, mapId }: { apiKey: string; mapId: strin
   const loading = search.status === "loading" || (mapState === "loading" && Boolean(apiKey));
 
   return (
-    <div className="flex flex-1 flex-col bg-sky-mist lg:grid lg:min-h-0 lg:grid-cols-[minmax(0,27rem)_minmax(0,1fr)] lg:grid-rows-[auto_minmax(0,1fr)]">
-      <section aria-labelledby="places-title" className="border-b border-rule bg-white px-4 pb-4 pt-5 sm:px-6 lg:col-start-1 lg:row-start-1 lg:border-r">
+    // Phones: controls, map, results in one scroll. Desktop: controls and results share a scrolling
+    // column beside a full-height map.
+    <div className="flex flex-1 flex-col bg-sky-mist lg:grid lg:min-h-0 lg:grid-cols-[minmax(0,27rem)_minmax(0,1fr)] lg:grid-rows-[minmax(0,1fr)]">
+      {/* relative: screen-reader-only text positions inside this scroller instead of stretching the page. */}
+      <div className="contents lg:relative lg:col-start-1 lg:row-start-1 lg:block lg:min-h-0 lg:overflow-y-auto lg:border-r lg:border-rule">
+      <section aria-labelledby="places-title" className="order-1 border-b border-rule bg-white px-4 pb-4 pt-5 sm:px-6">
         <p className="eyebrow">Places</p>
         <h1 id="places-title" className="display mt-1 text-[2rem] leading-tight sm:text-[2.25rem]">
           {isCity ? "Explore Fremont" : area.name}
@@ -554,22 +562,7 @@ export function PlacesExplorer({ apiKey, mapId }: { apiKey: string; mapId: strin
         </div>
       </section>
 
-      <div className="relative h-[55svh] min-h-[320px] lg:col-start-2 lg:row-span-2 lg:row-start-1 lg:h-auto lg:min-h-0">
-        <div ref={mapEl} role="region" aria-label={`Map of places in ${area.name}`} className="absolute inset-0 bg-sky-haze" />
-        {mapState === "ready" && hovered ? (
-          <p aria-hidden="true" className="pointer-events-none absolute left-3 top-3 rounded-full bg-white/95 px-3 py-1.5 text-sm font-semibold text-ink shadow">
-            {hovered}
-          </p>
-        ) : null}
-        {loading && mapState !== "failed" ? (
-          <p role="status" className="absolute bottom-6 left-1/2 -translate-x-1/2 rounded-full bg-ink px-4 py-2 text-sm font-semibold text-white shadow-lg">
-            {mapState === "loading" ? "Loading the map…" : `Finding places in ${area.name}…`}
-          </p>
-        ) : null}
-        {mapState === "missing-key" || mapState === "failed" ? <MapUnavailable state={mapState} error={mapError} /> : null}
-      </div>
-
-      <section aria-label="Results" className="bg-sky-mist px-4 py-4 sm:px-6 lg:col-start-1 lg:row-start-2 lg:overflow-y-auto lg:border-r lg:border-rule">
+      <section aria-label="Results" className="order-3 bg-sky-mist px-4 py-4 sm:px-6">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <p aria-live="polite" className="text-sm font-semibold text-ink">
             {search.status === "ready"
@@ -666,6 +659,22 @@ export function PlacesExplorer({ apiKey, mapId }: { apiKey: string; mapId: strin
           <p className="mt-4 text-sm text-ink-muted">Places, ratings and hours from Google. Tap a place for details and directions.</p>
         ) : null}
       </section>
+      </div>
+
+      <div className="relative order-2 h-[55svh] min-h-[320px] lg:col-start-2 lg:row-start-1 lg:h-auto lg:min-h-0">
+        <div ref={mapEl} role="region" aria-label={`Map of places in ${area.name}`} className="absolute inset-0 bg-sky-haze" />
+        {mapState === "ready" && hovered ? (
+          <p aria-hidden="true" className="pointer-events-none absolute left-3 top-3 rounded-full bg-white/95 px-3 py-1.5 text-sm font-semibold text-ink shadow">
+            {hovered}
+          </p>
+        ) : null}
+        {loading && mapState !== "failed" ? (
+          <p role="status" className="absolute bottom-6 left-1/2 -translate-x-1/2 rounded-full bg-ink px-4 py-2 text-sm font-semibold text-white shadow-lg">
+            {mapState === "loading" ? "Loading the map…" : `Finding places in ${area.name}…`}
+          </p>
+        ) : null}
+        {mapState === "missing-key" || mapState === "failed" ? <MapUnavailable state={mapState} error={mapError} /> : null}
+      </div>
     </div>
   );
 }
@@ -699,7 +708,7 @@ function PlaceCard({ result, detail }: { result: PlaceResult; detail: PlaceDetai
           <div className="mt-3 flex flex-wrap items-center gap-2 text-sm">
             {detail.openNow !== undefined ? (
               <span className={`rounded-full px-2.5 py-0.5 font-semibold ${detail.openNow ? "bg-park-wash text-park" : "bg-signal-wash text-signal"}`}>
-                {detail.openNow ? "Open now" : "Closed now"}
+                {detail.closedTemporarily ? "Temporarily closed" : detail.openNow ? "Open now" : "Closed now"}
               </span>
             ) : null}
             {detail.todayHours ? <span className="text-ink-soft">{detail.todayHours}</span> : null}

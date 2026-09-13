@@ -1,7 +1,46 @@
 import { describe, expect, it } from "vitest";
 import { GROUP_SEEDS } from "../data/fixtures";
 import { haversineKm, pointInPolygon } from "./geo";
-import { areaBySlug, CATEGORIES, categoryById, categoryForType, FREMONT, neighborhoodAt, neighborhoodForGroups, NEIGHBORHOODS } from "./places";
+import {
+  areaBySlug,
+  CATEGORIES,
+  categoryById,
+  categoryForType,
+  FREMONT,
+  isOpenAt,
+  neighborhoodAt,
+  neighborhoodForGroups,
+  NEIGHBORHOODS,
+} from "./places";
+
+describe("isOpenAt", () => {
+  const PDT = -420;
+  // Sunday 2026-09-13 at 14:30 in Fremont (PDT) is 21:30 UTC.
+  const sundayAfternoon = new Date("2026-09-13T21:30:00Z");
+  const at = (day: number, hour: number, minute = 0) => ({ day, hour, minute });
+
+  it("reads regular daily hours in the place's own time zone", () => {
+    const weekdays9to5 = [1, 2, 3, 4, 5].map((d) => ({ open: at(d, 9), close: at(d, 17) }));
+    expect(isOpenAt(weekdays9to5, PDT, sundayAfternoon)).toBe(false);
+    expect(isOpenAt(weekdays9to5, PDT, new Date("2026-09-14T16:05:00Z"))).toBe(true); // Monday 09:05 PDT
+    expect(isOpenAt(weekdays9to5, PDT, new Date("2026-09-15T00:00:00Z"))).toBe(false); // Monday 17:00 PDT, just closed
+    expect(isOpenAt([{ open: at(0, 11), close: at(0, 21) }], PDT, sundayAfternoon)).toBe(true);
+  });
+
+  it("handles 24-hour places, overnight hours and the Saturday-to-Sunday wrap", () => {
+    expect(isOpenAt([{ open: at(0, 0), close: null }], PDT, sundayAfternoon)).toBe(true);
+    const lateNight = [{ open: at(6, 18), close: at(0, 2) }]; // Saturday 18:00 to Sunday 02:00
+    expect(isOpenAt(lateNight, PDT, new Date("2026-09-13T08:30:00Z"))).toBe(true); // Sunday 01:30 PDT
+    expect(isOpenAt(lateNight, PDT, new Date("2026-09-13T10:00:00Z"))).toBe(false); // Sunday 03:00 PDT
+    expect(isOpenAt([{ open: at(5, 22), close: at(6, 3) }], PDT, new Date("2026-09-12T08:00:00Z"))).toBe(true); // Saturday 01:00 PDT
+  });
+
+  it("returns undefined without hours or an offset", () => {
+    expect(isOpenAt([], PDT, sundayAfternoon)).toBeUndefined();
+    expect(isOpenAt(null, PDT, sundayAfternoon)).toBeUndefined();
+    expect(isOpenAt([{ open: at(0, 9), close: at(0, 17) }], undefined, sundayAfternoon)).toBeUndefined();
+  });
+});
 
 // Checked against Google's Places API (New) Table A on 2026-09-13. Table B types (like place_of_worship)
 // are rejected as search filters, so every category type must come from this list.
