@@ -54,6 +54,8 @@ Rules:
   numbers that a tool returned in this turn.
 - Copy numbers, dollar amounts, dates, addresses, section numbers and case or request ids exactly as they
   appear in the evidence.
+- Each sentence cites the evidence number whose own text contains that sentence's facts. Do not combine
+  facts from different documents or meetings in one sentence; write a separate cited sentence for each.
 - If the evidence does not answer the question, reply exactly: I don't have anything in my sources about that.
 - When asked what someone is legally allowed or required to do, quote the relevant text, cite it, and say
   that this is the text of the source documents, not legal advice.
@@ -343,6 +345,22 @@ def persist_turn(
         )
 
 
+def recite_request(removed: list[dict]) -> str:
+    """Feedback for one re-citation attempt: the sentences that failed and the facts not in their citation."""
+    failures = "\n".join(
+        f"- {item['sentence']} (not in the cited evidence: {', '.join(item['unsupported'])})"
+        for item in removed
+    )
+    return (
+        "Your answer was not shown because these sentences state facts that are not in the evidence "
+        f"they cite:\n{failures}\n"
+        "Rewrite the answer using only the evidence already returned in this turn. Give each fact the "
+        "evidence number whose text contains it, and use one document per sentence. If the evidence does "
+        "not contain a fact, leave it out. If nothing in the evidence answers the question, reply "
+        f"exactly: {REFUSAL}"
+    )
+
+
 def _model() -> BedrockModel:
     return BedrockModel(model_id=settings.BEDROCK_MODEL_ID, region_name=settings.AWS_REGION)
 
@@ -363,6 +381,15 @@ async def answer(
     )
     result = await agent.invoke_async(question)
     response = finalize(question, final_text(result), turn)
+    if response.refused and response.removed_sentences:
+        # Nothing survived enforcement, usually because a fact was cited to the wrong evidence number or
+        # facts from two documents were merged. Ask once to re-cite from the same evidence; the retry goes
+        # through the same enforcement, so a wrong answer can still only become a refusal.
+        first_removed = response.removed_sentences
+        retry = await agent.invoke_async(recite_request(first_removed))
+        response = finalize(question, final_text(retry), turn)
+        response.removed_sentences = first_removed + response.removed_sentences
+        log.warning("chat answer re-cited after enforcement removed everything; refused=%s", response.refused)
     response.session_id = session
     if response.removed_sentences:
         log.warning(
