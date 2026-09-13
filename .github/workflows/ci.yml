@@ -82,13 +82,8 @@ jobs:
       - run: npm run test
       - run: npm run build
 
-      - name: Prepare static Pages landing
-        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
-        run: |
-          cp -R pages-landing out-pages
-          test -f out-pages/index.html
-          test -f out-pages/app.js
-          test -f out-pages/styles.css
+      - name: Build original frontend for Pages
+        run: npm run build:pages
       - name: Upload Pages artifact
         if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
         uses: actions/upload-pages-artifact@v3
@@ -131,4 +126,5 @@ jobs:
           test -n "$PAGES_URL"
           curl --fail --silent --show-error --location \
             --retry 5 --retry-delay 5 --retry-all-errors \
-            "$PAGES_URL" | grep -q "Know what city hall means"
+            --output /tmp/docket-home.html "$PAGES_URL"
+          grep -q "Where do you live?" /tmp/docket-home.html

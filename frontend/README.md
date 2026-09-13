@@ -59,3 +59,18 @@ never from a request body.
   shared across Amplify instances.
 - Geocoding uses the free US Census geocoder. Magic links are printed to the
   server console in development; email delivery is not configured yet.
+
+## GitHub Pages preview
+
+Run `npm run build:pages` to export the original Next.js frontend to `out-pages/`.
+The build copies `src/` into ignored `.pages-build/` and applies server-only route
+adapters there; shared components, fonts, illustrations, styles and fixtures are
+used directly. Do not create a separate HTML/CSS landing page. Changes made by
+the frontend team are included automatically on the next Pages build.
+
+The default base path is `/DOCKET`; set `PAGES_BASE_PATH` to override it. CI builds
+this preview on pull requests and publishes it after successful main checks.
+Pages has no API or session server: join submissions show an unavailable message
+instead of claiming an email was sent. Address lookup runs in the browser and
+uses the existing unavailable view if the Census service rejects the request.
+The regular `npm run build` remains the server build for Amplify.
