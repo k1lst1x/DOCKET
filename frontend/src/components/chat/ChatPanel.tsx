@@ -26,18 +26,31 @@ type ChatEvent =
   | { type: "final"; answer: string; citations?: Citation[]; session_id?: string; refused?: boolean }
   | { type: "error"; message: string };
 
+// Keep these in step with what the chat agent has actually read (see docket/ ingest).
 const GREETING =
-  "Hi, I'm Docket's assistant. Soon I'll explain agenda items, summarize how neighbors voted, and find places near you.";
+  "Hi, I'm Docket's assistant. Ask me about Fremont City Council and Planning Commission agendas and minutes (June to September 2026), recent city news, or the city's transportation plans. I link the documents behind every answer.";
 const NOT_CONNECTED =
   "I'm not connected to Docket's data yet, so I can't answer that for real. Once I am, I'll answer with sources from Fremont city documents.";
 
 const SUGGESTIONS = [
-  "What's due this week in Niles?",
-  "Explain the Irvington BART traffic plan",
-  "Which schools are near Lake Elizabeth?",
+  "What's on the September 15 City Council agenda?",
+  "What is the Fremont-Decoto Land Development Plan?",
+  "What did the City Council decide about the City charter in July?",
 ];
 
 const isHttpUrl = (url: string) => /^https?:\/\//i.test(url);
+
+/**
+ * Model output uses narrow no-break spaces and non-breaking hyphens that wrap
+ * badly, and sometimes markdown emphasis the plain-text bubble would show literally.
+ */
+function tidy(text: string): string {
+  return text
+    .replace(/[    ]/g, " ")
+    .replace(/[‐‑]/g, "-")
+    .replace(/\*\*([^*\n]+)\*\*/g, "$1")
+    .replace(/(^|[\s(“"'])\*([^*\n]+)\*(?=[\s).,;:!?”"']|$)/g, "$1$2");
+}
 
 function parseEvents(block: string): ChatEvent[] {
   const data = block
@@ -192,23 +205,32 @@ export function ChatPanel({ variant, onClose, autoFocus = false }: ChatPanelProp
               }`}
             >
               <span className="sr-only">{m.role === "user" ? "You: " : "Assistant: "}</span>
-              {m.text}
+              {m.role === "assistant" ? tidy(m.text) : m.text}
             </p>
             {m.citations && m.citations.length > 0 ? (
-              <ul aria-label="Sources" className="mt-1.5 max-w-[85%] space-y-1 pl-1 text-sm text-ink-muted">
-                {m.citations.map((c) => (
-                  <li key={`${m.id}-${c.ref}`}>
-                    <a
-                      href={c.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="underline decoration-rule underline-offset-2 hover:text-ink"
-                    >
-                      [{c.ref}] {c.title}
-                      {c.locator && c.locator !== "document start" ? ` — ${c.locator}` : ""}
-                    </a>
-                  </li>
-                ))}
+              <ul aria-label="Sources" className="mt-2 grid w-full max-w-[85%] gap-1.5">
+                {m.citations.map((c) => {
+                  // Locators span a whole chunk ("first heading … last heading") and read as the
+                  // wrong section, so the source is shown by document title only.
+                  return (
+                    <li key={`${m.id}-${c.ref}`} className="min-w-0">
+                      <a
+                        href={c.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        title={c.title}
+                        className="flex w-full min-w-0 items-center gap-2.5 overflow-hidden rounded-xl border border-rule bg-white px-3 py-2 text-sm transition-colors hover:border-ink/30 hover:bg-sky-mist"
+                      >
+                        <span className="shrink-0 rounded-md bg-sky-mist px-1.5 font-mono text-ink-soft">{c.ref}</span>
+                        <span className="line-clamp-2 min-w-0 flex-1 break-words font-semibold leading-snug text-ink">{c.title}</span>
+                        <svg viewBox="0 0 16 16" aria-hidden="true" className="mt-1 h-3.5 w-3.5 shrink-0 text-ink-muted">
+                          <path d="M6 3h7v7M13 3L5.5 10.5M11 9.5V13H3V5h3.5" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                        </svg>
+                        <span className="sr-only">(opens in a new tab)</span>
+                      </a>
+                    </li>
+                  );
+                })}
               </ul>
             ) : null}
           </div>

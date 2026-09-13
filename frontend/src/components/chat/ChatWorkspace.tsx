@@ -17,16 +17,21 @@ export function ChatWorkspace() {
           New chat
         </button>
         <div className="hidden md:block">
-          <p className="eyebrow">Recent</p>
-          <p className="mt-2 text-sm text-ink-muted">Your conversations will be saved here once chat is connected.</p>
+          <p className="eyebrow">What I&apos;ve read</p>
+          <ul className="mt-2 grid gap-1.5 text-sm text-ink-soft">
+            <li>City Council agendas and minutes, June to September 2026</li>
+            <li>Planning Commission agendas and minutes</li>
+            <li>City news, early September 2026</li>
+            <li>Fremont&apos;s transportation plans</li>
+          </ul>
         </div>
         <div className="mt-auto hidden rounded-xl bg-sky-mist p-4 md:block">
           <p className="flex items-center gap-2 text-sm font-semibold text-ink">
             <SparkIcon className="h-4 w-4" />
-            Coming soon
+            Every answer is sourced
           </p>
           <p className="mt-1 text-sm text-ink-soft">
-            Answers grounded in Fremont agendas, with the page they came from.
+            Each answer links the documents it came from. If those don&apos;t cover your question, I&apos;ll say so. Conversations aren&apos;t saved between visits.
           </p>
         </div>
       </aside>
