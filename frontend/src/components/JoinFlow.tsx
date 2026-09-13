@@ -1,9 +1,12 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, type FormEvent } from "react";
+import { CodeEntry } from "@/components/CodeEntry";
 import { EmptyState } from "@/components/EmptyState";
 import { WatchItemCard } from "@/components/WatchItemCard";
+import type { CodeStatus } from "@/lib/auth-codes";
 import { formatNumber } from "@/lib/format";
 import { parseJoin, type JoinFieldErrors } from "@/lib/join";
 import type { WatchItem } from "@/lib/types";
@@ -18,11 +21,25 @@ interface JoinGroup {
 
 interface Joined {
   email: string;
-  devLinkInConsole: boolean;
+  code: CodeStatus;
   items: WatchItem[];
 }
 
+function codeProblem(code: CodeStatus, email: string) {
+  switch (code) {
+    case "undeliverable":
+      return `We couldn't send a code to ${email} yet, so voting from this device will have to wait. Everything below is still yours to read.`;
+    case "busy":
+      return "Too many codes were requested just now. You can sign in again in a minute from the Sign in button.";
+    case "not_configured":
+      return "Sign-in isn't set up on this server yet, so we couldn't send a code.";
+    default:
+      return "We couldn't send your code just now. You can sign in later from the Sign in button.";
+  }
+}
+
 export function JoinFlow({ group }: { group: JoinGroup }) {
+  const router = useRouter();
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [topics, setTopics] = useState<string[]>([]);
@@ -33,6 +50,7 @@ export function JoinFlow({ group }: { group: JoinGroup }) {
   const [formError, setFormError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [joined, setJoined] = useState<Joined | null>(null);
+  const [signedInAs, setSignedInAs] = useState<string | null>(null);
 
   const nameRef = useRef<HTMLInputElement>(null);
   const emailRef = useRef<HTMLInputElement>(null);
@@ -72,10 +90,14 @@ export function JoinFlow({ group }: { group: JoinGroup }) {
         return;
       }
       if (!res.ok || !data) {
-        setFormError("We couldn't add you just now. Your details are still here; try again in a moment.");
+        setFormError(
+          res.status === 429
+            ? "Too many join requests from this connection. Wait a minute and try again."
+            : "We couldn't add you just now. Your details are still here; try again in a moment.",
+        );
         return;
       }
-      setJoined({ email: data.email, devLinkInConsole: data.devLinkInConsole, items: data.group.items });
+      setJoined({ email: data.email, code: data.code, items: data.group.items });
     } catch {
       setFormError("We couldn't reach Docket. Check your connection and try again.");
     } finally {
@@ -90,15 +112,30 @@ export function JoinFlow({ group }: { group: JoinGroup }) {
         <h1 id="joined-heading" ref={joinedHeading} tabIndex={-1} className="display mt-2 text-[2.25rem] leading-tight sm:text-[3rem]">
           Here&apos;s what {group.name} is watching.
         </h1>
-        <p className="mt-3 max-w-read text-lg text-ink-soft">
-          We sent a sign-in link to <span className="font-semibold text-ink">{joined.email}</span>. You don&apos;t need it to
-          read any of this. It&apos;s for voting and volunteering later.
-        </p>
-        {joined.devLinkInConsole ? (
-          <p className="mt-3 inline-block rounded bg-white px-3 py-1.5 text-sm text-ink-soft">
-            Development mode: the link is printed in the server console instead of emailed.
+
+        {signedInAs ? (
+          <p role="status" className="mt-5 inline-flex rounded-2xl bg-park-wash px-4 py-3 text-base font-semibold text-park">
+            Email confirmed. You&apos;re signed in as {signedInAs}.
           </p>
-        ) : null}
+        ) : joined.code === "sent" ? (
+          <div className="mt-6 max-w-read rounded-2xl border border-rule bg-white p-5 sm:p-6">
+            <CodeEntry
+              email={joined.email}
+              intro={
+                <>
+                  We emailed a 6-digit code to <span className="font-semibold text-ink">{joined.email}</span>. Enter it to confirm your
+                  email so you can vote and volunteer. You can read everything below either way.
+                </>
+              }
+              onVerified={({ name: verifiedName }) => {
+                setSignedInAs(verifiedName);
+                router.refresh();
+              }}
+            />
+          </div>
+        ) : (
+          <p className="mt-5 max-w-read rounded-2xl bg-white px-4 py-3 text-base text-ink-soft">{codeProblem(joined.code, joined.email)}</p>
+        )}
 
         {joined.items.length ? (
           <ol className="mt-8 grid gap-5">
@@ -115,7 +152,7 @@ export function JoinFlow({ group }: { group: JoinGroup }) {
         )}
 
         <div className="mt-8">
-          <Link href={`/g/${group.slug}`} className="btn btn-secondary">
+          <Link href={`/g/${group.slug}`} className="btn btn-secondary rounded-full">
             Go to the group page
           </Link>
         </div>
@@ -123,10 +160,8 @@ export function JoinFlow({ group }: { group: JoinGroup }) {
     );
   }
 
-  const otherSelected = somethingElse;
-
   return (
-    <div className="mx-auto max-w-3xl rounded-lg border border-rule bg-white p-6 sm:p-10">
+    <div className="mx-auto max-w-3xl rounded-2xl border border-rule bg-white p-6 sm:p-10">
       <p className="eyebrow">
         {group.district} · {formatNumber(group.memberCount)} members
       </p>
@@ -137,7 +172,7 @@ export function JoinFlow({ group }: { group: JoinGroup }) {
 
       <form noValidate onSubmit={onSubmit} className="mt-8 grid gap-7">
         {formError ? (
-          <div role="alert" className="rounded border border-signal/50 bg-signal-wash px-4 py-3 text-base text-signal">
+          <div role="alert" className="rounded-xl border border-signal/50 bg-signal-wash px-4 py-3 text-base text-signal">
             {formError}
           </div>
         ) : null}
@@ -157,7 +192,7 @@ export function JoinFlow({ group }: { group: JoinGroup }) {
             onChange={(e) => setName(e.target.value)}
             aria-invalid={Boolean(errors.name)}
             aria-describedby={errors.name ? "join-name-error" : undefined}
-            className="field"
+            className="field rounded-xl"
           />
           <FieldError id="join-name-error" message={errors.name} />
         </div>
@@ -177,10 +212,10 @@ export function JoinFlow({ group }: { group: JoinGroup }) {
             onChange={(e) => setEmail(e.target.value)}
             aria-invalid={Boolean(errors.email)}
             aria-describedby={`join-email-hint${errors.email ? " join-email-error" : ""}`}
-            className="field"
+            className="field rounded-xl"
           />
           <p id="join-email-hint" className="mt-2 text-sm text-ink-soft">
-            We send a sign-in link here. You can read everything without clicking it.
+            We&apos;ll email a 6-digit code so you can vote later. You can read everything without it.
           </p>
           <FieldError id="join-email-error" message={errors.email} />
         </div>
@@ -192,9 +227,9 @@ export function JoinFlow({ group }: { group: JoinGroup }) {
             {group.watchlist.map((topic) => (
               <Chip key={topic} label={topic} checked={topics.includes(topic)} onChange={() => toggleTopic(topic)} />
             ))}
-            <Chip label="Something else" checked={otherSelected} onChange={() => setSomethingElse((v) => !v)} />
+            <Chip label="Something else" checked={somethingElse} onChange={() => setSomethingElse((v) => !v)} />
           </div>
-          {otherSelected ? (
+          {somethingElse ? (
             <div className="mt-4">
               <label htmlFor="join-other" className="label">
                 What else should the group watch?
@@ -209,14 +244,14 @@ export function JoinFlow({ group }: { group: JoinGroup }) {
                 onChange={(e) => setOtherTopic(e.target.value)}
                 aria-invalid={Boolean(errors.otherTopic)}
                 aria-describedby={errors.otherTopic ? "join-other-error" : undefined}
-                className="field"
+                className="field rounded-xl"
               />
               <FieldError id="join-other-error" message={errors.otherTopic} />
             </div>
           ) : null}
         </fieldset>
 
-        <div className="flex items-start gap-3 rounded border border-rule bg-sky-mist p-4">
+        <div className="flex items-start gap-3 rounded-xl border border-rule bg-sky-mist p-4">
           <input
             id="join-speak"
             name="canSpeakEvenings"
@@ -237,7 +272,7 @@ export function JoinFlow({ group }: { group: JoinGroup }) {
         </div>
 
         <div className="flex flex-wrap items-center gap-x-5 gap-y-3">
-          <button type="submit" className="btn btn-primary" disabled={submitting} aria-busy={submitting}>
+          <button type="submit" className="btn btn-primary rounded-full" disabled={submitting} aria-busy={submitting}>
             {submitting ? "Joining…" : `Join ${group.name}`}
           </button>
           <p className="text-sm text-ink-soft">No password. Leave any time.</p>
@@ -260,9 +295,7 @@ function Chip({ label, checked, onChange }: { label: string; checked: boolean; o
   return (
     <label className="relative inline-flex cursor-pointer">
       <input type="checkbox" checked={checked} onChange={onChange} className="peer sr-only" />
-      <span
-        className="inline-flex h-11 items-center gap-2 rounded-full border border-field bg-white px-4 text-base text-ink transition-colors hover:bg-sky-mist peer-checked:border-ink peer-checked:bg-ink peer-checked:text-white peer-focus-visible:outline peer-focus-visible:outline-[3px] peer-focus-visible:outline-offset-2 peer-focus-visible:outline-ink"
-      >
+      <span className="inline-flex h-11 items-center gap-2 rounded-full border border-field bg-white px-4 text-base text-ink transition-colors hover:bg-sky-mist peer-checked:border-ink peer-checked:bg-ink peer-checked:text-white peer-focus-visible:outline peer-focus-visible:outline-[3px] peer-focus-visible:outline-offset-2 peer-focus-visible:outline-ink">
         {checked ? (
           <svg viewBox="0 0 16 16" aria-hidden="true" className="h-4 w-4">
             <path d="M3 8.5l3 3 7-7" fill="none" stroke="currentColor" strokeWidth="2" />

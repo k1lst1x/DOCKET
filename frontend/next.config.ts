@@ -8,6 +8,8 @@ const nextConfig: NextConfig = {
   reactStrictMode: true,
   // Pin tracing to this app so stray lockfiles in parent folders are ignored.
   outputFileTracingRoot: path.join(__dirname),
+  // Node-only database drivers stay out of the bundler and load at runtime.
+  serverExternalPackages: ["pg", "@aws/aurora-dsql-node-postgres-connector"],
 };
 
 export default nextConfig;

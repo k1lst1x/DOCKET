@@ -38,6 +38,19 @@ const joinByClient = new FixedWindowLimiter(10);
 const joinGlobal = new FixedWindowLimiter(100, 1);
 const lookupByClient = new FixedWindowLimiter(30);
 const lookupGlobal = new FixedWindowLimiter(240, 1);
+// Each code request sends an email through SES, so keep these tighter.
+const codeByClient = new FixedWindowLimiter(5);
+const codeGlobal = new FixedWindowLimiter(60, 1);
+const verifyByClient = new FixedWindowLimiter(10);
+const verifyGlobal = new FixedWindowLimiter(120, 1);
+
+export function allowCodeRequest(request: Request): boolean {
+  return codeByClient.allow(clientKey(request)) && codeGlobal.allow("all");
+}
+
+export function allowVerifyRequest(request: Request): boolean {
+  return verifyByClient.allow(clientKey(request)) && verifyGlobal.allow("all");
+}
 
 export function allowJoinRequest(request: Request): boolean {
   return joinByClient.allow(clientKey(request)) && joinGlobal.allow("all");

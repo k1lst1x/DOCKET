@@ -12,7 +12,7 @@ applications:
           commands:
             # Amplify console variables are build-time only; copy the ones the
             # Next.js server needs at runtime into .env.production.
-            - env | grep -E '^(DEMO|SESSION_SECRET|APP_URL|API_BASE_URL)=' >> .env.production || true
+            - env | grep -E '^(DEMO|SESSION_SECRET|APP_URL|API_BASE_URL|DSQL_ENDPOINT|DSQL_USER|COGNITO_USER_POOL_ID|COGNITO_CLIENT_ID)=' >> .env.production || true
             - npm run build
       artifacts:
         baseDirectory: .next

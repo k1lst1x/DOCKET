@@ -1,8 +1,10 @@
 import { NextResponse } from "next/server";
-import { createMagicLink, deliverMagicLink, isSameOrigin } from "@/lib/auth";
+import { isSameOrigin, setPendingCookie } from "@/lib/auth";
+import type { CodeStatus } from "@/lib/auth-codes";
+import { noStore } from "@/lib/auth-http";
+import { AuthError, sendCode, type CodeChallenge } from "@/lib/cognito";
 import { getGroup } from "@/lib/data";
 import { parseJoin } from "@/lib/join";
-import { upsertMembership, type Member } from "@/lib/store";
 import { allowJoinRequest } from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
@@ -12,7 +14,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ slu
     return NextResponse.json({ error: "Cross-site requests are not accepted." }, { status: 403 });
   }
   if (!allowJoinRequest(request)) {
-    return NextResponse.json({ error: "Too many join requests. Try again shortly." }, { status: 429, headers: { "Cache-Control": "no-store" } });
+    return NextResponse.json({ error: "Too many join requests. Try again shortly." }, { status: 429, headers: noStore });
   }
 
   // The group comes from the URL, never from the request body.
@@ -30,24 +32,39 @@ export async function POST(request: Request, { params }: { params: Promise<{ slu
   if (!parsed.ok) {
     return NextResponse.json({ error: "Check the highlighted fields.", fields: parsed.errors }, { status: 400 });
   }
+  const email = parsed.value.email.toLowerCase();
 
-  let member: Member;
+  // Creates the Cognito account (or starts a sign-in for an existing one) and
+  // emails a code. The membership is saved once the code is confirmed.
+  let challenge: CodeChallenge | null = null;
+  let code: CodeStatus = "sent";
   try {
-    ({ member } = upsertMembership({ ...parsed.value, groupId: group.id, slug: group.slug }));
-  } catch {
-    return NextResponse.json({ error: "Join requests are temporarily busy. Try again shortly." }, { status: 503, headers: { "Cache-Control": "no-store" } });
+    challenge = await sendCode(email, parsed.value.name);
+  } catch (error) {
+    code = error instanceof AuthError ? error.code : "failed";
+    if (code === "failed") console.error("[docket] join: could not send code", error);
   }
-  deliverMagicLink(member.email, createMagicLink(member.id, `/g/${group.slug}`));
 
-  // Same response whether or not the email was already a member, so the form
-  // can't be used to discover who belongs to a group.
-  return NextResponse.json(
-    {
-      email: parsed.value.email,
-      verification: "sent",
-      devLinkInConsole: process.env.NODE_ENV !== "production",
-      group: { slug: group.slug, name: group.name, district: group.district, items: group.items },
-    },
-    { status: 201, headers: { "Cache-Control": "no-store" } },
+  // The group's items are returned either way: nobody has to verify an email
+  // before they can see what the group is watching.
+  const response = NextResponse.json(
+    { email, code, group: { slug: group.slug, name: group.name, district: group.district, items: group.items } },
+    { status: 201, headers: noStore },
   );
+  if (challenge) {
+    setPendingCookie(response, {
+      kind: challenge.kind,
+      email,
+      name: parsed.value.name,
+      cognitoSession: challenge.cognitoSession,
+      join: {
+        slug: group.slug,
+        topics: parsed.value.topics,
+        otherTopic: parsed.value.otherTopic,
+        canSpeakEvenings: parsed.value.canSpeakEvenings,
+      },
+      next: `/g/${group.slug}`,
+    });
+  }
+  return response;
 }

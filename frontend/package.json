@@ -18,6 +18,7 @@
     "@aws-sdk/credential-providers": "^3.1131.0",
     "@aws-sdk/dsql-signer": "^3.1131.0",
     "@aws/aurora-dsql-node-postgres-connector": "^0.1.9",
+    "aws-jwt-verify": "^5.2.1",
     "leaflet": "^1.9.4",
     "next": "15.5.25",
     "pg": "^8.23.0",

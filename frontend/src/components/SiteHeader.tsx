@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { AccountLink } from "@/components/AccountLink";
 import { NavLinks } from "@/components/NavLinks";
 
 export function DocketMark({ className = "h-8 w-8" }: { className?: string }) {
@@ -21,9 +22,10 @@ export function SiteHeader({ tone = "plain" }: { tone?: "sky" | "plain" }) {
         </Link>
         <nav aria-label="Main" className="flex items-center gap-2 sm:gap-4">
           <NavLinks />
-          <Link href="/#address" className="btn btn-primary hidden h-11 rounded-full px-5 md:inline-flex">
+          <Link href="/#address" className="btn btn-primary hidden h-11 rounded-full px-5 lg:inline-flex">
             Find your group
           </Link>
+          <AccountLink />
         </nav>
       </div>
     </header>
