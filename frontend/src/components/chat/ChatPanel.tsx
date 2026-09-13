@@ -25,12 +25,14 @@ interface Message {
   role: "user" | "assistant";
   text: string;
   citations?: Citation[];
+  /** False for general answers that don't come from Fremont city documents. */
+  grounded?: boolean;
 }
 
 type ChatEvent =
   | { type: "status"; message: string }
   | { type: "text"; text: string }
-  | { type: "final"; answer: string; citations?: Citation[]; session_id?: string; refused?: boolean }
+  | { type: "final"; answer: string; citations?: Citation[]; session_id?: string; refused?: boolean; grounded?: boolean }
   | { type: "error"; message: string };
 
 // Keep these in step with what the chat agent has actually read (see docket/ ingest).
@@ -38,6 +40,8 @@ const GREETING =
   "Hi, I'm Docket's assistant. Ask me about Fremont City Council and Planning Commission agendas and minutes (June to September 2026), Fremont Unified school board agendas, recent city news, or the city's transportation plans. I link the documents behind every answer.";
 const NOT_CONNECTED =
   "I'm not connected to Docket's data yet, so I can't answer that for real. Once I am, I'll answer with sources from Fremont city documents.";
+// An outage (server error, expired credentials, dropped stream) rather than "never set up".
+const UNAVAILABLE = "The assistant is temporarily unavailable. Please try again in a moment.";
 
 const SUGGESTIONS = [
   "What's on the September 15 City Council agenda?",
@@ -84,6 +88,7 @@ export function ChatPanel({ variant, onClose, autoFocus = false }: ChatPanelProp
   const [messages, setMessages] = useState<Message[]>([{ id: 0, role: "assistant", text: GREETING }]);
   const [draft, setDraft] = useState("");
   const [thinking, setThinking] = useState(false);
+  const [statusText, setStatusText] = useState<string | null>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const logRef = useRef<HTMLDivElement>(null);
   const nextId = useRef(1);
@@ -119,7 +124,11 @@ export function ChatPanel({ variant, onClose, autoFocus = false }: ChatPanelProp
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ text: clean, session_id: sessionRef.current }),
       });
-      if (!res.ok || !res.body) throw new Error(`chat request failed: ${res.status}`);
+      if (!res.ok || !res.body) {
+        // 503: chat isn't configured; 404: no API routes (static preview). Anything else is an outage.
+        upsertReply({ id: replyId, role: "assistant", text: res.status === 503 || res.status === 404 ? NOT_CONNECTED : UNAVAILABLE });
+        return;
+      }
 
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
@@ -133,9 +142,12 @@ export function ChatPanel({ variant, onClose, autoFocus = false }: ChatPanelProp
           const block = buffer.slice(0, boundary);
           buffer = buffer.slice(boundary + 2);
           for (const event of parseEvents(block)) {
-            if (event.type === "text") {
+            if (event.type === "status") {
+              setStatusText(event.message);
+            } else if (event.type === "text") {
               streamed += event.text;
               setThinking(false);
+              setStatusText(null);
               upsertReply({ id: replyId, role: "assistant", text: streamed });
             } else if (event.type === "final") {
               finished = true;
@@ -145,6 +157,7 @@ export function ChatPanel({ variant, onClose, autoFocus = false }: ChatPanelProp
                 role: "assistant",
                 text: event.answer,
                 citations: (event.citations ?? []).filter((c) => isHttpUrl(c.url)),
+                grounded: event.grounded,
               });
             } else if (event.type === "error") {
               throw new Error(event.message);
@@ -155,9 +168,10 @@ export function ChatPanel({ variant, onClose, autoFocus = false }: ChatPanelProp
       }
       if (!finished) throw new Error("chat stream ended early");
     } catch {
-      upsertReply({ id: replyId, role: "assistant", text: NOT_CONNECTED });
+      upsertReply({ id: replyId, role: "assistant", text: UNAVAILABLE });
     } finally {
       setThinking(false);
+      setStatusText(null);
     }
   }
 
@@ -207,6 +221,11 @@ export function ChatPanel({ variant, onClose, autoFocus = false }: ChatPanelProp
       <div ref={logRef} role="log" aria-live="polite" aria-label="Conversation" className="min-h-0 flex-1 space-y-3 overflow-y-auto px-4 py-5 sm:px-5">
         {messages.map((m) => (
           <div key={m.id} className={`flex flex-col ${m.role === "user" ? "items-end" : "items-start"}`}>
+            {m.role === "assistant" && m.grounded === false ? (
+              <span className="mb-1 ml-1 rounded-full bg-ochre-wash px-2.5 py-0.5 text-sm font-semibold text-ochre">
+                General answer · not from city documents
+              </span>
+            ) : null}
             <p
               className={`max-w-[85%] whitespace-pre-wrap rounded-2xl px-4 py-2.5 text-base leading-relaxed ${
                 m.role === "user" ? "rounded-br-md bg-ink text-white" : "rounded-bl-md bg-sky-mist text-ink"
@@ -248,11 +267,18 @@ export function ChatPanel({ variant, onClose, autoFocus = false }: ChatPanelProp
         ))}
         {thinking ? (
           <div className="flex justify-start">
-            <p className="flex items-center gap-1.5 rounded-2xl rounded-bl-md bg-sky-mist px-4 py-3.5">
-              <span className="sr-only">Assistant is typing</span>
-              {[0, 1, 2].map((i) => (
-                <span key={i} aria-hidden="true" className="h-2 w-2 animate-bounce rounded-full bg-ink-muted" style={{ animationDelay: `${i * 120}ms` }} />
-              ))}
+            <p className="flex items-center gap-3 rounded-2xl rounded-bl-md bg-sky-mist px-4 py-3">
+              <span className="sr-only">{statusText ?? "Assistant is typing"}</span>
+              <span aria-hidden="true" className="flex items-center gap-1.5">
+                {[0, 1, 2].map((i) => (
+                  <span key={i} className="h-2 w-2 animate-bounce rounded-full bg-ink-muted" style={{ animationDelay: `${i * 120}ms` }} />
+                ))}
+              </span>
+              {statusText ? (
+                <span aria-hidden="true" className="text-sm text-ink-soft">
+                  {statusText}
+                </span>
+              ) : null}
             </p>
           </div>
         ) : null}

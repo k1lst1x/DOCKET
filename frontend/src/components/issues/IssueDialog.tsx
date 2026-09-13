@@ -49,6 +49,7 @@ export function IssueDialog({ issueId, onClose, fallbackTitle }: IssueDialogProp
   const [busy, setBusy] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
+  const busyRef = useRef(false);
 
   useEffect(() => {
     const dialog = dialogRef.current;
@@ -82,9 +83,42 @@ export function IssueDialog({ issueId, onClose, fallbackTitle }: IssueDialogProp
     };
   }, [issueId, reloadKey]);
 
+  // Real-time: refresh votes, charts and reviews every 15 s while open (and on tab
+  // focus). When the database is unreachable, keep retrying every 20 s so the
+  // dialog switches back to live data on its own.
+  useEffect(() => {
+    if (!issueId || (state !== "ready" && state !== "error")) return;
+    let active = true;
+    const url = `/api/issues/${encodeURIComponent(issueId)}`;
+    const refresh = async () => {
+      if (document.hidden || busyRef.current) return;
+      try {
+        const res = await fetch(url, { cache: "no-store" });
+        if (!res.ok) return;
+        const data = (await res.json()) as IssueDetail;
+        if (active && !busyRef.current) {
+          setDetail(data);
+          setState("ready");
+        }
+      } catch {
+        // Keep what's on screen; the next tick tries again.
+      }
+    };
+    const every = state === "error" || detail?.live === false ? 20_000 : 15_000;
+    const timer = window.setInterval(() => void refresh(), every);
+    const onFocus = () => void refresh();
+    window.addEventListener("focus", onFocus);
+    return () => {
+      active = false;
+      window.clearInterval(timer);
+      window.removeEventListener("focus", onFocus);
+    };
+  }, [issueId, state, detail?.live]);
+
   async function post(path: "votes" | "reviews", payload: object): Promise<boolean> {
     if (!issueId) return false;
     setBusy(true);
+    busyRef.current = true;
     setActionError(null);
     try {
       const res = await fetch(`/api/issues/${encodeURIComponent(issueId)}/${path}`, {
@@ -104,6 +138,7 @@ export function IssueDialog({ issueId, onClose, fallbackTitle }: IssueDialogProp
       setActionError("We couldn't reach Docket. Check your connection and try again.");
       return false;
     } finally {
+      busyRef.current = false;
       setBusy(false);
     }
   }
@@ -128,6 +163,7 @@ export function IssueDialog({ issueId, onClose, fallbackTitle }: IssueDialogProp
           <p className="min-w-0 flex-1 truncate text-sm text-ink-muted">
             {ready ? (detail.group ? detail.group.name : "Citywide") : "Neighborhood item"}
           </p>
+          {ready ? <LiveBadge live={detail.live} /> : null}
           <button
             type="button"
             autoFocus
@@ -166,7 +202,7 @@ function DialogStatus({ state, title, onRetry }: { state: LoadState; title?: str
           {state === "missing" ? "This item isn't open for discussion." : "We couldn't load this item."}
         </h2>
         <p className="mx-auto mt-2 max-w-md text-base text-ink-soft">
-          {state === "missing" ? "It may have been decided or removed." : "Check your connection, then try again."}
+          {state === "missing" ? "It may have been decided or removed." : "Docket keeps retrying on its own every 20 seconds, or you can try again now."}
         </p>
         {state === "error" ? (
           <button type="button" onClick={onRetry} className="btn btn-primary mt-6 rounded-full">
@@ -208,6 +244,7 @@ function IssueView({ detail, busy, actionError, onVote, onReview }: IssueViewPro
   const votesFor = (id: string) => stance?.options.find((o) => o.id === id)?.votes ?? 0;
   const decided = votesFor("support") + votesFor("oppose");
   const supportShare = decided ? Math.round((votesFor("support") / decided) * 100) : null;
+  const live = detail.live;
 
   return (
     <article className="px-4 pb-12 pt-6 sm:px-8">
@@ -232,6 +269,8 @@ function IssueView({ detail, busy, actionError, onVote, onReview }: IssueViewPro
         ) : null}
       </p>
 
+      {live ? null : <OfflineBanner />}
+
       <div className="mt-6 grid gap-3 sm:grid-cols-3">
         <Tile>
           {detail.deadline ? (
@@ -243,15 +282,15 @@ function IssueView({ detail, busy, actionError, onVote, onReview }: IssueViewPro
         <Tile>
           <TileStat
             label="Neighbors weighed in"
-            value={String(stance?.total ?? 0)}
-            note={stance ? `${stance.passes} passed · ${detail.reviewCount} reviews` : undefined}
+            value={live ? String(stance?.total ?? 0) : "–"}
+            note={!live ? "Reconnecting…" : stance ? `${stance.passes} passed · ${detail.reviewCount} reviews` : undefined}
           />
         </Tile>
         <Tile>
           <TileStat
             label="Support among voters"
             value={supportShare === null ? "–" : `${supportShare}%`}
-            note={supportShare === null ? "No votes yet" : `${100 - supportShare}% oppose`}
+            note={!live ? "Reconnecting…" : supportShare === null ? "No votes yet" : `${100 - supportShare}% oppose`}
           />
           {supportShare !== null ? (
             <div aria-hidden="true" className="mt-2 flex h-2 gap-[2px] overflow-hidden rounded-full">
@@ -269,8 +308,9 @@ function IssueView({ detail, busy, actionError, onVote, onReview }: IssueViewPro
             <ClaimList title="Pros" tone="pro" items={detail.analysis?.pros ?? []} />
             <ClaimList title="Cons" tone="con" items={detail.analysis?.cons ?? []} />
           </div>
-          {stance ? <VoteCard detail={detail} stance={stance} busy={busy} actionError={actionError} onVote={onVote} /> : null}
-          {choicePolls.map((poll) => (
+          {stance && live ? <VoteCard detail={detail} stance={stance} busy={busy} actionError={actionError} onVote={onVote} /> : null}
+          {live ? null : <OfflineVoteCard question={stance?.question ?? null} />}
+          {(live ? choicePolls : []).map((poll) => (
             <Card key={poll.id} title="Follow-up question">
               <p className="text-lg font-semibold leading-snug text-ink">{poll.question}</p>
               <div className="-mx-3 mt-3">
@@ -287,7 +327,7 @@ function IssueView({ detail, busy, actionError, onVote, onReview }: IssueViewPro
               </p>
             </Card>
           ))}
-          <ReviewsCard detail={detail} busy={busy} onReview={onReview} />
+          {live ? <ReviewsCard detail={detail} busy={busy} onReview={onReview} /> : null}
         </div>
 
         <aside className="grid content-start gap-6">
@@ -304,7 +344,7 @@ function IssueView({ detail, busy, actionError, onVote, onReview }: IssueViewPro
             </Card>
           ) : null}
           <MapCard detail={detail} />
-          {stance && stance.total > 0 ? (
+          {live && stance && stance.total > 0 ? (
             <Card title="How the vote moved">
               <TrendLine points={detail.trend} />
             </Card>
@@ -707,4 +747,47 @@ function TileStat({ label, value, note }: { label: string; value: string; note?:
 
 function SampleBadge({ children }: { children: ReactNode }) {
   return <span className="rounded-full bg-ochre-wash px-2.5 py-0.5 text-sm font-semibold text-ochre">{children}</span>;
+}
+
+function LiveBadge({ live }: { live: boolean }) {
+  if (live) {
+    return (
+      <span
+        title="Votes, results and reviews refresh every 15 seconds"
+        className="inline-flex items-center gap-1.5 rounded-full bg-park-wash px-2.5 py-0.5 text-sm font-semibold text-park"
+      >
+        <span aria-hidden="true" className="relative flex h-2 w-2">
+          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-park opacity-60" />
+          <span className="relative inline-flex h-2 w-2 rounded-full bg-park" />
+        </span>
+        Live
+      </span>
+    );
+  }
+  return (
+    <span className="inline-flex items-center gap-1.5 rounded-full bg-ochre-wash px-2.5 py-0.5 text-sm font-semibold text-ochre">
+      <span aria-hidden="true" className="h-2 w-2 rounded-full bg-ochre" />
+      Reconnecting
+    </span>
+  );
+}
+
+function OfflineBanner() {
+  return (
+    <p role="status" className="mt-5 rounded-2xl border border-ochre/30 bg-ochre-wash px-4 py-3 text-base text-ink">
+      <span className="font-semibold">Live votes and reviews are reconnecting.</span> You&apos;re seeing the saved summary, pros and
+      cons. This checks again every 20 seconds and updates on its own.
+    </p>
+  );
+}
+
+function OfflineVoteCard({ question }: { question: string | null }) {
+  return (
+    <Card title="Neighborhood vote">
+      {question ? <p className="text-lg font-semibold leading-snug text-ink">{question}</p> : null}
+      <p className="mt-3 rounded-2xl bg-sky-mist px-4 py-3 text-base text-ink-soft">
+        Voting, results and reviews come back as soon as Docket reconnects to its database. Votes you&apos;ve already cast are saved.
+      </p>
+    </Card>
+  );
 }

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
+import { fallbackIssueDetail } from "@/lib/issue-fallback";
 import { ISSUE_ID_PATTERN, issueFailure } from "@/lib/issue-http";
 import { getIssueDetail } from "@/lib/issues";
 
@@ -15,7 +16,10 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
     if (!detail) return issueFailure("not_found");
     return NextResponse.json(detail, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
-    console.error("[docket] issue detail failed", error);
+    console.error("[docket] issue detail failed; serving saved content", error);
+    // Database unreachable: show the saved summary without votes instead of an error.
+    const fallback = fallbackIssueDetail(id, Boolean(session));
+    if (fallback) return NextResponse.json(fallback, { headers: { "Cache-Control": "no-store" } });
     return issueFailure("unavailable");
   }
 }

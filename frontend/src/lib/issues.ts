@@ -282,6 +282,7 @@ export async function getIssueDetail(issueId: string, memberId: string | null): 
       votingAs: votingGroup?.name ?? null,
     },
     sample: { issue: issue.is_sample, analysis: Boolean(issue.analysis_sample), activity: sampleVotes > 0 },
+    live: true,
   };
 }
 

@@ -93,7 +93,11 @@ export async function POST(request: Request) {
       return new Response(upstream.body, { headers: STREAM_HEADERS });
     }
   } catch (error) {
-    console.error("[docket] chat: agent call failed", error);
+    const name = (error as { name?: string } | null)?.name ?? "Error";
+    const hint = /Credentials|ExpiredToken|LoginRefresh|expired/i.test(`${name} ${(error as Error)?.message ?? ""}`)
+      ? " (AWS credentials expired or missing: run `aws login`, or use the local dev user from scripts/aws-dev-user.sh)"
+      : "";
+    console.error(`[docket] chat: agent call failed: ${name}${hint}`, error);
     return NextResponse.json({ error: "The assistant is unavailable right now." }, { status: 502, headers: noStore });
   }
   return NextResponse.json({ error: "The assistant is not connected." }, { status: 503, headers: noStore });

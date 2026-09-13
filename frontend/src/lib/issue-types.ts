@@ -87,6 +87,8 @@ export interface IssueDetail {
     votingAs: string | null; // the group that makes the viewer eligible
   };
   sample: { issue: boolean; analysis: boolean; activity: boolean };
+  /** False when the database is unreachable and this is the saved sample content without votes. */
+  live: boolean;
 }
 
 export type IssueActionErrorCode =
