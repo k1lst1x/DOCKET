@@ -8,6 +8,7 @@ dependencies = [
     "boto3>=1.43.93",
     "botocore[crt]>=1.43.93",
     "fastapi>=0.141.1",
+    "firecrawl-py>=4.42.0",
     "httpx>=0.28.1",
     "pgvector>=0.5.0",
     "psycopg[binary]>=3.3.5",

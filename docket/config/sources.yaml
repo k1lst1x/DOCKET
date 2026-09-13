@@ -1,0 +1,164 @@
+# DOCKET source registry: Fremont, California.
+#
+# Required per entry: id, name, url, kind, crawl_strategy, parser, enabled.
+# Optional: fetcher (http | firecrawl), send_user_agent (default true),
+# schedule (daily | weekly | monthly), verify_pattern (regex that proves real content
+# came back), params.
+#
+# Every URL below was fetched and its robots.txt checked on 2026-09-13.
+#
+# Identity policy: requests identify as DOCKET-civic-research-bot by default.
+# fremont.gov (Akamai), the city's IQM2 portal and FUSD's Simbli site allow crawling in
+# robots.txt, but their bot firewalls reject that User-Agent. For those sources only,
+# the user decided (2026-09-13) to let Firecrawl send its default identity
+# (send_user_agent: false). robots.txt rules and crawl delays are still enforced, and
+# Firecrawl runs in basic proxy mode only; stealth proxies are never used.
+
+sources:
+  - id: fremont-council-iqm2
+    name: City of Fremont meeting portal (IQM2) - agendas and agenda packets
+    url: https://fremontcityca.iqm2.com/Citizens/Calendar.aspx
+    kind: meetings
+    crawl_strategy: listing_one_level
+    parser: iqm2_calendar
+    fetcher: firecrawl
+    send_user_agent: false
+    schedule: weekly
+    enabled: true
+    verify_pattern: 'Detail_Meeting\.aspx\?ID=\d+'
+    params:
+      wait_for_ms: 3000
+      # robots.txt sets Crawl-delay: 60; the fetcher honors it.
+
+  - id: fremont-agenda-center-council
+    name: City of Fremont Agenda Center - City Council meetings and minutes
+    url: https://www.fremont.gov/government/agenda-center/city-council-1038
+    kind: meetings
+    crawl_strategy: listing_one_level
+    parser: civicplus_agenda_center
+    fetcher: firecrawl
+    send_user_agent: false
+    schedule: weekly
+    enabled: true
+    verify_pattern: '\d{2}/\d{2}/2026 \d{1,2}:\d{2} [AP]M'
+    params:
+      wait_for_ms: 3000
+
+  - id: fremont-planning-commission
+    name: City of Fremont Agenda Center - Planning Commission (zoning and land use)
+    url: https://www.fremont.gov/government/agenda-center/planning-commission-1048
+    kind: zoning
+    crawl_strategy: listing_one_level
+    parser: civicplus_agenda_center
+    fetcher: firecrawl
+    send_user_agent: false
+    schedule: weekly
+    enabled: true
+    verify_pattern: '\d{2}[/-]\d{2}[/-]20\d{2}'
+    params:
+      wait_for_ms: 3000
+
+  - id: fremont-news
+    name: City of Fremont news
+    url: https://www.fremont.gov/about/news-media/fremont-news
+    kind: news
+    crawl_strategy: listing_one_level
+    parser: civicplus_news
+    fetcher: firecrawl
+    send_user_agent: false
+    schedule: daily
+    enabled: true
+    verify_pattern: '/Home/Components/News/News/\d+/1067'
+    params:
+      wait_for_ms: 3000
+
+  - id: fremont-app-requests
+    name: Fremont App (CitySourced) - resident service requests
+    url: https://fremontca.citysourced.com/servicerequests/nearby
+    kind: resident_issues
+    crawl_strategy: listing_one_level
+    parser: citysourced_requests
+    fetcher: firecrawl
+    schedule: daily
+    enabled: true
+    verify_pattern: 'CAS-\d+-[A-Z0-9]+'
+    params:
+      wait_for_ms: 8000
+
+  - id: fremont-transportation
+    name: City of Fremont Transportation Engineering - plans and projects
+    url: https://www.fremont.gov/government/departments/transportation-engineering
+    kind: transportation
+    crawl_strategy: listing_one_level
+    parser: civicplus_page
+    fetcher: firecrawl
+    send_user_agent: false
+    schedule: weekly
+    enabled: true
+    verify_pattern: 'transportation-engineering/[a-z0-9-]+'
+
+  - id: fusd-board-meetings
+    name: Fremont Unified School District - Board of Education meetings (Simbli)
+    url: https://simbli.eboardsolutions.com/SB_Meetings/SB_MeetingListing.aspx?S=36031613
+    kind: schools
+    crawl_strategy: listing_one_level
+    parser: simbli_meetings
+    fetcher: firecrawl
+    send_user_agent: false
+    schedule: weekly
+    enabled: true
+    verify_pattern: 'Meeting of the Board of Education'
+    params:
+      wait_for_ms: 10000
+
+  - id: ca-legislature-bills
+    name: California Legislature bulk data (leginfo daily change files)
+    url: https://downloads.leginfo.legislature.ca.gov/
+    kind: state_legislation
+    crawl_strategy: bulk_download
+    parser: leginfo_pubinfo
+    fetcher: http
+    schedule: daily
+    enabled: true
+    verify_pattern: 'pubinfo_[A-Z][a-z]{2}\.zip'
+    params:
+      # leginfo.legislature.ca.gov disallows all crawlers; this download host has no robots.txt.
+      # Keep bills authored by Fremont's legislators plus bills whose text mentions Fremont.
+      # Districts came from the US Census geocoder over all 32 neighborhood centroids.
+      assembly_district: 24
+      senate_district: 10
+      member_sources: [ca-assembly-members, ca-senate-members]
+      mention_terms: [Fremont]
+
+  - id: ca-assembly-members
+    name: California State Assembly - members by district
+    url: https://www.assembly.ca.gov/assemblymembers
+    kind: reference
+    crawl_strategy: single_page
+    parser: assembly_members
+    fetcher: http
+    schedule: monthly
+    enabled: true
+    verify_pattern: 'assemblymembers/24\b'
+
+  - id: ca-senate-members
+    name: California State Senate - senators by district
+    url: https://www.senate.ca.gov/senators
+    kind: reference
+    crawl_strategy: single_page
+    parser: senate_members
+    fetcher: http
+    schedule: monthly
+    enabled: true
+    verify_pattern: 'data-district="10"'
+
+  - id: fremont-neighborhoods-gis
+    name: City of Fremont Neighborhoods GIS layer (32 official areas)
+    url: https://services2.arcgis.com/AVso4yDITKsybTJg/arcgis/rest/services/Neighborhoods/FeatureServer/0/query?where=1%3D1&returnCountOnly=true&f=json
+    kind: reference
+    crawl_strategy: api_query
+    parser: arcgis_featureserver
+    fetcher: http
+    schedule: monthly
+    enabled: true
+    verify_pattern: '"count":\s*\d+'

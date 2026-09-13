@@ -16,6 +16,8 @@ BEDROCK_MODEL_ID = os.getenv("BEDROCK_MODEL_ID", "openai.gpt-oss-120b-1:0")
 EMBED_MODEL_ID = os.getenv("EMBED_MODEL_ID", "amazon.titan-embed-text-v2:0")
 EMBED_DIMENSIONS = 1024
 
+FIRECRAWL_API_KEY = os.getenv("FIRECRAWL_API_KEY", "").strip()
+
 DATABASE_URL = os.getenv("DATABASE_URL", "")
 S3_BUCKET = os.getenv("S3_BUCKET", "")
 
