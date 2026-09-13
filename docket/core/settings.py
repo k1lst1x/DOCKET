@@ -10,9 +10,9 @@ load_dotenv(ROOT / ".env")
 
 AWS_REGION = os.getenv("AWS_REGION", "us-west-2")
 
-# Claude Sonnet on Bedrock. Some accounts must call through a cross-region
-# inference profile (e.g. a "us." prefix); override BEDROCK_MODEL_ID if so.
-BEDROCK_MODEL_ID = os.getenv("BEDROCK_MODEL_ID", "anthropic.claude-sonnet-5")
+# Claude Sonnet on Bedrock, called through the US cross-region inference profile
+# (no on-demand throughput in us-west-2). Sonnet 4.6 until the account has Sonnet 5.
+BEDROCK_MODEL_ID = os.getenv("BEDROCK_MODEL_ID", "us.anthropic.claude-sonnet-4-6")
 EMBED_MODEL_ID = os.getenv("EMBED_MODEL_ID", "amazon.titan-embed-text-v2:0")
 EMBED_DIMENSIONS = 1024
 
