@@ -2,14 +2,29 @@
 
 import { useEffect, useId, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
 
-// Chat UI only. No model is connected yet: replies are a fixed notice so the
-// interface can be designed and tested before the agent exists.
+// Chat UI. Messages go to /api/chat, which streams answers from Docket's chat agent. Every
+// answer arrives with the sources it cites. When the agent is unreachable (including the static
+// preview, which has no API routes) the assistant shows the NOT_CONNECTED notice instead.
+
+interface Citation {
+  ref: number;
+  title: string;
+  locator: string;
+  url: string;
+}
 
 interface Message {
   id: number;
   role: "user" | "assistant";
   text: string;
+  citations?: Citation[];
 }
+
+type ChatEvent =
+  | { type: "status"; message: string }
+  | { type: "text"; text: string }
+  | { type: "final"; answer: string; citations?: Citation[]; session_id?: string; refused?: boolean }
+  | { type: "error"; message: string };
 
 const GREETING =
   "Hi, I'm Docket's assistant. Soon I'll explain agenda items, summarize how neighbors voted, and find places near you.";
@@ -21,6 +36,22 @@ const SUGGESTIONS = [
   "Explain the Irvington BART traffic plan",
   "Which schools are near Lake Elizabeth?",
 ];
+
+const isHttpUrl = (url: string) => /^https?:\/\//i.test(url);
+
+function parseEvents(block: string): ChatEvent[] {
+  const data = block
+    .split("\n")
+    .filter((line) => line.startsWith("data:"))
+    .map((line) => line.slice(5).trimStart())
+    .join("\n");
+  if (!data) return [];
+  try {
+    return [JSON.parse(data) as ChatEvent];
+  } catch {
+    return [];
+  }
+}
 
 interface ChatPanelProps {
   variant: "popup" | "page";
@@ -35,6 +66,7 @@ export function ChatPanel({ variant, onClose, autoFocus = false }: ChatPanelProp
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const logRef = useRef<HTMLDivElement>(null);
   const nextId = useRef(1);
+  const sessionRef = useRef<string | null>(null);
   const titleId = useId();
 
   useEffect(() => {
@@ -45,27 +77,78 @@ export function ChatPanel({ variant, onClose, autoFocus = false }: ChatPanelProp
     logRef.current?.scrollTo({ top: logRef.current.scrollHeight, behavior: "smooth" });
   }, [messages, thinking]);
 
-  function send(text: string) {
+  function upsertReply(reply: Message) {
+    setMessages((m) => (m.some((msg) => msg.id === reply.id) ? m.map((msg) => (msg.id === reply.id ? reply : msg)) : [...m, reply]));
+  }
+
+  async function send(text: string) {
     const clean = text.trim();
     if (!clean || thinking) return;
-    setMessages((m) => [...m, { id: nextId.current++, role: "user", text: clean }]);
+    const replyId = nextId.current + 1;
+    setMessages((m) => [...m, { id: nextId.current, role: "user", text: clean }]);
+    nextId.current += 2;
     setDraft("");
     setThinking(true);
-    window.setTimeout(() => {
-      setMessages((m) => [...m, { id: nextId.current++, role: "assistant", text: NOT_CONNECTED }]);
+
+    let streamed = "";
+    let finished = false;
+    try {
+      const res = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: clean, session_id: sessionRef.current }),
+      });
+      if (!res.ok || !res.body) throw new Error(`chat request failed: ${res.status}`);
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true }).replace(/\r\n/g, "\n");
+        let boundary = buffer.indexOf("\n\n");
+        while (boundary !== -1) {
+          const block = buffer.slice(0, boundary);
+          buffer = buffer.slice(boundary + 2);
+          for (const event of parseEvents(block)) {
+            if (event.type === "text") {
+              streamed += event.text;
+              setThinking(false);
+              upsertReply({ id: replyId, role: "assistant", text: streamed });
+            } else if (event.type === "final") {
+              finished = true;
+              if (event.session_id) sessionRef.current = event.session_id;
+              upsertReply({
+                id: replyId,
+                role: "assistant",
+                text: event.answer,
+                citations: (event.citations ?? []).filter((c) => isHttpUrl(c.url)),
+              });
+            } else if (event.type === "error") {
+              throw new Error(event.message);
+            }
+          }
+          boundary = buffer.indexOf("\n\n");
+        }
+      }
+      if (!finished) throw new Error("chat stream ended early");
+    } catch {
+      upsertReply({ id: replyId, role: "assistant", text: NOT_CONNECTED });
+    } finally {
       setThinking(false);
-    }, 700);
+    }
   }
 
   function onSubmit(e: FormEvent) {
     e.preventDefault();
-    send(draft);
+    void send(draft);
   }
 
   function onKeyDown(e: KeyboardEvent<HTMLTextAreaElement>) {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
-      send(draft);
+      void send(draft);
     }
   }
 
@@ -102,7 +185,7 @@ export function ChatPanel({ variant, onClose, autoFocus = false }: ChatPanelProp
 
       <div ref={logRef} role="log" aria-live="polite" aria-label="Conversation" className="min-h-0 flex-1 space-y-3 overflow-y-auto px-4 py-5 sm:px-5">
         {messages.map((m) => (
-          <div key={m.id} className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
+          <div key={m.id} className={`flex flex-col ${m.role === "user" ? "items-end" : "items-start"}`}>
             <p
               className={`max-w-[85%] whitespace-pre-wrap rounded-2xl px-4 py-2.5 text-base leading-relaxed ${
                 m.role === "user" ? "rounded-br-md bg-ink text-white" : "rounded-bl-md bg-sky-mist text-ink"
@@ -111,6 +194,23 @@ export function ChatPanel({ variant, onClose, autoFocus = false }: ChatPanelProp
               <span className="sr-only">{m.role === "user" ? "You: " : "Assistant: "}</span>
               {m.text}
             </p>
+            {m.citations && m.citations.length > 0 ? (
+              <ul aria-label="Sources" className="mt-1.5 max-w-[85%] space-y-1 pl-1 text-sm text-ink-muted">
+                {m.citations.map((c) => (
+                  <li key={`${m.id}-${c.ref}`}>
+                    <a
+                      href={c.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="underline decoration-rule underline-offset-2 hover:text-ink"
+                    >
+                      [{c.ref}] {c.title}
+                      {c.locator && c.locator !== "document start" ? ` — ${c.locator}` : ""}
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            ) : null}
           </div>
         ))}
         {thinking ? (
@@ -129,7 +229,7 @@ export function ChatPanel({ variant, onClose, autoFocus = false }: ChatPanelProp
               <button
                 key={s}
                 type="button"
-                onClick={() => send(s)}
+                onClick={() => void send(s)}
                 className="rounded-full border border-rule bg-white px-3.5 py-2 text-left text-sm text-ink hover:border-ink/40 hover:bg-sky-mist"
               >
                 {s}

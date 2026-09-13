@@ -57,6 +57,14 @@ export function allowReviewRequest(request: Request): boolean {
   return reviewByClient.allow(clientKey(request)) && reviewGlobal.allow("all");
 }
 
+// Each chat message runs retrieval and a Bedrock model call, so keep these modest.
+const chatByClient = new FixedWindowLimiter(20);
+const chatGlobal = new FixedWindowLimiter(300, 1);
+
+export function allowChatRequest(request: Request): boolean {
+  return chatByClient.allow(clientKey(request)) && chatGlobal.allow("all");
+}
+
 export function allowCodeRequest(request: Request): boolean {
   return codeByClient.allow(clientKey(request)) && codeGlobal.allow("all");
 }
