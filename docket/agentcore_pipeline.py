@@ -11,6 +11,7 @@ Long jobs are registered with add_async_task, so the runtime reports HEALTHY_BUS
 Local run (no AgentCore): uv run python agentcore_pipeline.py, then POST to http://localhost:8080/invocations.
 """
 
+import asyncio
 import sys
 import threading
 import uuid
@@ -21,6 +22,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from bedrock_agentcore.runtime import BedrockAgentCoreApp  # noqa: E402
 
 from core.db import connect  # noqa: E402
+from core.generation_graph import generate as run_generation  # noqa: E402
 from core.jobs import IngestFailed, run_ingest  # noqa: E402
 
 app = BedrockAgentCoreApp()
@@ -98,7 +100,16 @@ def invoke(payload, context):
                 job = JOBS.get(payload.get("job_id")) if isinstance(payload.get("job_id"), str) else None
             return {"job": job, "latest_runs": _latest_runs()}
         if action == "generate":
-            return {"error": "the generation graph is not available yet"}
+            topic = payload.get("topic")
+            kind = payload.get("kind")
+            if not isinstance(topic, str) or not 3 <= len(topic.strip()) <= 300:
+                return {"error": "topic must be 3 to 300 characters"}
+            if kind not in ("summary", "announcement", "proscons"):
+                return {"error": "kind must be summary, announcement or proscons"}
+            group_id = payload.get("group_id") if isinstance(payload.get("group_id"), str) else None
+            crawl = payload.get("crawl") is True
+            # Sync entrypoints run in AgentCore's thread pool, so this thread has no running event loop.
+            return asyncio.run(run_generation(topic.strip(), kind, group_id, crawl=crawl))
     except ValueError as error:
         return {"error": str(error)}
     return {"error": "action must be one of: ingest, status, generate"}

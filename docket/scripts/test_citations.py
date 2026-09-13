@@ -5,7 +5,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from core.citations import enforce, extract_facts
+from core.citations import canonical_date, enforce, extract_facts
 
 CHUNK = (
     "| | C. | Security Information And Management System Renewal - Authorize the City Manager or her "
@@ -20,7 +20,10 @@ CASES = [
     ("supported dollar amount", "The renewal is capped at $396,000 for a 3-year term [1].", True),
     ("wrong dollar amount", "The renewal is capped at $400,000 [1].", False),
     ("supported date format", "The council met on 9/8/2026 [1].", True),
-    ("date reworded, not verbatim", "The council met on September 8, 2026 [1].", False),
+    ("same date, different format", "The council met on September 8, 2026 [1].", True),
+    ("same date, narrow no-break spaces", "The council met on September 8 2026 [1].", True),
+    ("same month only", "The council met in September 2026 [1].", True),
+    ("different date", "The council met on September 9, 2026 [1].", False),
     ("supported address and record id", "The project at 2057 Olive Avenue is PLN2025-00182 [1].", True),
     ("invented address", "The project is at 2100 Olive Avenue [1].", False),
     ("supported section", "It relies on CEQA Guidelines Section 15332 [1].", True),
@@ -42,6 +45,11 @@ def main() -> int:
     mixed = enforce("Capped at $396,000 [1]. It was approved unanimously on 9/9/2026 [1].", [CHUNK])
     print(f"\nmixed answer -> {mixed.text!r}; removed {[r.unsupported for r in mixed.removed]}")
     failures += mixed.text != "Capped at $396,000 [1]."
+    date_cases = (("Sep. 8th 2026", "2026-09-08"), ("2026-09-08", "2026-09-08"), ("Sept 2026", "2026-09"))
+    for value, expected in date_cases:
+        ok = canonical_date(value) == expected
+        failures += not ok
+        print(f"{'PASS' if ok else 'FAIL'}  canonical_date({value!r}) = {canonical_date(value)!r}")
     print(f"\n{failures} failure(s)")
     return 1 if failures else 0
 

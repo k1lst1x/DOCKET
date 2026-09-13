@@ -2,11 +2,13 @@
 
 Grounding is enforced in code, not only in the prompt:
 - an answer is accepted only if a retrieval tool actually ran during the turn (a hook counts it);
+- only the model's final answer text is used; reasoning is never shown or checked as an answer;
 - the answer must cite evidence returned in this turn with [n] markers; unknown markers are dropped;
-- every number, amount, date, address, section and record id must appear verbatim in the cited
-  chunks (core.citations), or its sentence is removed;
+- every number, amount, date, address, section and record id must appear in the cited chunks
+  (core.citations), or its sentence is removed;
 - when nothing grounded remains, the reply is a fixed refusal that names the sources searched.
-The agent has no tool that writes, sends, publishes or contacts anyone.
+A chat session is only continued by the user who started it. The agent has no tool that writes, sends,
+publishes or contacts anyone.
 """
 
 import json
@@ -31,6 +33,8 @@ MAX_QUESTION_CHARS = 2000
 HISTORY_MESSAGES = 6
 RETRIEVAL_TOOLS = {"vector_search", "keyword_search", "search_by_address", "fetch_chunks", "get_document"}
 REFUSAL = "I don't have anything in my sources about that."
+REFUSAL_SENTENCE = re.compile(r"I don['’]t have anything in my sources about that\.?", re.IGNORECASE)
+REASONING_SPAN = re.compile(r"<reasoning>.*?</reasoning>", re.DOTALL | re.IGNORECASE)
 DISCLAIMER = "This is the text of the source documents, not legal advice."
 LEGAL_QUESTION = re.compile(
     r"\b(allowed|permitted|legal|illegal|required|requirements?|must i|can i|may i|zoning|permits?|"
@@ -178,8 +182,27 @@ def build_tools(turn: TurnEvidence) -> list:
     ]
 
 
+def final_text(result) -> str:
+    """The model's answer text only. Reasoning blocks are skipped, and leaked <reasoning> spans removed."""
+    message = getattr(result, "message", None)
+    blocks = message.get("content", []) if isinstance(message, dict) else []
+    text = "\n".join(
+        block["text"] for block in blocks if isinstance(block, dict) and isinstance(block.get("text"), str)
+    )
+    return REASONING_SPAN.sub("", text).strip()
+
+
 def _searched_source_names() -> list[str]:
     return [source["name"] for source in retrieval.list_sources() if source["document_count"]]
+
+
+def _refs_in(text: str) -> list[int]:
+    refs: list[int] = []
+    for match in MARKER.finditer(text):
+        for ref in (int(n) for n in match.group(1).split(",")):
+            if ref not in refs:
+                refs.append(ref)
+    return refs
 
 
 def finalize(question: str, raw_answer: str, turn: TurnEvidence) -> ChatResponse:
@@ -195,8 +218,11 @@ def finalize(question: str, raw_answer: str, turn: TurnEvidence) -> ChatResponse
             removed_sentences=removed or [],
         )
 
-    text = raw_answer.strip()
-    if turn.retrieval_calls == 0 or not text or text.startswith(REFUSAL):
+    # gpt-oss cites as 【1†L31-L38】; normalize to [1]. Markdown emphasis would show as raw asterisks.
+    text = re.sub(r"【(\d+)(?:†[^】]*)?】", r"[\1]", raw_answer).replace("**", "")
+    # A refusal sentence is not an answer: drop it wherever it appears and judge what remains.
+    text = REFUSAL_SENTENCE.sub("", text).strip()
+    if turn.retrieval_calls == 0 or not text:
         return refusal()
 
     def keep_known(match: re.Match) -> str:
@@ -204,22 +230,14 @@ def finalize(question: str, raw_answer: str, turn: TurnEvidence) -> ChatResponse
         return f"[{', '.join(str(ref) for ref in refs)}]" if refs else ""
 
     text = MARKER.sub(keep_known, text)
-    refs = []
-    for match in MARKER.finditer(text):
-        for ref in (int(n) for n in match.group(1).split(",")):
-            if ref not in refs:
-                refs.append(ref)
+    refs = _refs_in(text)
     if not refs:
         return refusal()
 
     enforced = enforce(text, [turn.by_ref[ref].text for ref in refs])
     removed = [asdict(item) for item in enforced.removed]
     text = enforced.text
-    remaining = []
-    for match in MARKER.finditer(text):
-        for ref in (int(n) for n in match.group(1).split(",")):
-            if ref not in remaining:
-                remaining.append(ref)
+    remaining = _refs_in(text)
     if not text or not remaining:
         return refusal(removed)
     if LEGAL_QUESTION.search(question) and "not legal advice" not in text.lower():
@@ -239,13 +257,26 @@ def finalize(question: str, raw_answer: str, turn: TurnEvidence) -> ChatResponse
     )
 
 
-def _session_uuid(session_id: str | None) -> str:
-    if not session_id:
-        return str(uuid.uuid4())
+def _session_uuid(session_id: str) -> str:
     try:
         return str(uuid.UUID(session_id))
     except ValueError:
         return str(uuid.uuid5(uuid.NAMESPACE_URL, f"docket-chat:{session_id}"))
+
+
+def resolve_session(session_id: str | None, user_id: str | None) -> str:
+    """Continue a session only for the user who started it (both None for signed-out chats)."""
+    if not session_id:
+        return str(uuid.uuid4())
+    candidate = _session_uuid(session_id)
+    with connect() as conn:
+        row = conn.execute(
+            "SELECT user_id FROM agent_chat_sessions WHERE id = %s::uuid", (candidate,)
+        ).fetchone()
+    if row is None or row[0] == user_id:
+        return candidate
+    log.warning("chat session requested by a different user; starting a new session instead")
+    return str(uuid.uuid4())
 
 
 def load_history(session_id: str) -> list[dict]:
@@ -308,7 +339,7 @@ async def answer(
     question: str, session_id: str | None = None, user_id: str | None = None, group_id: str | None = None
 ) -> ChatResponse:
     question = question.strip()[:MAX_QUESTION_CHARS]
-    session = _session_uuid(session_id)
+    session = resolve_session(session_id, user_id)
     turn = TurnEvidence()
     agent = Agent(
         model=_model(),
@@ -319,7 +350,7 @@ async def answer(
         callback_handler=None,
     )
     result = await agent.invoke_async(question)
-    response = finalize(question, str(result), turn)
+    response = finalize(question, final_text(result), turn)
     response.session_id = session
     if response.removed_sentences:
         log.warning(

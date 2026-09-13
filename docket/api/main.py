@@ -21,6 +21,7 @@ sys.path.insert(0, str(ROOT))
 from core import retrieval, settings  # noqa: E402
 from core.chat_agent import MAX_QUESTION_CHARS, stream_answer  # noqa: E402
 from core.embed import embed_text  # noqa: E402
+from core.generation_graph import generate as run_generation  # noqa: E402
 from core.jobs import IngestFailed, run_ingest  # noqa: E402
 
 log = logging.getLogger("docket.api")
@@ -39,6 +40,7 @@ class GenerateRequest(BaseModel):
     topic: str = Field(min_length=3, max_length=300)
     kind: Literal["summary", "announcement", "proscons"]
     group_id: str | None = None
+    crawl: bool = False  # true starts the graph at the crawler instead of the researcher
 
 
 class IngestRequest(BaseModel):
@@ -109,8 +111,9 @@ async def chat(request: ChatRequest) -> StreamingResponse:
 
 
 @app.post("/generate")
-def generate(request: GenerateRequest) -> dict:
-    raise HTTPException(status_code=501, detail="The generation graph is not available yet.")
+async def generate(request: GenerateRequest) -> dict:
+    """Runs the generation graph for one topic and returns what was verified and stored (or why not)."""
+    return await run_generation(request.topic.strip(), request.kind, request.group_id, crawl=request.crawl)
 
 
 @app.post("/ingest/run")
