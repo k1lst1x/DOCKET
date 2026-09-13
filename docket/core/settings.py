@@ -10,9 +10,9 @@ load_dotenv(ROOT / ".env")
 
 AWS_REGION = os.getenv("AWS_REGION", "us-west-2")
 
-# Claude Sonnet on Bedrock, called through the US cross-region inference profile
-# (no on-demand throughput in us-west-2). Sonnet 4.6 until the account has Sonnet 5.
-BEDROCK_MODEL_ID = os.getenv("BEDROCK_MODEL_ID", "us.anthropic.claude-sonnet-4-6")
+# Reasoning model on Bedrock. openai.gpt-oss-120b runs on-demand; switch to
+# us.openai.gpt-5.6-luna once the account is granted access to it.
+BEDROCK_MODEL_ID = os.getenv("BEDROCK_MODEL_ID", "openai.gpt-oss-120b-1:0")
 EMBED_MODEL_ID = os.getenv("EMBED_MODEL_ID", "amazon.titan-embed-text-v2:0")
 EMBED_DIMENSIONS = 1024
 
