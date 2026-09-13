@@ -1,0 +1,22 @@
+{
+  "targets": {
+    "default": {
+      "resources": {
+        "runtimes": {
+          "docket_chat": {
+            "runtimeId": "docket_docket_chat-T7Fwx36JKm",
+            "runtimeArn": "arn:aws:bedrock-agentcore:us-west-2:465083445156:runtime/docket_docket_chat-T7Fwx36JKm",
+            "roleArn": "arn:aws:iam::465083445156:role/AgentCore-docket-default-ApplicationAgentDocketChat-su45AzjB6MJ0"
+          },
+          "docket_pipeline": {
+            "runtimeId": "docket_docket_pipeline-gyEVqfE6Kl",
+            "runtimeArn": "arn:aws:bedrock-agentcore:us-west-2:465083445156:runtime/docket_docket_pipeline-gyEVqfE6Kl",
+            "roleArn": "arn:aws:iam::465083445156:role/AgentCore-docket-default-ApplicationAgentDocketPipe-DqkVNEHiKPkN"
+          }
+        },
+        "stackName": "AgentCore-docket-default",
+        "deployHash": "692785f4733c341d"
+      }
+    }
+  }
+}
