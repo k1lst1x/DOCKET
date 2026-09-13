@@ -42,6 +42,7 @@ LEGAL_QUESTION = re.compile(
     re.IGNORECASE,
 )
 MARKER = re.compile(r"\[(\d+(?:\s*,\s*\d+)*)\]")
+EMPHASIS = re.compile(r"(?<![\w*])([*_])(?=\S)([^*_\n]+?)(?<=\S)\1(?![\w*])")
 
 SYSTEM_PROMPT = """You are Docket's assistant for residents of Fremont, California.
 
@@ -100,7 +101,7 @@ class TurnEvidence:
                 ref = len(self.by_ref) + 1
                 self.ref_of[item.chunk_id] = ref
                 self.by_ref[ref] = item
-            date = f" | {item.published_at[:10]}" if item.published_at else ""
+            date = f" | {item.local_date()}" if item.published_at else ""
             blocks.append(
                 f"[{ref}] {item.title} | {item.locator}{date} | {item.url} "
                 f"| chunk_id={item.chunk_id} document_id={item.document_id}\n{item.text}"
@@ -219,7 +220,9 @@ def finalize(question: str, raw_answer: str, turn: TurnEvidence) -> ChatResponse
         )
 
     # gpt-oss cites as 【1†L31-L38】; normalize to [1]. Markdown emphasis would show as raw asterisks.
-    text = re.sub(r"【(\d+)(?:†[^】]*)?】", r"[\1]", raw_answer).replace("**", "")
+    text = re.sub(r"【(\d+)(?:†[^】]*)?】", r"[\1]", raw_answer).replace("**", "").replace("__", "")
+    # Single-character emphasis (*Purchase of ...*, _term_) too; bullets and snake_case ids stay.
+    text = EMPHASIS.sub(r"\2", text)
     # A refusal sentence is not an answer: drop it wherever it appears and judge what remains.
     text = REFUSAL_SENTENCE.sub("", text).strip()
     if turn.retrieval_calls == 0 or not text:
@@ -243,10 +246,19 @@ def finalize(question: str, raw_answer: str, turn: TurnEvidence) -> ChatResponse
     if LEGAL_QUESTION.search(question) and "not legal advice" not in text.lower():
         text = f"{text} {DISCLAIMER}"
 
+    # Evidence numbers count every chunk returned this turn ([13] is the 13th). Renumber what the answer
+    # cites to 1..n in order of first use, so markers match the numbered source list shown to residents.
+    number = {ref: position for position, ref in enumerate(remaining, 1)}
+
+    def renumber(match: re.Match) -> str:
+        cited = dict.fromkeys(number[int(n)] for n in match.group(1).split(","))
+        return f"[{', '.join(str(n) for n in cited)}]"
+
+    text = MARKER.sub(renumber, text)
     citations = []
     for ref in remaining:
         item = turn.by_ref[ref]
-        citations.append(Citation(ref, item.chunk_id, item.title, item.locator, item.url))
+        citations.append(Citation(number[ref], item.chunk_id, item.title, item.locator, item.url))
     return ChatResponse(
         answer=text,
         cited_chunk_ids=[citation.chunk_id for citation in citations],

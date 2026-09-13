@@ -8,6 +8,8 @@ import re
 import threading
 import time
 from dataclasses import asdict, dataclass, field
+from datetime import datetime
+from zoneinfo import ZoneInfo
 
 import psycopg
 from rank_bm25 import BM25Okapi
@@ -19,6 +21,7 @@ from core.vectors import S3VectorStore
 TOP_K = 12
 RRF_K = 60  # reciprocal rank fusion constant
 KEYWORD_INDEX_TTL_S = 600
+FREMONT_TZ = ZoneInfo("America/Los_Angeles")
 
 TOKEN = re.compile(r"[a-z0-9]+(?:[.\-][a-z0-9]+)*")
 STOPWORDS = {
@@ -57,11 +60,17 @@ class Evidence:
     def to_dict(self) -> dict:
         return asdict(self)
 
+    def local_date(self) -> str:
+        """The document's date in Fremont. published_at is stored in UTC, where an evening meeting
+        falls on the next day."""
+        if not self.published_at:
+            return ""
+        return datetime.fromisoformat(self.published_at).astimezone(FREMONT_TZ).date().isoformat()
+
     def cited_text(self) -> str:
         """What a citation to this chunk vouches for: the chunk plus its document's title, locator and
         date. A meeting's date is often only in the document title, not in the agenda row being cited."""
-        date = self.published_at[:10] if self.published_at else ""
-        return f"{self.title}\n{self.locator}\n{date}\n{self.text}"
+        return f"{self.title}\n{self.locator}\n{self.local_date()}\n{self.text}"
 
 
 _lock = threading.Lock()
