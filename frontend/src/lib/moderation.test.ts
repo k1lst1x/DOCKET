@@ -73,6 +73,19 @@ describe("moderateText blocks offensive language", () => {
     ["slur whole word", "spics"],
     ["Spanish", "pendejo"],
     ["Hindi", "bhenchod"],
+    ["digit for the first letter", "4uck"],
+    ["mask for the first letter", "*uck this"],
+    ["hash for the first letter", "#hit"],
+    ["mask for the last letter", "fuc*"],
+    ["masks at both leetspeak and edge", "sh!*"],
+    ["hash for the last letter of a long word", "b1tc#"],
+    ["masked sensitive word", "s*x"],
+    ["leetspeak sensitive word", "s3x"],
+    ["dollar sign sensitive word", "$exy"],
+    ["spaced sensitive word", "s e x"],
+    ["zero for o", "p0rn"],
+    ["at sign for a", "n@ked"],
+    ["Cyrillic look-alike in a sensitive word", "ѕex"],
   ])("evasion: %s (%s)", (_label, text) => expect(blocked(text)).toBe(true));
 
   it.each(["kill yourself", "k1ll y0urself", "kys", "I'll kill you", "hope you die"])("threat: %s", (text) =>
@@ -102,6 +115,8 @@ describe("moderateText allows everyday writing", () => {
     "Dick's Sporting Goods", "Moby Dick", "Hell's Kitchen",
     "I-880", "455 Mission Blvd", "$5M", "10am", "4th of July", "(510) 555-0199", "39550 Liberty St.", "B2B", "e.g.",
     "who re-elected the mayor", "Warm Springs BART", "Lake Elizabeth", "Mission Peak",
+    "the sex offender registry", "same-sex marriage", "sex education", "Nazi Germany", "rape kit backlog", "Li Shi.",
+    "Is that Shi?", "Shi!", "#1 priority", "4th", "grapes", "Essex", "unisex", "sextant", "naked eye",
   ])("%s", (text) => expect(moderateText(text)).toEqual({ ok: true, matches: [] }));
 
   it("passes every sample review, summary, pro, con and title", () => {

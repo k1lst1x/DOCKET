@@ -1,6 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { IssueDialog } from "@/components/issues/IssueDialog";
+import type { IssueMarker } from "@/lib/issue-types";
 import { loadGoogleMaps } from "@/lib/google-maps";
 import { pointInPolygon } from "@/lib/geo";
 import {
@@ -20,6 +22,9 @@ import { kmFromFremont } from "@/lib/live/parsers";
 import { LIVE_KINDS, type LiveIncident, type LiveKind } from "@/lib/live/types";
 import { LivePanel, livePin } from "./LivePanel";
 import { useLiveIncidents } from "./useLiveIncidents";
+import { issueMatchesFilter, issuePin, IssuesPanel, type IssueFilter } from "./IssuesPanel";
+import { PlaceSearch, type SearchPick } from "./PlaceSearch";
+import { useIssueMarkers } from "./useIssueMarkers";
 
 // Live Google map of a Fremont neighborhood: its boundary highlighted, the places inside it
 // from Google Places, filterable by category or a search, and every other neighborhood one
@@ -106,6 +111,25 @@ function describeError(error: unknown): string {
   return "Google Places didn't respond. Try again in a moment.";
 }
 
+function placeToResult(p: google.maps.places.Place): PlaceResult | null {
+  if (!p.location) return null;
+  const lat = p.location.lat();
+  const lng = p.location.lng();
+  return {
+    id: p.id,
+    name: p.displayName ?? "Unnamed place",
+    lat,
+    lng,
+    address: p.formattedAddress?.replace(/, USA$/, "") ?? null,
+    typeLabel: p.primaryTypeDisplayName ?? null,
+    primaryType: p.primaryType ?? null,
+    rating: p.rating ?? null,
+    ratingCount: p.userRatingCount ?? null,
+    mapsUrl: p.googleMapsURI ?? null,
+    neighborhood: neighborhoodAt(lng, lat)?.name ?? null,
+  };
+}
+
 async function searchPlaces(area: Area, category: PlaceCategory, query: string): Promise<PlaceResult[]> {
   const { Place, SearchNearbyRankPreference } = (await google.maps.importLibrary("places")) as google.maps.PlacesLibrary;
   const { places } = query
@@ -118,25 +142,10 @@ async function searchPlaces(area: Area, category: PlaceCategory, query: string):
         rankPreference: SearchNearbyRankPreference.POPULARITY,
       });
 
-  return places
-    .filter((p) => p.location && String(p.businessStatus ?? "") !== "CLOSED_PERMANENTLY")
-    .map((p) => {
-      const lat = p.location!.lat();
-      const lng = p.location!.lng();
-      return {
-        id: p.id,
-        name: p.displayName ?? "Unnamed place",
-        lat,
-        lng,
-        address: p.formattedAddress?.replace(/, USA$/, "") ?? null,
-        typeLabel: p.primaryTypeDisplayName ?? null,
-        primaryType: p.primaryType ?? null,
-        rating: p.rating ?? null,
-        ratingCount: p.userRatingCount ?? null,
-        mapsUrl: p.googleMapsURI ?? null,
-        neighborhood: neighborhoodAt(lng, lat)?.name ?? null,
-      };
-    });
+  return places.flatMap((p) => {
+    const result = String(p.businessStatus ?? "") !== "CLOSED_PERMANENTLY" ? placeToResult(p) : null;
+    return result ? [result] : [];
+  });
 }
 
 async function loadDetail(id: string): Promise<PlaceDetail> {
@@ -205,11 +214,18 @@ export function PlacesExplorer({ apiKey, mapId }: { apiKey: string; mapId: strin
   const [locating, setLocating] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [retryKey, setRetryKey] = useState(0);
-  const [tab, setTab] = useState<"places" | "live">("places");
+  const [tab, setTab] = useState<"places" | "issues" | "live">("places");
   const [liveKinds, setLiveKinds] = useState<Set<LiveKind>>(() => new Set(LIVE_KINDS.map((k) => k.kind)));
   const [showLive, setShowLive] = useState(true);
   const [selectedIncidentId, setSelectedIncidentId] = useState<string | null>(null);
   const live = useLiveIncidents();
+  const issueData = useIssueMarkers();
+  const [issueFilter, setIssueFilter] = useState<IssueFilter>("all");
+  const [selectedIssueId, setSelectedIssueId] = useState<string | null>(null);
+  const [openIssueId, setOpenIssueId] = useState<string | null>(null);
+  /** A place picked from the search suggestions, kept at the top of the list. */
+  const [pinned, setPinned] = useState<PlaceResult | null>(null);
+  const [now, setNow] = useState(() => Date.now());
 
   const mapEl = useRef<HTMLDivElement>(null);
   const mapRef = useRef<google.maps.Map | null>(null);
@@ -218,16 +234,20 @@ export function PlacesExplorer({ apiKey, mapId }: { apiKey: string; mapId: strin
   const resultsRef = useRef<PlaceResult[]>([]);
   const liveMarkersRef = useRef(new Map<string, google.maps.marker.AdvancedMarkerElement>());
   const liveIncidentsRef = useRef<LiveIncident[]>([]);
+  const issueMarkersRef = useRef(new Map<string, google.maps.marker.AdvancedMarkerElement>());
+  const issueCircleRef = useRef<google.maps.Circle | null>(null);
+  const issuesRef = useRef<IssueMarker[]>([]);
 
   const area = areaBySlug(areaSlug) ?? FREMONT;
   const category = categoryById(categoryId);
   const isCity = area.slug === FREMONT.slug;
 
-  const visible = useMemo(() => {
+  const inside = useMemo(() => {
     if (!insideOnly) return search.results;
     return search.results.filter((r) => (area.polygon ? pointInPolygon([r.lng, r.lat], area.polygon) : r.neighborhood !== null));
   }, [search.results, insideOnly, area]);
-  const hiddenOutside = search.results.length - visible.length;
+  const visible = useMemo(() => (pinned ? [pinned, ...inside.filter((r) => r.id !== pinned.id)] : inside), [inside, pinned]);
+  const hiddenOutside = search.results.length - inside.length;
   resultsRef.current = visible;
 
   const liveIncidents = useMemo(() => (live.snapshot?.incidents ?? []).filter((i) => liveKinds.has(i.kind)), [live.snapshot, liveKinds]);
@@ -235,6 +255,9 @@ export function PlacesExplorer({ apiKey, mapId }: { apiKey: string; mapId: strin
   const liveCount = live.snapshot?.incidents.length ?? 0;
   const topAlert = live.snapshot?.alerts[0] ?? null;
   const moreAlerts = Math.max(0, (live.snapshot?.alerts.length ?? 0) - 1);
+
+  const shownIssues = useMemo(() => issueData.issues.filter((i) => issueMatchesFilter(i, issueFilter, now)), [issueData.issues, issueFilter, now]);
+  issuesRef.current = issueData.issues;
 
   // Starting area: the link, then the last one viewed here, then the member's home neighborhood.
   useEffect(() => {
@@ -299,6 +322,7 @@ export function PlacesExplorer({ apiKey, mapId }: { apiKey: string; mapId: strin
     const polygons = polygonsRef.current;
     const markers = markersRef.current;
     const liveMarkers = liveMarkersRef.current;
+    const issueMarkers = issueMarkersRef.current;
     loadGoogleMaps(apiKey, () => {
       if (cancelled) return;
       setMapState("failed");
@@ -351,6 +375,10 @@ export function PlacesExplorer({ apiKey, mapId }: { apiKey: string; mapId: strin
       markers.clear();
       liveMarkers.forEach((m) => (m.map = null));
       liveMarkers.clear();
+      issueMarkers.forEach((m) => (m.map = null));
+      issueMarkers.clear();
+      issueCircleRef.current?.setMap(null);
+      issueCircleRef.current = null;
       mapRef.current = null;
     };
   }, [apiKey, mapId]);
@@ -478,6 +506,77 @@ export function PlacesExplorer({ apiKey, mapId }: { apiKey: string; mapId: strin
     return () => window.clearTimeout(timer);
   }, [selectedIncidentId]);
 
+  // Deadlines and "days left" labels move with the clock.
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(Date.now()), 60_000);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  // City issue pins: where each decision applies, with the share of neighbors voting for it.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (mapState !== "ready" || !map) return;
+    const markers = issueMarkersRef.current;
+    const wanted = new Set(shownIssues.map((i) => i.id));
+    markers.forEach((marker, id) => {
+      if (!wanted.has(id)) {
+        marker.map = null;
+        markers.delete(id);
+      }
+    });
+    for (const issue of shownIssues) {
+      const selected = issue.id === selectedIssueId;
+      const content = issuePin(issue, selected, now);
+      let marker = markers.get(issue.id);
+      if (!marker) {
+        marker = new google.maps.marker.AdvancedMarkerElement({
+          map,
+          position: { lat: issue.location.lat, lng: issue.location.lng },
+          title: issue.location.label ? `${issue.title}, ${issue.location.label}` : issue.title,
+          content,
+          gmpClickable: true,
+        });
+        marker.addEventListener("gmp-click", () => {
+          setTab("issues");
+          setSelectedIssueId((current) => (current === issue.id ? null : issue.id));
+        });
+        markers.set(issue.id, marker);
+      } else {
+        marker.content = content;
+      }
+      marker.zIndex = selected ? 1500 : 400;
+    }
+  }, [mapState, shownIssues, selectedIssueId, now]);
+
+  // Selecting an issue outlines the area it affects and brings it into view.
+  useEffect(() => {
+    issueCircleRef.current?.setMap(null);
+    issueCircleRef.current = null;
+    const map = mapRef.current;
+    const issue = selectedIssueId ? issuesRef.current.find((i) => i.id === selectedIssueId) : undefined;
+    if (mapState !== "ready" || !map || !issue) return;
+    const center = { lat: issue.location.lat, lng: issue.location.lng };
+    if (issue.affectedRadiusM) {
+      const circle = new google.maps.Circle({
+        map,
+        center,
+        radius: issue.affectedRadiusM,
+        strokeColor: "#2a78d6",
+        strokeWeight: 2,
+        fillColor: "#2a78d6",
+        fillOpacity: 0.12,
+        clickable: false,
+      });
+      issueCircleRef.current = circle;
+      const bounds = circle.getBounds();
+      if (bounds) map.fitBounds(bounds, 48);
+    } else {
+      map.panTo(center);
+    }
+    const timer = window.setTimeout(() => document.getElementById(`issue-${issue.id}`)?.scrollIntoView({ block: "nearest", behavior: "smooth" }), 60);
+    return () => window.clearTimeout(timer);
+  }, [selectedIssueId, mapState]);
+
   // Selecting a place pans to it and loads hours, contact details and a photo.
   useEffect(() => {
     if (!selectedId) {
@@ -501,11 +600,58 @@ export function PlacesExplorer({ apiKey, mapId }: { apiKey: string; mapId: strin
     setCategoryId(id);
     setQuery("");
     setDraft("");
+    setPinned(null);
   }
 
-  function submitSearch(event: FormEvent) {
-    event.preventDefault();
-    setQuery(draft.trim().slice(0, MAX_QUERY));
+  function onSearchPick(pick: SearchPick) {
+    switch (pick.kind) {
+      case "area":
+        setAreaSlug(pick.slug);
+        setDraft("");
+        setQuery("");
+        setPinned(null);
+        break;
+      case "category":
+        chooseCategory(pick.id);
+        setTab("places");
+        break;
+      case "issue":
+        setDraft("");
+        setIssueFilter("all");
+        setTab("issues");
+        setSelectedIssueId(pick.id);
+        break;
+      case "query":
+        setPinned(null);
+        setQuery(pick.text.slice(0, MAX_QUERY));
+        setTab("places");
+        break;
+      case "place":
+        void pickPlace(pick.prediction);
+        break;
+    }
+  }
+
+  /** A Google suggestion: fetch the place, keep it at the top of the list, and zoom to it. */
+  async function pickPlace(prediction: google.maps.places.PlacePrediction) {
+    setTab("places");
+    setNotice(null);
+    try {
+      const place = prediction.toPlace();
+      await place.fetchFields({ fields: LIST_FIELDS });
+      const result = placeToResult(place);
+      if (!result) throw new Error("Place has no location");
+      setPinned(result);
+      setDraft(result.name);
+      setSelectedId(result.id);
+      const map = mapRef.current;
+      if (map) {
+        map.panTo({ lat: result.lat, lng: result.lng });
+        if ((map.getZoom() ?? 0) < 16) map.setZoom(16);
+      }
+    } catch {
+      setNotice("We couldn't open that place. Try searching for it instead.");
+    }
   }
 
   function locate() {
@@ -540,6 +686,7 @@ export function PlacesExplorer({ apiKey, mapId }: { apiKey: string; mapId: strin
   return (
     // Phones: controls, map, results in one scroll. Desktop: controls and results share a scrolling
     // column beside a full-height map.
+    <>
     <div className="flex flex-1 flex-col bg-sky-mist lg:grid lg:min-h-0 lg:grid-cols-[minmax(0,27rem)_minmax(0,1fr)] lg:grid-rows-[minmax(0,1fr)]">
       {/* relative: screen-reader-only text positions inside this scroller instead of stretching the page. */}
       <div className="contents lg:relative lg:col-start-1 lg:row-start-1 lg:block lg:min-h-0 lg:overflow-y-auto lg:border-r lg:border-rule">
@@ -561,7 +708,15 @@ export function PlacesExplorer({ apiKey, mapId }: { apiKey: string; mapId: strin
             <label htmlFor="places-area" className="label text-sm">
               Neighborhood
             </label>
-            <select id="places-area" value={area.slug} onChange={(e) => setAreaSlug(e.target.value)} className="field h-11 rounded-full pr-8">
+            <select
+              id="places-area"
+              value={area.slug}
+              onChange={(e) => {
+                setAreaSlug(e.target.value);
+                setPinned(null);
+              }}
+              className="field h-11 rounded-full pr-8"
+            >
               <option value={FREMONT.slug}>{FREMONT.name}</option>
               {home ? <option value={home.slug}>{`${home.name} (your neighborhood)`}</option> : null}
               <optgroup label="Neighborhoods">
@@ -588,30 +743,21 @@ export function PlacesExplorer({ apiKey, mapId }: { apiKey: string; mapId: strin
           </p>
         ) : null}
 
-        <form role="search" onSubmit={submitSearch} className="mt-3 flex items-center gap-2 rounded-full border border-field bg-white p-1 pl-4 focus-within:border-ink">
-          <label htmlFor="places-query" className="sr-only">
-            Search places in {area.name}
-          </label>
-          <svg viewBox="0 0 20 20" aria-hidden="true" className="h-4 w-4 shrink-0 text-ink-muted">
-            <circle cx="9" cy="9" r="5.5" fill="none" stroke="currentColor" strokeWidth="2" />
-            <path d="M13.5 13.5L17 17" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-          </svg>
-          <input
-            id="places-query"
-            type="search"
-            value={draft}
-            maxLength={MAX_QUERY}
-            onChange={(e) => {
-              setDraft(e.target.value);
-              if (!e.target.value && query) setQuery("");
-            }}
-            placeholder={`Search ${isCity ? "Fremont" : area.name}: boba, dentist, tacos…`}
-            className="h-10 min-w-0 flex-1 bg-transparent text-base text-ink placeholder:text-ink-muted focus:outline-none"
-          />
-          <button type="submit" className="btn btn-primary h-10 rounded-full px-4 text-sm" disabled={!draft.trim()}>
-            Search
-          </button>
-        </form>
+        <PlaceSearch
+          area={area}
+          value={draft}
+          onChange={(value) => {
+            setDraft(value);
+            if (!value) {
+              if (query) setQuery("");
+              setPinned(null);
+            }
+          }}
+          onPick={onSearchPick}
+          issues={issueData.issues}
+          googleReady={mapState === "ready"}
+          maxLength={MAX_QUERY}
+        />
 
         <div role="group" aria-label="Filter by category" className="-mx-4 mt-3 flex gap-2 overflow-x-auto px-4 pb-1 sm:-mx-6 sm:px-6 lg:mx-0 lg:flex-wrap lg:overflow-visible lg:px-0">
           {CATEGORIES.map((c) => {
@@ -635,10 +781,11 @@ export function PlacesExplorer({ apiKey, mapId }: { apiKey: string; mapId: strin
       </section>
 
       <section aria-label="Results" className="order-3 bg-sky-mist px-4 py-4 sm:px-6">
-        <div role="group" aria-label="Show places or live incidents" className="mb-4 grid grid-cols-2 gap-1 rounded-full bg-white p-1">
+        <div role="group" aria-label="Show places, issues or live incidents" className="mb-4 grid grid-cols-3 gap-1 rounded-full bg-white p-1">
           {(
             [
               ["places", "Places", visible.length],
+              ["issues", "Issues", issueData.issues.length],
               ["live", "Live now", liveCount],
             ] as const
           ).map(([id, label, n]) => (
@@ -647,7 +794,7 @@ export function PlacesExplorer({ apiKey, mapId }: { apiKey: string; mapId: strin
               type="button"
               aria-pressed={tab === id}
               onClick={() => setTab(id)}
-              className={`inline-flex h-10 items-center justify-center gap-2 rounded-full text-sm font-semibold transition-colors ${
+              className={`inline-flex h-10 min-w-0 items-center justify-center gap-1.5 rounded-full px-1 text-sm font-semibold transition-colors ${
                 tab === id ? "bg-ink text-white" : "text-ink hover:bg-sky-mist"
               }`}
             >
@@ -755,6 +902,18 @@ export function PlacesExplorer({ apiKey, mapId }: { apiKey: string; mapId: strin
           <p className="mt-4 text-sm text-ink-muted">Places, ratings and hours from Google. Tap a place for details and directions.</p>
         ) : null}
           </>
+        ) : tab === "issues" ? (
+          <IssuesPanel
+            issues={issueData.issues}
+            live={issueData.live}
+            loaded={issueData.loaded}
+            filter={issueFilter}
+            onFilter={setIssueFilter}
+            selectedId={selectedIssueId}
+            onSelect={setSelectedIssueId}
+            onOpen={setOpenIssueId}
+            now={now}
+          />
         ) : (
           <LivePanel
             live={live}
@@ -804,6 +963,8 @@ export function PlacesExplorer({ apiKey, mapId }: { apiKey: string; mapId: strin
         {mapState === "missing-key" || mapState === "failed" ? <MapUnavailable state={mapState} error={mapError} /> : null}
       </div>
     </div>
+    <IssueDialog issueId={openIssueId} onClose={() => setOpenIssueId(null)} fallbackTitle={issueData.issues.find((i) => i.id === openIssueId)?.title} />
+    </>
   );
 }
 
