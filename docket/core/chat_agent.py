@@ -186,6 +186,26 @@ def build_tools(turn: TurnEvidence) -> list:
     ]
 
 
+PLANNING_SENTENCE = re.compile(
+    r"\b(?:we\s+(?:must|need\s+to|should|can)|the\s+user\s+(?:asks|wants|is\s+asking)|let['’]s\b|"
+    r"now\s+answer|provide\s+(?:a\s+)?(?:concise|short|brief|final)?\s*answer|use\s+evidence|"
+    r"cite\s+(?:the\s+)?evidence|final\s+answer\s*:)",
+    re.IGNORECASE,
+)
+GLUED_SENTENCE = re.compile(r"(?<=[a-z][.!?])(?=[A-Z])")
+
+
+def strip_planning(text: str) -> str:
+    """Drop sentences in which the model talks about producing the answer instead of answering."""
+    lines = []
+    for line in text.splitlines():
+        sentences = re.split(r"(?<=[.!?])\s+", GLUED_SENTENCE.sub(" ", line))
+        kept = [sentence for sentence in sentences if not PLANNING_SENTENCE.search(sentence)]
+        if kept or not line.strip():
+            lines.append(" ".join(kept))
+    return "\n".join(lines).strip()
+
+
 def final_text(result) -> str:
     """The model's answer text only. Reasoning blocks are skipped, and leaked <reasoning> spans removed."""
     message = getattr(result, "message", None)
@@ -228,6 +248,10 @@ def finalize(question: str, raw_answer: str, turn: TurnEvidence) -> ChatResponse
     text = EMPHASIS.sub(r"\2", text)
     # A refusal sentence is not an answer: drop it wherever it appears and judge what remains.
     text = REFUSAL_SENTENCE.sub("", text).strip()
+    # gpt-oss occasionally writes its planning into the answer ("Now answer: ... We must cite. Use evidence
+    # [1]. Provide concise answer.The agreement ..."). Those sentences are about writing the answer, never
+    # part of it, and can carry supported facts and markers, so enforcement alone would let them through.
+    text = strip_planning(text)
     if turn.retrieval_calls == 0 or not text:
         return refusal()
 

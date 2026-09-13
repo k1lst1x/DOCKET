@@ -84,7 +84,7 @@
   "refusal": [
     { "question": "What is the population of Fremont, California?" },
     { "question": "In what year was the City of Fremont incorporated?" },
-    { "question": "What is the sales tax rate in Fremont?" },
+    { "question": "What is the median household income in Fremont?" },
     { "question": "How do I appeal a parking ticket in Fremont?" },
     { "question": "Which high school in Fremont has the best ranking?" }
   ]
