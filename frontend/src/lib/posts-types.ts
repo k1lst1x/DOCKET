@@ -2,13 +2,21 @@
 
 import type { PostMediaKind } from "./post-media";
 
-/** A photo or video in a post. url is a temporary signed link. */
+/** A photo or video in a post. */
 export interface FeedMedia {
   kind: PostMediaKind;
-  url: string;
+  /** Temporary signed link; null when the automatic content check removed the file. */
+  url: string | null;
   width: number | null;
   height: number | null;
   durationS: number | null;
+  /**
+   * The automatic content check. Neighbors only ever receive approved files; the author also sees
+   * their own files that are still being checked or were removed.
+   */
+  review: "approved" | "pending" | "blocked" | "failed";
+  /** For the author, what happened to a file that isn't approved. */
+  notice: string | null;
 }
 
 export interface FeedAuthor {
@@ -54,6 +62,8 @@ export type PostErrorCode =
   | "post_blocked"
   | "link_blocked"
   | "media_invalid"
+  | "media_blocked"
+  | "media_unreviewable"
   | "media_unavailable"
   | "not_found"
   | "forbidden"

@@ -54,13 +54,42 @@ export function LinkCard({ text }: { text: string }) {
   );
 }
 
+type ShownMedia = FeedMedia & { url: string };
+
+/**
+ * A post's photos or video. Neighbors only receive files that passed the content check; on their own
+ * post, the author also sees files still being checked (marked) and a notice for removed ones.
+ */
 export function MediaGallery({ media, author }: { media: FeedMedia[]; author: string }) {
   if (!media.length) return null;
+  const shown = media.filter((m): m is ShownMedia => Boolean(m.url));
+  const notices = [...new Set(media.map((m) => m.notice).filter((n): n is string => Boolean(n)))];
+  const removed = media.some((m) => m.review === "blocked" || m.review === "failed");
+  return (
+    <>
+      {shown.length ? <Gallery media={shown} author={author} /> : null}
+      {notices.map((notice) => (
+        <p key={notice} role="note" className={`mt-2 rounded-xl px-3 py-2 text-sm ${removed ? "bg-signal-wash text-signal" : "bg-ochre-wash text-ochre"}`}>
+          {notice}
+        </p>
+      ))}
+    </>
+  );
+}
+
+function CheckingBadge({ media }: { media: FeedMedia }) {
+  return media.review === "pending" ? (
+    <span className="absolute left-2 top-2 rounded-full bg-ink/80 px-2 py-0.5 text-xs font-semibold text-white">Being checked</span>
+  ) : null;
+}
+
+function Gallery({ media, author }: { media: ShownMedia[]; author: string }) {
   const video = media.find((m) => m.kind === "video");
   if (video) {
     const ratio = video.width && video.height ? `${video.width} / ${video.height}` : "16 / 9";
     return (
-      <div className="mt-3 overflow-hidden rounded-xl border border-rule bg-black">
+      <div className="relative mt-3 overflow-hidden rounded-xl border border-rule bg-black">
+        <CheckingBadge media={video} />
         <video
           src={video.url}
           controls
@@ -80,7 +109,8 @@ export function MediaGallery({ media, author }: { media: FeedMedia[]; author: st
       {media.map((m, i) => {
         const ratio = single && m.width && m.height ? `${m.width} / ${m.height}` : undefined;
         return (
-          <li key={m.url} className={media.length === 3 && i === 0 ? "row-span-2" : ""}>
+          <li key={m.url} className={`relative ${media.length === 3 && i === 0 ? "row-span-2" : ""}`}>
+            <CheckingBadge media={m} />
             <a href={m.url} target="_blank" rel="noopener noreferrer" className="block h-full">
               {/* eslint-disable-next-line @next/next/no-img-element -- media links are signed and short-lived. */}
               <img

@@ -1,10 +1,11 @@
 "use client";
 
 import { useCallback, useEffect, useId, useRef, useState } from "react";
-import { formatDuration, MAX_IMAGES, MAX_VIDEO_SECONDS, maxBytes, MEDIA_TYPES, type PostMediaKind } from "@/lib/post-media";
+import { CONVERTIBLE_IMAGE_TYPES, formatDuration, MAX_IMAGES, MAX_VIDEO_SECONDS, maxBytes, MEDIA_TYPES, MIN_IMAGE_DIMENSION, type PostMediaKind } from "@/lib/post-media";
 
 // Photos, a video and emoji for the post box. Files upload as soon as they're picked, straight to
-// Docket's media bucket with a one-time ticket from /api/posts/media, so posting is instant.
+// Docket's media bucket with a one-time ticket from /api/posts/media, then go through the automatic
+// content check (/api/posts/media/review), so the poster learns right away if a file can't be posted.
 
 export interface Attachment {
   id: string;
@@ -15,8 +16,11 @@ export interface Attachment {
   height: number | null;
   durationS: number | null;
   progress: number;
-  status: "uploading" | "ready" | "failed";
+  /** checking: uploaded, content check running. blocked: the check refused it. */
+  status: "uploading" | "checking" | "ready" | "blocked" | "failed";
   key: string | null;
+  /** What the content check said, e.g. that a video appears to neighbors after its check. */
+  notice: string | null;
 }
 
 const MB = 1024 * 1024;
@@ -75,6 +79,48 @@ function upload(file: File, contentType: string, durationS: number | null, onPro
   })();
 }
 
+type ReviewResult = { status: "approved" | "pending" | "blocked" | "failed"; notice: string | null };
+
+/** Runs the content check on an upload. Photos get a result right away; a video's check finishes later. */
+async function requestReview(key: string, contentType: string, durationS: number | null): Promise<ReviewResult> {
+  const res = await fetch("/api/posts/media/review", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ key, contentType, durationS }),
+  }).catch(() => null);
+  const data = res ? await res.json().catch(() => null) : null;
+  if (!res?.ok || !data?.status) {
+    throw new Error(UPLOAD_ERRORS[(data as { error?: string } | null)?.error ?? ""] ?? "Docket couldn't check that file. Remove it and try again.");
+  }
+  return data as ReviewResult;
+}
+
+/** WebP and GIF photos become JPEGs before upload so the content check can read them. A GIF keeps its first frame. */
+async function toJpeg(file: File): Promise<File> {
+  const url = URL.createObjectURL(file);
+  try {
+    const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const image = new Image();
+      image.onload = () => resolve(image);
+      image.onerror = () => reject(new Error("That photo couldn't be opened."));
+      image.src = url;
+    });
+    const canvas = document.createElement("canvas");
+    canvas.width = img.naturalWidth;
+    canvas.height = img.naturalHeight;
+    const context = canvas.getContext("2d");
+    if (!context) throw new Error("That photo couldn't be prepared. Try a JPEG or PNG.");
+    context.fillStyle = "#ffffff";
+    context.fillRect(0, 0, canvas.width, canvas.height);
+    context.drawImage(img, 0, 0);
+    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.9));
+    if (!blob) throw new Error("That photo couldn't be prepared. Try a JPEG or PNG.");
+    return new File([blob], `${file.name.replace(/\.[^.]+$/, "") || "photo"}.jpg`, { type: "image/jpeg" });
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
+
 /** Picked files, their uploads, and what the post should send. */
 export function useAttachments() {
   const [items, setItems] = useState<Attachment[]>([]);
@@ -87,12 +133,20 @@ export function useAttachments() {
   const patch = useCallback((id: string, change: Partial<Attachment>) => setItems((list) => list.map((a) => (a.id === id ? { ...a, ...change } : a))), []);
 
   const add = useCallback(
-    async (files: File[]) => {
+    async (picked: File[]) => {
       setError(null);
-      if (!files.length) return;
+      if (!picked.length) return;
       const current = itemsRef.current;
-      const kinds = files.map((f) => MEDIA_TYPES[f.type]?.kind);
-      if (kinds.some((k) => !k)) return setError("Photos can be JPEG, PNG, WebP or GIF. Videos can be MP4, WebM or MOV.");
+      if (picked.some((f) => !MEDIA_TYPES[f.type] && !CONVERTIBLE_IMAGE_TYPES.includes(f.type))) {
+        return setError("Photos can be JPEG, PNG, WebP or GIF. Videos can be MP4 or MOV.");
+      }
+      let files: File[];
+      try {
+        files = await Promise.all(picked.map((f) => (CONVERTIBLE_IMAGE_TYPES.includes(f.type) ? toJpeg(f) : Promise.resolve(f))));
+      } catch (e) {
+        return setError((e as Error).message);
+      }
+      const kinds = files.map((f) => MEDIA_TYPES[f.type].kind);
       const hasVideo = kinds.includes("video") || current.some((a) => a.kind === "video");
       if (hasVideo && current.length + files.length > 1) return setError(`A post can have one video, or up to ${MAX_IMAGES} photos.`);
       if (current.length + files.length > MAX_IMAGES) return setError(`A post can have up to ${MAX_IMAGES} photos.`);
@@ -118,10 +172,24 @@ export function useAttachments() {
           setError(`Videos can be up to 5 minutes long. That one is ${formatDuration(size.durationS ?? 0)}.`);
           continue;
         }
-        const item: Attachment = { id: crypto.randomUUID(), kind, contentType: file.type, previewUrl, ...size, progress: 0, status: "uploading", key: null };
+        if (kind === "image" && (size.width < MIN_IMAGE_DIMENSION || size.height < MIN_IMAGE_DIMENSION)) {
+          URL.revokeObjectURL(previewUrl);
+          setError(`Photos need to be at least ${MIN_IMAGE_DIMENSION} × ${MIN_IMAGE_DIMENSION} pixels.`);
+          continue;
+        }
+        const item: Attachment = { id: crypto.randomUUID(), kind, contentType: file.type, previewUrl, ...size, progress: 0, status: "uploading", key: null, notice: null };
         setItems((list) => [...list, item]);
         upload(file, file.type, size.durationS, (progress) => patch(item.id, { progress }))
-          .then((key) => patch(item.id, { key, status: "ready", progress: 100 }))
+          .then(async (key) => {
+            patch(item.id, { key, status: "checking", progress: 100 });
+            const review = await requestReview(key, file.type, size.durationS);
+            if (review.status === "approved" || review.status === "pending") {
+              patch(item.id, { status: "ready", notice: review.notice });
+            } else {
+              patch(item.id, { status: "blocked", notice: review.notice });
+              setError(review.notice ?? "That file can't be posted. Remove it to post.");
+            }
+          })
           .catch((e: Error) => {
             patch(item.id, { status: "failed" });
             setError(e.message);
@@ -144,13 +212,15 @@ export function useAttachments() {
     setError(null);
   }, []);
 
-  const uploading = items.some((a) => a.status === "uploading");
-  const failed = items.some((a) => a.status === "failed");
+  const uploading = items.some((a) => a.status === "uploading" || a.status === "checking");
+  const checking = items.some((a) => a.status === "checking");
+  // Blocked files must be removed before posting.
+  const failed = items.some((a) => a.status === "failed" || a.status === "blocked");
   const media = items
     .filter((a) => a.status === "ready" && a.key)
     .map((a) => ({ key: a.key, contentType: a.contentType, width: a.width, height: a.height, durationS: a.durationS }));
 
-  return { items, error, add, remove, clear, uploading, failed, media, canAddMore: !items.some((a) => a.kind === "video") && items.length < MAX_IMAGES };
+  return { items, error, add, remove, clear, uploading, checking, failed, media, canAddMore: !items.some((a) => a.kind === "video") && items.length < MAX_IMAGES };
 }
 
 export function AttachmentPreviews({ items, onRemove }: { items: Attachment[]; onRemove: (id: string) => void }) {
@@ -171,11 +241,18 @@ export function AttachmentPreviews({ items, onRemove }: { items: Attachment[]; o
           {a.status !== "ready" ? (
             <span
               role="status"
-              className={`absolute inset-x-0 top-0 px-2.5 py-1 text-xs font-semibold ${a.status === "failed" ? "bg-signal text-white" : "bg-ink/75 text-white"}`}
+              className={`absolute inset-x-0 top-0 px-2.5 py-1 text-xs font-semibold ${a.status === "failed" || a.status === "blocked" ? "bg-signal text-white" : "bg-ink/75 text-white"}`}
             >
-              {a.status === "failed" ? "Upload failed. Remove it and try again." : `Uploading ${a.progress}%`}
+              {a.status === "failed"
+                ? "Upload failed. Remove it and try again."
+                : a.status === "blocked"
+                  ? "Can't be posted. Remove it."
+                  : a.status === "checking"
+                    ? "Checking…"
+                    : `Uploading ${a.progress}%`}
             </span>
           ) : null}
+          {a.status === "ready" && a.notice ? <p className="bg-white px-2.5 py-1.5 text-xs text-ink-soft">{a.notice}</p> : null}
           <button
             type="button"
             onClick={() => onRemove(a.id)}

@@ -27,6 +27,8 @@ const ERRORS: Record<PostErrorCode, string> = {
   post_blocked: "That includes language Docket doesn't allow, such as swear words, slurs or threats. Please rephrase it.",
   link_blocked: "Links need to start with http:// or https://.",
   media_invalid: "One of the photos or videos didn't finish uploading. Remove it and add it again.",
+  media_blocked: "One of the photos or videos can't be posted because Docket's automatic check flagged it. Remove it to post.",
+  media_unreviewable: "Docket couldn't check one of the photos or videos. Try a JPEG or PNG photo, or an MP4 (H.264) video.",
   media_unavailable: "Photo and video posts aren't available right now. You can still post text.",
   not_found: "That post isn't available anymore.",
   forbidden: "You can only delete your own posts.",
@@ -537,7 +539,7 @@ function Composer({
               {POST_MAX_LENGTH - length}
             </span>
             <button type="submit" disabled={!canPost} className="btn btn-primary h-10 rounded-full px-5 text-sm">
-              {busy ? "Posting…" : attachments.uploading ? "Uploading…" : "Post"}
+              {busy ? "Posting…" : attachments.checking ? "Checking…" : attachments.uploading ? "Uploading…" : "Post"}
             </button>
           </div>
         </div>

@@ -9,6 +9,8 @@ const STATUS: Record<PostErrorCode, number> = {
   post_blocked: 422,
   link_blocked: 422,
   media_invalid: 400,
+  media_blocked: 422,
+  media_unreviewable: 422,
   media_unavailable: 503,
   not_found: 404,
   forbidden: 403,

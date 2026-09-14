@@ -1,4 +1,6 @@
 import { db } from "./db";
+import { reviewNotice, type ReviewReason, type ReviewStatus } from "./media-moderation";
+import { reviewsFor, reviewUpload, type MediaReview } from "./media-review";
 import { confirmUploads, mediaBucket, viewUrl } from "./media-storage";
 import { moderateText } from "./moderation";
 import { areaBySlug } from "./places";
@@ -37,15 +39,39 @@ const SELECT_POSTS = `SELECT p.id, p.parent_id, p.body, p.media, p.created_at, p
   FROM posts p JOIN members m ON m.id = p.member_id`;
 
 const iso = (d: Date) => new Date(d).toISOString();
+const storedMedia = (row: PostRow): StoredMedia[] => (Array.isArray(row.media) ? row.media : []);
 
-/** Temporary links for a post's photos and video. A signing failure hides the media, not the post. */
-async function feedMedia(stored: StoredMedia[] | null): Promise<FeedMedia[]> {
-  if (!Array.isArray(stored) || !stored.length) return [];
+/**
+ * A post's photos and video, by content-check result. Neighbors get approved files only; the author
+ * also sees files still being checked, and a notice for removed ones. A signing failure hides the
+ * media, not the post.
+ */
+async function feedMedia(stored: StoredMedia[], reviews: Map<string, MediaReview>, isAuthor: boolean): Promise<FeedMedia[]> {
+  const items = stored
+    .map((m) => {
+      const review = reviews.get(m.key);
+      const status: ReviewStatus = review?.status ?? "pending";
+      const reasons: ReviewReason[] = review?.reasons ?? [];
+      return { m, status, reasons };
+    })
+    .filter((item) => isAuthor || item.status === "approved");
+  if (!items.length) return [];
   try {
-    const urls = await Promise.all(stored.map((m) => viewUrl(m.key)));
-    return stored.flatMap((m, i) => {
+    const urls = await Promise.all(items.map((item) => (item.status === "approved" || item.status === "pending" ? viewUrl(item.m.key) : Promise.resolve(null))));
+    return items.flatMap(({ m, status, reasons }, i) => {
       const url = urls[i];
-      return url ? [{ kind: m.kind, url, width: m.width ?? null, height: m.height ?? null, durationS: m.durationS ?? null }] : [];
+      if (!url && (status === "approved" || status === "pending")) return [];
+      return [
+        {
+          kind: m.kind,
+          url,
+          width: m.width ?? null,
+          height: m.height ?? null,
+          durationS: m.durationS ?? null,
+          review: status,
+          notice: reviewNotice(m.kind, status, reasons, "author"),
+        },
+      ];
     });
   } catch (error) {
     console.error("[docket] couldn't sign post media links", error);
@@ -56,7 +82,13 @@ async function feedMedia(stored: StoredMedia[] | null): Promise<FeedMedia[]> {
 /** Adds like and reply counts, the viewer's likes, authors' home neighborhoods and media links. */
 async function hydrate(rows: PostRow[], viewerId: string | null): Promise<FeedPost[]> {
   // Anything that fails today's language filter stays visible only to its author.
-  const visible = rows.filter((r) => r.member_id === viewerId || moderateText(r.body).ok);
+  const clean = rows.filter((r) => r.member_id === viewerId || moderateText(r.body).ok);
+  if (!clean.length) return [];
+  const reviews = await reviewsFor(
+    clean.flatMap((r) => storedMedia(r).map((m) => ({ key: m.key, memberId: r.member_id, kind: m.kind, contentType: m.contentType }))),
+  );
+  // A post with photos or a video reaches neighbors only once every file has passed the content check.
+  const visible = clean.filter((r) => r.member_id === viewerId || storedMedia(r).every((m) => reviews.get(m.key)?.status === "approved"));
   if (!visible.length) return [];
   const pool = db();
   const postIds = JSON.stringify(visible.map((r) => r.id));
@@ -75,7 +107,7 @@ async function hydrate(rows: PostRow[], viewerId: string | null): Promise<FeedPo
        WHERE ms.member_id IN ${IDS(1)} ORDER BY ms.joined_at`,
       [memberIds],
     ),
-    Promise.all(visible.map((r) => feedMedia(r.media))),
+    Promise.all(visible.map((r) => feedMedia(storedMedia(r), reviews, r.member_id === viewerId))),
   ]);
   const likeCounts = new Map(likes.rows.map((r) => [r.post_id, Number(r.n)]));
   const replyCounts = new Map(replies.rows.map((r) => [r.parent_id, Number(r.n)]));
@@ -161,7 +193,8 @@ export async function listReplies(postId: string, viewerId: string | null): Prom
 
 /**
  * New post or reply. Replies always attach to the top-level post, inherit its neighborhood and
- * are text only. A post may have photos or a video instead of text; uploads are checked in the bucket.
+ * are text only. A post may have photos or a video instead of text; every upload must pass the
+ * automatic content check (a video may still be being checked, and stays hidden until it passes).
  */
 export async function createPost(
   memberId: string,
@@ -193,6 +226,16 @@ export async function createPost(
   let media: StoredMedia[] | null = null;
   if (mediaCheck.media.length) {
     if (!mediaBucket()) throw new PostActionError("media_unavailable");
+    let reviews: (MediaReview | null)[];
+    try {
+      reviews = await Promise.all(mediaCheck.media.map((m) => reviewUpload({ key: m.key, memberId, kind: m.kind, contentType: m.contentType })));
+    } catch (error) {
+      console.error("[docket] media check failed while posting", error);
+      throw new PostActionError("media_unavailable");
+    }
+    if (reviews.some((r) => !r)) throw new PostActionError("media_invalid");
+    if (reviews.some((r) => r?.status === "blocked")) throw new PostActionError("media_blocked");
+    if (reviews.some((r) => r?.status === "failed")) throw new PostActionError("media_unreviewable");
     media = await confirmUploads(mediaCheck.media);
     if (!media) throw new PostActionError("media_invalid");
   }

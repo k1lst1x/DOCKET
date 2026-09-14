@@ -25,7 +25,7 @@ const key2 = (ext: string) => `uploads/${MEMBER}/1c7b5a3f-8d2e-4f9b-a04c-6e3d2b1
 describe("upload tickets", () => {
   it("accept photos and videos within the limits", () => {
     expect(validateUploadRequest({ contentType: "image/jpeg", size: 2_000_000 })).toMatchObject({ ok: true, kind: "image" });
-    expect(validateUploadRequest({ contentType: "image/gif", size: MAX_IMAGE_BYTES })).toMatchObject({ ok: true });
+    expect(validateUploadRequest({ contentType: "image/png", size: MAX_IMAGE_BYTES })).toMatchObject({ ok: true });
     expect(validateUploadRequest({ contentType: "video/mp4", size: 80_000_000, durationS: 299.6 })).toMatchObject({ ok: true, kind: "video" });
     expect(validateUploadRequest({ contentType: "video/quicktime", size: MAX_VIDEO_BYTES, durationS: 300 })).toMatchObject({ ok: true });
   });
@@ -33,6 +33,10 @@ describe("upload tickets", () => {
   it("refuse other types, oversized files and videos over five minutes", () => {
     expect(validateUploadRequest({ contentType: "image/svg+xml", size: 100 })).toEqual({ ok: false });
     expect(validateUploadRequest({ contentType: "text/html", size: 100 })).toEqual({ ok: false });
+    // The content check can't read these; the post box converts WebP and GIF photos to JPEG first.
+    expect(validateUploadRequest({ contentType: "image/gif", size: 100 })).toEqual({ ok: false });
+    expect(validateUploadRequest({ contentType: "image/webp", size: 100 })).toEqual({ ok: false });
+    expect(validateUploadRequest({ contentType: "video/webm", size: 100, durationS: 5 })).toEqual({ ok: false });
     expect(validateUploadRequest({ contentType: "image/png", size: MAX_IMAGE_BYTES + 1 })).toEqual({ ok: false });
     expect(validateUploadRequest({ contentType: "video/mp4", size: MAX_VIDEO_BYTES + 1, durationS: 60 })).toEqual({ ok: false });
     expect(validateUploadRequest({ contentType: "video/mp4", size: 1000, durationS: 300.5 })).toEqual({ ok: false });

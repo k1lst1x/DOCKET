@@ -10,18 +10,25 @@ export const MAX_VIDEO_BYTES = 250 * 1024 * 1024;
 export const MAX_VIDEO_SECONDS = 5 * 60;
 const MAX_DIMENSION = 20_000;
 
-/** Allowed upload types and the file extension each is stored under. */
+/**
+ * Upload types Docket stores, and the file extension each is stored under. These are the formats the
+ * automatic content check (Amazon Rekognition) can read: JPEG and PNG photos, MP4 and MOV videos.
+ */
 export const MEDIA_TYPES: Record<string, { kind: PostMediaKind; ext: string }> = {
   "image/jpeg": { kind: "image", ext: "jpg" },
   "image/png": { kind: "image", ext: "png" },
-  "image/webp": { kind: "image", ext: "webp" },
-  "image/gif": { kind: "image", ext: "gif" },
   "video/mp4": { kind: "video", ext: "mp4" },
-  "video/webm": { kind: "video", ext: "webm" },
   "video/quicktime": { kind: "video", ext: "mov" },
 };
 
-export const ACCEPT_MEDIA = Object.keys(MEDIA_TYPES).join(",");
+/** Photo types the post box converts to JPEG before uploading (a GIF keeps its first frame). */
+export const CONVERTIBLE_IMAGE_TYPES = ["image/webp", "image/gif"];
+
+/** What the file picker offers. */
+export const ACCEPT_MEDIA = [...Object.keys(MEDIA_TYPES), ...CONVERTIBLE_IMAGE_TYPES].join(",");
+
+/** The content check needs photos at least this many pixels on each side. */
+export const MIN_IMAGE_DIMENSION = 80;
 
 export const maxBytes = (kind: PostMediaKind) => (kind === "video" ? MAX_VIDEO_BYTES : MAX_IMAGE_BYTES);
 
@@ -61,7 +68,7 @@ export function validateUploadRequest(raw: unknown): { ok: true; kind: PostMedia
 export function validatePostMedia(raw: unknown, memberId: string): { ok: true; media: Omit<StoredMedia, "size">[] } | { ok: false } {
   if (raw === undefined || raw === null) return { ok: true, media: [] };
   if (!Array.isArray(raw) || raw.length > MAX_IMAGES) return { ok: false };
-  const keyPattern = new RegExp(`^uploads/${memberId.replace(/[^0-9a-zA-Z-]/g, "")}/${UUID}\\.(jpg|png|webp|gif|mp4|webm|mov)$`);
+  const keyPattern = new RegExp(`^uploads/${memberId.replace(/[^0-9a-zA-Z-]/g, "")}/${UUID}\\.(jpg|png|mp4|mov)$`);
   const media: Omit<StoredMedia, "size">[] = [];
   for (const item of raw) {
     if (!item || typeof item !== "object") return { ok: false };

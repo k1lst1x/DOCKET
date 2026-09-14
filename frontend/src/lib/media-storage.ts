@@ -82,6 +82,27 @@ export async function confirmUploads(media: Omit<StoredMedia, "size">[]): Promis
   return confirmed;
 }
 
+/** The first bytes of an upload, for checking what kind of file it really is. Null when it isn't there. */
+export async function readFileStart(key: string, bytes = 32): Promise<Uint8Array | null> {
+  const bucket = mediaBucket();
+  if (!bucket) throw new Error("DOCKET_MEDIA_BUCKET is not set.");
+  try {
+    const object = await s3().send(new GetObjectCommand({ Bucket: bucket, Key: key, Range: `bytes=0-${bytes - 1}` }));
+    return object.Body ? await object.Body.transformToByteArray() : null;
+  } catch (error) {
+    const e = error as { name?: string; $metadata?: { httpStatusCode?: number } };
+    if (e.name === "NoSuchKey" || e.name === "NotFound" || e.$metadata?.httpStatusCode === 404) return null;
+    throw error;
+  }
+}
+
+/** Marks an upload posted (kept) or pending (the bucket's lifecycle rule deletes it within a day). */
+export async function setUploadState(key: string, state: "pending" | "posted"): Promise<void> {
+  const bucket = mediaBucket();
+  if (!bucket) throw new Error("DOCKET_MEDIA_BUCKET is not set.");
+  await s3().send(new PutObjectTaggingCommand({ Bucket: bucket, Key: key, Tagging: { TagSet: [{ Key: STATE_TAG, Value: state }] } }));
+}
+
 /** A temporary link for showing an upload in the feed. */
 export async function viewUrl(key: string): Promise<string | null> {
   const bucket = mediaBucket();
