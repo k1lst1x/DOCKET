@@ -7,7 +7,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 
-from publish_issues import AgendaItem, Fact, issue_rows, verified_item  # noqa: E402
+from publish_issues import AgendaItem, Fact, agenda_numbers, issue_rows, number_for, verified_item  # noqa: E402
 from publish_posts import MAX_BODY, agenda_post, comment_post, planned_posts  # noqa: E402
 
 NEIGHBORHOODS = {"ardenwood": "Ardenwood", "niles": "Niles", "northgate": "Northgate"}
@@ -47,6 +47,41 @@ class VerifiedItemTests(unittest.TestCase):
             topic="Budget",
         )
         self.assertIsNone(verified_item(wrong_section, AGENDA, NEIGHBORHOODS))
+
+
+IQM2_AGENDA = """| **1.** | **Preliminary** |
+| **2.** | **Consent Calendar** |
+|  | A. | Waive Further Reading of Proposed Ordinances |
+|  |  |  | a. | DRAFT - Example Minutes |
+|  | C. | Example Ordinance Amending Municipal Code Section 1.23.456 to Adjust Fees |
+|  |  | a. | Draft Ordinance Example |
+| **5.** | **Scheduled Items** |
+|  | A. | Adopt a Resolution About an Example Policy |
+|  |  | a. | Draft Resolution- Example Policy |
+| **8.** | **Adjournment** |"""
+
+
+class AgendaNumberTests(unittest.TestCase):
+    def test_numbers_come_from_section_headers_and_item_rows(self):
+        numbers = agenda_numbers(IQM2_AGENDA)
+        self.assertEqual(number_for("Example Ordinance Amending Municipal Code Section 1.23.456", numbers), "2C")
+        self.assertEqual(number_for("Adopt a Resolution About an Example Policy", numbers), "5A")
+        self.assertIsNone(number_for("Draft Resolution- Example Policy", numbers))  # attachment row
+
+    def test_model_number_is_ignored_when_the_agenda_numbering_is_known(self):
+        numbers = agenda_numbers(IQM2_AGENDA)
+        item = AgendaItem(
+            number="C",
+            section="consent calendar",
+            title="Example Ordinance Amending Municipal Code Section 1.23.456 to Adjust Fees",
+            summary="The council would amend Section 1.23.456.",
+            topic="Fees",
+        )
+        self.assertEqual(verified_item(item, IQM2_AGENDA, NEIGHBORHOODS, numbers)["number"], "2C")
+        attachment = AgendaItem(
+            number="5A", section="scheduled items", title="Draft Resolution- Example Policy", summary="x", topic="x"
+        )
+        self.assertIsNone(verified_item(attachment, IQM2_AGENDA, NEIGHBORHOODS, numbers))
 
 
 class ItemRulesTests(unittest.TestCase):

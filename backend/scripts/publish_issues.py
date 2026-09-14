@@ -43,6 +43,10 @@ PROCEDURAL = re.compile(
     r"adjournment|acronyms?|meeting schedule|pledge of allegiance|salute (?:to )?the flag)\b",
     re.IGNORECASE,
 )
+# IQM2 agendas print sections as "| **2.** | **Consent Calendar** |" and items as "|  | C. | Title |";
+# attachment rows are indented one more cell and use lower-case letters.
+SECTION_ROW = re.compile(r"^\|\s*\*\*(\d{1,2})\.\*\*\s*\|")
+ITEM_ROW = re.compile(r"^\|\s*\|\s*([A-Z])\.\s*\|\s*(.+?)\s*\|?\s*$")
 LOOKAHEAD_DAYS = 21
 MAX_ITEMS_PER_AGENDA = 12
 BODIES = {
@@ -100,10 +104,42 @@ def neighborhoods_in(text: str, neighborhoods: dict[str, str]) -> list[str]:
     return sorted(slug for slug, name in neighborhoods.items() if re.search(rf"\b{re.escape(name.lower())}\b", lowered))
 
 
-def verified_item(item: AgendaItem, chunk_text: str, neighborhoods: dict[str, str]) -> dict | None:
-    """The item as it will be stored, or None when its title or summary can't be verified in the chunk."""
-    number = re.sub(r"[^0-9A-Za-z]", "", item.number).upper()
+def agenda_numbers(text: str) -> dict[str, str]:
+    """Item numbers as the agenda prints them: the section header's number plus the item row's capital letter
+    ("2C"), keyed by the row's title. The first occurrence wins, since stored chunks overlap."""
+    numbers: dict[str, str] = {}
+    section = None
+    for line in text.splitlines():
+        header = SECTION_ROW.match(line)
+        if header:
+            section = header.group(1)
+            continue
+        row = ITEM_ROW.match(line)
+        if row and section:
+            numbers.setdefault(squash(row.group(2)), f"{section}{row.group(1)}")
+    return numbers
+
+
+def number_for(title: str, numbers: dict[str, str]) -> str | None:
+    key = squash(title)
+    for row_title, number in numbers.items():
+        if row_title.startswith(key) or key.startswith(row_title):
+            return number
+    return None
+
+
+def verified_item(
+    item: AgendaItem, chunk_text: str, neighborhoods: dict[str, str], numbers: dict[str, str] | None = None
+) -> dict | None:
+    """The item as it will be stored, or None when its title or summary can't be verified in the chunk.
+
+    When the agenda's own numbering could be read (numbers), the item number comes from it and a title that
+    matches no item row (an attachment, a heading) is rejected; otherwise the model's number is used."""
     title = re.sub(r"\s+", " ", item.title).strip(" |-")
+    if numbers:
+        number = number_for(title, numbers) or ""
+    else:
+        number = re.sub(r"[^0-9A-Za-z]", "", item.number).upper()
     if not ITEM_NUMBER.fullmatch(number) or len(title) < 8 or PROCEDURAL.search(title):
         return None
     if squash(title) not in squash(chunk_text):
@@ -266,6 +302,7 @@ def run() -> dict:
     totals: Counter[str] = Counter()
     for doc in documents.values():
         seen: dict[str, dict] = {}
+        numbers = agenda_numbers("\n".join(text for text, _ in doc["chunks"]))
         for text, locator in doc["chunks"]:
             try:
                 found = asyncio.run(items_in(doc, text, locator))
@@ -274,7 +311,7 @@ def run() -> dict:
                 totals["chunks_failed"] += 1
                 continue
             for item in found:
-                checked = verified_item(item, text, neighborhoods)
+                checked = verified_item(item, text, neighborhoods, numbers)
                 if checked is None:
                     totals["items_rejected"] += 1
                     continue
