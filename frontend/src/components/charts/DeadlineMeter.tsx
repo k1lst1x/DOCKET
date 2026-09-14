@@ -21,8 +21,9 @@ export function DeadlineMeter({ start, deadline, label }: { start: string; deadl
   const closed = remaining !== null && remaining <= 0;
   const urgent = remaining !== null && !closed && remaining < DAY_MS;
   const used = now === null ? 0 : Math.min(100, Math.max(0, ((now - begin) / Math.max(end - begin, 1)) * 100));
-  const fill = urgent ? "#B3261E" : closed ? "#5F6368" : "#2a78d6";
-  const track = urgent ? "#FBEAE8" : "#DCEAF9";
+  const fill = urgent ? "rgb(var(--signal))" : closed ? "var(--chart-axis)" : "#2a78d6";
+  // Tracks follow the theme (globals.css) so they don't glow on dark cards.
+  const track = urgent ? "var(--meter-urgent-track)" : "var(--meter-track)";
 
   return (
     <div>

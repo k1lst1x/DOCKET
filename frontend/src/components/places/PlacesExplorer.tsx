@@ -366,6 +366,8 @@ export function PlacesExplorer({ apiKey, mapId }: { apiKey: string; mapId: strin
         if (cancelled || !mapEl.current) return;
         const map = new Map(mapEl.current, {
           mapId,
+          // Read once; the places page remounts this component when the theme changes.
+          colorScheme: document.documentElement.dataset.theme === "dark" ? "DARK" : "LIGHT",
           center: FREMONT.center,
           zoom: 12,
           clickableIcons: false,
@@ -846,7 +848,7 @@ export function PlacesExplorer({ apiKey, mapId }: { apiKey: string; mapId: strin
           </p>
           {mapState === "ready" ? (
             <label className="inline-flex cursor-pointer items-center gap-2 text-sm text-ink-soft">
-              <input type="checkbox" checked={insideOnly} onChange={(e) => setInsideOnly(e.target.checked)} className="h-4 w-4 accent-[#262626]" />
+              <input type="checkbox" checked={insideOnly} onChange={(e) => setInsideOnly(e.target.checked)} className="h-4 w-4 accent-ink" />
               Only inside {isCity ? "Fremont" : area.name}
             </label>
           ) : null}

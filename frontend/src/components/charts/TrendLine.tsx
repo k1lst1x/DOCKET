@@ -89,19 +89,19 @@ export function TrendLine({ points }: { points: TrendPoint[] }) {
           <svg width={width} height={height} aria-hidden="true" className="block">
             {[0, maxY / 2, maxY].map((tick) => (
               <g key={tick}>
-                <line x1={pad.left} x2={pad.left + innerW} y1={y(tick)} y2={y(tick)} stroke={CHART_INK.grid} strokeWidth={1} />
-                <text x={pad.left - 8} y={y(tick)} dy="0.32em" textAnchor="end" fontSize={14} fill={CHART_INK.axis} style={{ fontVariantNumeric: "tabular-nums" }}>
+                <line x1={pad.left} x2={pad.left + innerW} y1={y(tick)} y2={y(tick)} strokeWidth={1} style={{ stroke: CHART_INK.grid }} />
+                <text x={pad.left - 8} y={y(tick)} dy="0.32em" textAnchor="end" fontSize={14} style={{ fill: CHART_INK.axis, fontVariantNumeric: "tabular-nums" }}>
                   {Math.round(tick)}
                 </text>
               </g>
             ))}
-            <text x={pad.left} y={height - 6} fontSize={14} fill={CHART_INK.axis}>
+            <text x={pad.left} y={height - 6} fontSize={14} style={{ fill: CHART_INK.axis }}>
               {dayLabel(points[0].day)}
             </text>
-            <text x={pad.left + innerW} y={height - 6} fontSize={14} fill={CHART_INK.axis} textAnchor="end">
+            <text x={pad.left + innerW} y={height - 6} fontSize={14} textAnchor="end" style={{ fill: CHART_INK.axis }}>
               {dayLabel(points[last].day)}
             </text>
-            {active ? <line x1={x(index ?? 0)} x2={x(index ?? 0)} y1={pad.top} y2={pad.top + innerH} stroke={CHART_INK.axis} strokeWidth={1} /> : null}
+            {active ? <line x1={x(index ?? 0)} x2={x(index ?? 0)} y1={pad.top} y2={pad.top + innerH} strokeWidth={1} style={{ stroke: CHART_INK.axis }} /> : null}
             {SERIES.map((s) => (
               <g key={s.key}>
                 <path
@@ -112,8 +112,8 @@ export function TrendLine({ points }: { points: TrendPoint[] }) {
                   strokeLinejoin="round"
                   strokeLinecap="round"
                 />
-                <circle cx={x(last)} cy={y(points[last][s.key])} r={4.5} fill={s.color} stroke="#FFFFFF" strokeWidth={2} />
-                {active ? <circle cx={x(index ?? 0)} cy={y(active[s.key])} r={4.5} fill={s.color} stroke="#FFFFFF" strokeWidth={2} /> : null}
+                <circle cx={x(last)} cy={y(points[last][s.key])} r={4.5} fill={s.color} strokeWidth={2} style={{ stroke: CHART_INK.halo }} />
+                {active ? <circle cx={x(index ?? 0)} cy={y(active[s.key])} r={4.5} fill={s.color} strokeWidth={2} style={{ stroke: CHART_INK.halo }} /> : null}
               </g>
             ))}
             {SERIES.map((s, i) => {
@@ -122,7 +122,7 @@ export function TrendLine({ points }: { points: TrendPoint[] }) {
               const tooClose = Math.abs(a - b) < 20;
               const labelY = tooClose ? (i === 0 ? Math.min(a, b) - 10 : Math.max(a, b) + 10) : y(points[last][s.key]);
               return (
-                <text key={s.key} x={x(last) + 12} y={labelY} dy="0.32em" fontSize={14} fill="#262626">
+                <text key={s.key} x={x(last) + 12} y={labelY} dy="0.32em" fontSize={14} style={{ fill: CHART_INK.label }}>
                   {s.label} <tspan fontWeight={600}>{points[last][s.key]}</tspan>
                 </text>
               );

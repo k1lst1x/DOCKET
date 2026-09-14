@@ -391,7 +391,7 @@ export function ChatPanel({ variant, chat, context = null, onDismissContext, onC
             type="submit"
             disabled={!draft.trim() || pending}
             aria-label="Send message"
-            className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-ink text-white transition-opacity hover:bg-black disabled:opacity-40"
+            className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-ink text-white transition-opacity hover:bg-ink-strong disabled:opacity-40"
           >
             <svg viewBox="0 0 20 20" aria-hidden="true" className="h-5 w-5">
               <path d="M10 16V4M4.5 9.5L10 4l5.5 5.5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />

@@ -3,6 +3,7 @@ import { AccountLink } from "@/components/AccountLink";
 import { NavLinks } from "@/components/NavLinks";
 import { LOGO_PALETTE, LOGO_ROWS } from "@/components/pixel/logo";
 import { Sprite } from "@/components/pixel/Sprite";
+import { ThemeToggle } from "@/components/theme/ThemeToggle";
 
 /** The D Lens mark in pixel art. Drawn on a 32px grid, so 32px (or a multiple) keeps every pixel crisp. */
 export function DocketMark({ className = "h-8 w-8" }: { className?: string }) {
@@ -21,11 +22,12 @@ export function SiteHeader({ tone = "plain" }: { tone?: "sky" | "plain" }) {
           <DocketMark />
           <span className="hidden min-[400px]:inline">Docket</span>
         </Link>
-        <nav aria-label="Main" className="flex items-center gap-1 sm:gap-4">
+        <nav aria-label="Main" className="flex items-center gap-0.5 min-[400px]:gap-1 sm:gap-4">
           <NavLinks />
           <Link href="/#address" className="btn btn-primary hidden h-11 rounded-full px-5 lg:inline-flex">
             Find your group
           </Link>
+          <ThemeToggle />
           <AccountLink />
         </nav>
       </div>

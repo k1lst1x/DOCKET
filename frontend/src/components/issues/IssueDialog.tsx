@@ -640,8 +640,7 @@ function ReviewsCard({
                 <span className="font-semibold text-ink">{review.mine ? "You" : review.author}</span>
                 {review.neighborhood ? <span className="text-sm text-ink-muted">{review.neighborhood}</span> : null}
                 <span
-                  className="ml-auto inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-sm font-semibold"
-                  style={{ background: "#EEF4FC", color: "#1c4f8f" }}
+                  className="ml-auto inline-flex items-center gap-1.5 rounded-full bg-sky-haze px-2.5 py-0.5 text-sm font-semibold text-ink"
                 >
                   <span aria-hidden="true" className="h-2 w-2 rounded-full" style={{ background: RATING_RAMP[review.rating - 1] }} />
                   {RATING_LABELS[review.rating - 1]}

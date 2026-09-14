@@ -105,7 +105,7 @@ export function ChatWidget() {
           setEverOpened(true);
           setOpen((v) => !v);
         }}
-        className="on-dark fixed bottom-4 right-4 z-50 grid h-14 w-14 place-items-center rounded-full bg-ink text-white shadow-[0_10px_30px_rgba(38,38,38,0.28)] transition-transform hover:scale-105 hover:bg-black"
+        className="on-dark fixed bottom-4 right-4 z-50 grid h-14 w-14 place-items-center rounded-full bg-ink text-white shadow-[0_10px_30px_rgba(38,38,38,0.28)] transition-transform hover:scale-105 hover:bg-ink-strong"
       >
         {open ? (
           <svg viewBox="0 0 20 20" aria-hidden="true" className="h-6 w-6">

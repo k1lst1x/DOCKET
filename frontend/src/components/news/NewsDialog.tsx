@@ -8,6 +8,7 @@ import { clock, timeAgo, whereFromFremont } from "@/components/places/LivePanel"
 import type { ChatContext } from "@/lib/chat-context";
 import type { LiveKind } from "@/lib/live/types";
 import { newsCategoryInfo, type NewsItem } from "@/lib/news/types";
+import { readableAccent } from "@/lib/theme";
 
 // A news story, community post, live incident or weather alert in its own popup: the summary, when
 // and where, a map for incidents, the link to the original source, and the assistant with this item
@@ -146,7 +147,7 @@ export function NewsDialog({ item, onClose, pool, onOpenItem, onArea }: NewsDial
       {item && info ? (
         <div className="flex h-[100svh] w-full flex-col overflow-hidden bg-white sm:h-auto sm:max-h-[90svh] sm:rounded-2xl">
           <header className="flex items-center gap-2 border-b border-rule px-4 py-2.5 sm:px-6">
-            <span className="rounded-full px-2 py-0.5 text-xs font-semibold" style={{ background: `${info.color}14`, color: info.color }}>
+            <span className="rounded-full px-2 py-0.5 text-xs font-semibold" style={{ background: `${info.color}14`, color: readableAccent(info.color) }}>
               <span aria-hidden="true">{info.icon} </span>
               {info.label}
             </span>

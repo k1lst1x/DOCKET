@@ -236,7 +236,7 @@ export function AttachmentPreviews({ items, onRemove }: { items: Attachment[]; o
             <img src={a.previewUrl} alt={`Attached photo ${i + 1}`} className={`block w-full object-cover ${items.length === 1 ? "max-h-80" : "h-36 sm:h-44"}`} />
           )}
           {a.durationS ? (
-            <span className="absolute bottom-2 left-2 rounded-full bg-black/70 px-2 py-0.5 font-mono text-xs text-white">{formatDuration(a.durationS)}</span>
+            <span className="absolute bottom-2 left-2 rounded-full bg-black/70 px-2 py-0.5 font-mono text-xs text-snow">{formatDuration(a.durationS)}</span>
           ) : null}
           {a.status !== "ready" ? (
             <span

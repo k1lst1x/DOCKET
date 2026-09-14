@@ -62,7 +62,8 @@ function Avatar({ name, size = 40 }: { name: string; size?: number }) {
   return (
     <span
       aria-hidden="true"
-      className="grid shrink-0 place-items-center rounded-full font-semibold text-white"
+      // Always-white initials: the avatar colors are the same in both themes.
+      className="grid shrink-0 place-items-center rounded-full font-semibold text-snow"
       style={{ width: size, height: size, fontSize: size * 0.42, background: AVATAR_COLORS[hash % AVATAR_COLORS.length] }}
     >
       {(name.trim().charAt(0) || "?").toUpperCase()}
@@ -250,7 +251,7 @@ export function HomeFeed() {
       </h2>
 
       {me && !me.signedIn ? (
-        <div className="mb-4 rounded-2xl bg-[linear-gradient(135deg,#8DC2F5_0%,#DDEBF6_100%)] p-5 sm:p-6">
+        <div className="mb-4 rounded-2xl bg-gradient-to-br from-sky-top to-sky-haze p-5 sm:p-6">
           <p className="display text-[1.75rem] leading-tight text-ink sm:text-[2.125rem]">What&apos;s happening in your neighborhood?</p>
           <p className="mt-2 max-w-read text-base text-ink-soft">
             Fremont neighbors share news, questions, lost pets and city-hall heads-ups here. Read along, or sign in to post to your neighborhood or

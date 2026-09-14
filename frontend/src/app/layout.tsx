@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Figtree, IBM_Plex_Mono, Source_Serif_4 } from "next/font/google";
 import { ChatWidget } from "@/components/chat/ChatWidget";
+import { THEME_SCRIPT } from "@/lib/theme";
 import "./globals.css";
 
 const sans = Figtree({ subsets: ["latin"], variable: "--font-sans", display: "swap" });
@@ -28,12 +29,19 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#8DC2F5",
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#8DC2F5" },
+    { media: "(prefers-color-scheme: dark)", color: "#0F151B" },
+  ],
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={`${sans.variable} ${serif.variable} ${mono.variable}`}>
+    // The theme script sets data-theme on <html> before React hydrates, hence suppressHydrationWarning.
+    <html lang="en" className={`${sans.variable} ${serif.variable} ${mono.variable}`} suppressHydrationWarning>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: THEME_SCRIPT }} />
+      </head>
       <body>
         <a href="#main" className="skip-link">
           Skip to content

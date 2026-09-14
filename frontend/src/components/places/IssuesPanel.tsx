@@ -2,6 +2,7 @@
 
 import type { IssueMarker } from "@/lib/issue-types";
 import { areaBySlug } from "@/lib/places";
+import { readableAccent } from "@/lib/theme";
 
 // "Issues" tab on the Places page: city decisions, law and zoning changes, and how neighbors voted,
 // each pinned where it applies.
@@ -175,7 +176,7 @@ export function IssuesPanel({ issues, live, loaded, filter, onFilter, selectedId
                   </span>
                   <span className="min-w-0 flex-1">
                     <span className="block font-semibold leading-snug text-ink">{issue.title}</span>
-                    <span className="mt-0.5 block text-sm font-semibold" style={{ color: status.color }}>
+                    <span className="mt-0.5 block text-sm font-semibold" style={{ color: readableAccent(status.color) }}>
                       {status.label}
                       {share !== null ? <span className="font-normal text-ink-soft"> · {share}% for</span> : null}
                     </span>

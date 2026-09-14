@@ -1,6 +1,10 @@
 .sky {
   background: linear-gradient(180deg, #8dc2f5 0%, #b3d6f6 48%, #ddebf6 100%);
 }
+/* Dark mode: the hero is the same block at night (the scene swaps the sun for a moon and stars). */
+:global(html[data-theme="dark"]) .sky {
+  background: linear-gradient(180deg, #1b3350 0%, #1f3d5c 50%, #2c4f72 100%);
+}
 
 .night {
   background: linear-gradient(180deg, #0e1a2b 0%, #172b45 100%);
@@ -57,14 +61,14 @@
 }
 
 .pixelShadow {
-  box-shadow: 4px 4px 0 0 #262626;
+  box-shadow: 4px 4px 0 0 rgb(var(--ink));
   transition:
     transform 150ms steps(2),
     box-shadow 150ms steps(2);
 }
 .pixelShadow:hover {
   transform: translate(-2px, -2px);
-  box-shadow: 6px 6px 0 0 #262626;
+  box-shadow: 6px 6px 0 0 rgb(var(--ink));
 }
 
 /* Sections rise in as they scroll into view, where the browser supports scroll timelines. */

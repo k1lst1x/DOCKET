@@ -1,9 +1,14 @@
 import type { Config } from "tailwindcss";
 
-// Palette sampled from the approved landing reference: open sky, near-black ink,
-// park greens. Text colors are paired with their surfaces at 4.5:1 or better.
+// Every theme color is a CSS variable of RGB channels, defined for light and dark in
+// globals.css, so opacity modifiers (bg-ink/5) keep working and one attribute switches themes.
+// Light palette sampled from the approved landing reference: open sky, near-black ink,
+// park greens. Text colors are paired with their surfaces at 4.5:1 or better in both themes.
+const token = (name: string) => `rgb(var(--${name}) / <alpha-value>)`;
+
 const config: Config = {
   content: ["./src/**/*.{ts,tsx}"],
+  darkMode: ["selector", '[data-theme="dark"]'],
   theme: {
     // Soft, rounded shapes throughout: controls 12px, cards 20px, panels 28px.
     borderRadius: {
@@ -18,33 +23,39 @@ const config: Config = {
     },
     extend: {
       colors: {
+        // "white" is the surface color: white in light mode, the card color in dark mode.
+        // Use snow and coal where a color must not change (text on photos, always-dark panels).
+        white: token("white"),
+        snow: "#FFFFFF",
+        coal: "#262626",
         sky: {
-          top: "#8DC2F5",
-          DEFAULT: "#B3D6F6",
-          haze: "#DDEBF6",
-          mist: "#EEF5FA",
+          top: token("sky-top"),
+          DEFAULT: token("sky"),
+          haze: token("sky-haze"),
+          mist: token("sky-mist"),
         },
         ink: {
-          DEFAULT: "#262626",
-          soft: "#474747",
-          muted: "#5F6368",
+          DEFAULT: token("ink"),
+          soft: token("ink-soft"),
+          muted: token("ink-muted"),
+          strong: token("ink-strong"),
         },
-        canvas: "#FFFFFF",
-        rule: "#DCE3E8",
-        field: "#7A7F85",
+        canvas: token("white"),
+        rule: token("rule"),
+        field: token("field"),
         park: {
-          DEFAULT: "#2F6A31",
-          leaf: "#6DB33F",
-          deep: "#1F3D1A",
-          wash: "#EAF4E2",
+          DEFAULT: token("park"),
+          leaf: token("park-leaf"),
+          deep: token("park-deep"),
+          wash: token("park-wash"),
         },
         signal: {
-          DEFAULT: "#B3261E",
-          wash: "#FBEAE8",
+          DEFAULT: token("signal"),
+          wash: token("signal-wash"),
         },
         ochre: {
-          DEFAULT: "#865700",
-          wash: "#FAF0DC",
+          DEFAULT: token("ochre"),
+          wash: token("ochre-wash"),
         },
       },
       fontFamily: {

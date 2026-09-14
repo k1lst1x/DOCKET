@@ -65,7 +65,7 @@ export default async function GroupPage({ params }: { params: Params }) {
           ],
         }}
       />
-      <div className="bg-[linear-gradient(180deg,#8DC2F5_0%,#B3D6F6_45%,#DDEBF6_100%)]">
+      <div className="bg-gradient-to-b from-sky-top via-sky to-sky-haze">
         <SiteHeader tone="sky" />
         <section aria-labelledby="group-name" className="relative">
           <div className="page grid gap-10 pb-28 pt-8 sm:pb-32 sm:pt-12 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] lg:items-center lg:gap-14">

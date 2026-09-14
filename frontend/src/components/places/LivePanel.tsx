@@ -154,7 +154,7 @@ export function LivePanel({ live, kinds, onToggleKind, showOnMap, onShowOnMap, s
         })}
       </div>
       <label className="mt-2 inline-flex cursor-pointer items-center gap-2 text-sm text-ink-soft">
-        <input type="checkbox" checked={showOnMap} onChange={(e) => onShowOnMap(e.target.checked)} className="h-4 w-4 accent-[#262626]" />
+        <input type="checkbox" checked={showOnMap} onChange={(e) => onShowOnMap(e.target.checked)} className="h-4 w-4 accent-ink" />
         Show live incidents on the map
       </label>
 

@@ -7,6 +7,7 @@ import { areaSlug, DEFAULT_NEWS_QUERY, filterNews, paramsToQuery, queryToParams,
 import { alertToNewsItem } from "@/lib/news/incidents";
 import { DISTRICT_ALIASES } from "@/lib/news/parse";
 import { NEWS_CATEGORIES, NEWS_KINDS, newsCategoryInfo, type NewsCategory, type NewsItem, type NewsKind } from "@/lib/news/types";
+import { readableAccent } from "@/lib/theme";
 import { NewsDialog } from "./NewsDialog";
 import { useNewsCatalog } from "./useNewsCatalog";
 
@@ -191,7 +192,7 @@ export function NewsCenter() {
                 {NEWS_KINDS.map((k) => (
                   <label key={k.id} className="flex cursor-pointer items-center justify-between gap-2 rounded-lg px-2 py-1.5 text-sm text-ink hover:bg-sky-mist">
                     <span className="flex items-center gap-2">
-                      <input type="checkbox" checked={query.kinds.includes(k.id)} onChange={() => update({ kinds: toggle(query.kinds, k.id) })} className="h-4 w-4 accent-[#262626]" />
+                      <input type="checkbox" checked={query.kinds.includes(k.id)} onChange={() => update({ kinds: toggle(query.kinds, k.id) })} className="h-4 w-4 accent-ink" />
                       {k.label}
                     </span>
                     <span className="font-mono text-xs text-ink-muted">{kindCounts.get(k.id) ?? 0}</span>
@@ -371,7 +372,7 @@ function Radio({ name, value, checked, onChange, label, count }: { name: string;
   return (
     <label className={`flex cursor-pointer items-center justify-between gap-2 rounded-lg px-2 py-1.5 text-sm ${checked ? "bg-sky-mist font-semibold text-ink" : "text-ink hover:bg-sky-mist"}`}>
       <span className="flex items-center gap-2">
-        <input type="radio" name={name} value={value} checked={checked} onChange={onChange} className="h-4 w-4 accent-[#262626]" />
+        <input type="radio" name={name} value={value} checked={checked} onChange={onChange} className="h-4 w-4 accent-ink" />
         {label}
       </span>
       <span className="font-mono text-xs text-ink-muted">{count ?? 0}</span>
@@ -398,7 +399,7 @@ function Story({ item, isNew, now, firstIncident, onOpen, onArea }: StoryProps) 
       {/* The headline button stretches over the whole card; neighborhood chips sit above it. */}
       <article className="relative rounded-2xl border border-rule bg-white p-4 transition-colors hover:border-ink/30 sm:p-5">
         <div className="flex flex-wrap items-center gap-2 text-sm">
-          <span className="rounded-full px-2 py-0.5 text-xs font-semibold" style={{ background: `${info.color}14`, color: info.color }}>
+          <span className="rounded-full px-2 py-0.5 text-xs font-semibold" style={{ background: `${info.color}14`, color: readableAccent(info.color) }}>
             <span aria-hidden="true">{info.icon} </span>
             {info.label}
           </span>
@@ -414,7 +415,7 @@ function Story({ item, isNew, now, firstIncident, onOpen, onArea }: StoryProps) 
               {name}
             </button>
           ))}
-          {isNew ? <span className="rounded-full bg-[#b3261e] px-2 py-0.5 text-xs font-semibold text-white">New</span> : null}
+          {isNew ? <span className="rounded-full bg-signal px-2 py-0.5 text-xs font-semibold text-white">New</span> : null}
           <span className="text-ink-muted">
             {item.source} · {item.publishedAt ? <time dateTime={item.publishedAt}>{timeAgo(item.publishedAt, now)}</time> : "Date unknown"}
           </span>

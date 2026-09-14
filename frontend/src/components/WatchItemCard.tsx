@@ -53,7 +53,7 @@ export function WatchItemCard({ item, onOpen }: WatchItemCardProps) {
               type="button"
               onClick={(e) => onOpen(e.currentTarget)}
               aria-label={`${item.title}: summary, vote and reviews`}
-              className="on-dark ml-auto inline-flex h-10 items-center gap-2 rounded-full bg-ink px-4 text-sm font-semibold text-white hover:bg-black"
+              className="on-dark ml-auto inline-flex h-10 items-center gap-2 rounded-full bg-ink px-4 text-sm font-semibold text-white hover:bg-ink-strong"
             >
               Vote &amp; details
               <svg viewBox="0 0 16 16" aria-hidden="true" className="h-4 w-4">

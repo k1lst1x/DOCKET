@@ -55,6 +55,11 @@ const BURST = [
   { x: 270, y: 66, dx: "-20px", delay: "0.25s" },
 ];
 
+const STARS = [
+  [150, 10], [176, 30], [210, 8], [252, 22], [300, 6], [330, 44], [372, 34],
+  [400, 12], [430, 30], [460, 8], [40, 14], [70, 32], [110, 20], [236, 42],
+];
+
 const CLOUDS = [
   { x: 60, y: 20, dur: "110s", delay: "-40s" },
   { x: 200, y: 8, dur: "140s", delay: "-95s" },
@@ -87,9 +92,21 @@ export function NeighborhoodScene({ className = "" }: { className?: string }) {
       >
         <BlockPatterns prefix={P} />
 
-        {/* Square sun */}
-        <rect x={344} y={12} width={16} height={16} fill="#FFE27A" />
-        <rect x={347} y={15} width={10} height={10} fill="#FFF1A8" />
+        {/* Square sun; in dark mode a moon, with stars */}
+        <rect x={344} y={12} width={16} height={16} fill="#FFE27A" className={styles.sun} />
+        <rect x={347} y={15} width={10} height={10} fill="#FFF1A8" className={styles.sunCore} />
+        {STARS.map(([x, y], i) => (
+          <rect
+            key={`${x}:${y}`}
+            x={x}
+            y={y}
+            width={1}
+            height={1}
+            fill="#F7F1E3"
+            className={`${styles.star} ${styles.twinkle}`}
+            style={vars({ "--dur": `${2.4 + (i % 4) * 0.8}s`, "--delay": `${i * -0.7}s` })}
+          />
+        ))}
 
         {CLOUDS.map((c) => (
           <g key={c.x} transform={`translate(0 ${c.y})`}>
@@ -240,9 +257,9 @@ function House({ x, walls }: { x: number; walls: "planks" | "birch" }) {
       <rect x={12} y={112} width={8} height={16} fill="#5C3B1E" />
       <rect x={18} y={119} width={1} height={1} fill="#F2C230" />
       <rect x={27} y={103} width={14} height={10} fill="#5C3B1E" />
-      <rect x={28} y={104} width={12} height={8} fill="#A7D3F0" />
+      <rect x={28} y={104} width={12} height={8} fill="#A7D3F0" className={styles.glass} />
       <rect x={33} y={104} width={2} height={8} fill="#5C3B1E" />
-      <rect x={28} y={104} width={5} height={2} fill="#D8EEFB" />
+      <rect x={28} y={104} width={5} height={2} fill="#D8EEFB" className={styles.glassShine} />
     </g>
   );
 }
@@ -268,12 +285,12 @@ function CityHall() {
       {[35, 67].map((wx) => (
         <g key={wx}>
           <rect x={wx} y={90} width={6} height={12} fill="#4A4A4A" />
-          <rect x={wx + 1} y={91} width={4} height={10} fill="#A7D3F0" />
-          <rect x={wx + 1} y={91} width={2} height={3} fill="#D8EEFB" />
+          <rect x={wx + 1} y={91} width={4} height={10} fill="#A7D3F0" className={styles.glass} />
+          <rect x={wx + 1} y={91} width={2} height={3} fill="#D8EEFB" className={styles.glassShine} />
         </g>
       ))}
       <rect x={50} y={88} width={8} height={8} fill="#4A4A4A" />
-      <rect x={51} y={89} width={6} height={6} fill="#A7D3F0" />
+      <rect x={51} y={89} width={6} height={6} fill="#A7D3F0" className={styles.glass} />
       <rect x={50} y={104} width={8} height={16} fill="#5C3B1E" />
       <rect x={51} y={103} width={6} height={1} fill="#5C3B1E" />
       <rect x={54} y={104} width={1} height={16} fill="#45301E" />

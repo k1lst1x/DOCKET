@@ -71,7 +71,7 @@ export function AccountLink() {
         aria-controls="account-menu"
         aria-label={`Account menu for ${me.name ?? "you"}`}
         onClick={() => setOpen((v) => !v)}
-        className="on-dark grid h-10 w-10 place-items-center rounded-full bg-park text-base font-semibold text-white hover:bg-park-deep"
+        className="on-dark grid h-10 w-10 place-items-center rounded-full bg-park text-base font-semibold text-white hover:opacity-90"
       >
         {initial}
       </button>

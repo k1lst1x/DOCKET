@@ -10,8 +10,12 @@ export const VOTE_COLORS = {
 
 export const RATING_RAMP = ["#86b6ef", "#5598e7", "#2a78d6", "#1c5cab", "#104281"] as const;
 
+// Neutrals follow the theme (variables in globals.css). Use them through style props,
+// not SVG presentation attributes.
 export const CHART_INK = {
-  grid: "#E6E8EB",
-  track: "#EEF1F4",
-  axis: "#5F6368",
+  grid: "var(--chart-grid)",
+  track: "var(--chart-track)",
+  axis: "var(--chart-axis)",
+  label: "var(--chart-label)",
+  halo: "var(--chart-halo)",
 } as const;

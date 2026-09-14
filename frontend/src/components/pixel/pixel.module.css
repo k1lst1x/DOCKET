@@ -593,6 +593,30 @@
   }
 }
 
+/* ---------- Dark mode: scenes turn to night ---------- */
+
+.star {
+  display: none;
+}
+:global(html[data-theme="dark"]) .star {
+  display: inline;
+}
+:global(html[data-theme="dark"]) .sun {
+  fill: #e8ecef;
+}
+:global(html[data-theme="dark"]) .sunCore {
+  fill: #c9d3dc;
+}
+:global(html[data-theme="dark"]) .cloud {
+  opacity: 0.35;
+}
+:global(html[data-theme="dark"]) .glass {
+  fill: #f2c94c;
+}
+:global(html[data-theme="dark"]) .glassShine {
+  fill: #ffe7a0;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .scene,
   .scene * {

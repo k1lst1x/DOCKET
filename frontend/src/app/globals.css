@@ -3,6 +3,76 @@
 @tailwind utilities;
 
 @layer base {
+  /* Theme tokens as RGB channels (see tailwind.config.ts). Light is the default;
+     [data-theme="dark"] on <html> is set before first paint by the script in layout.tsx. */
+  :root {
+    color-scheme: light;
+    --white: 255 255 255;
+    --sky-top: 141 194 245;
+    --sky: 179 214 246;
+    --sky-haze: 221 235 246;
+    --sky-mist: 238 245 250;
+    --ink: 38 38 38;
+    --ink-soft: 71 71 71;
+    --ink-muted: 95 99 104;
+    --ink-strong: 0 0 0;
+    --rule: 220 227 232;
+    --field: 122 127 133;
+    --park: 47 106 49;
+    --park-leaf: 109 179 63;
+    --park-deep: 31 61 26;
+    --park-wash: 234 244 226;
+    --signal: 179 38 30;
+    --signal-wash: 251 234 232;
+    --ochre: 134 87 0;
+    --ochre-wash: 250 240 220;
+
+    /* Category hues (news, places, incidents) are tuned for white surfaces. */
+    --accent-lift: 0%;
+
+    --chart-grid: #e6e8eb;
+    --chart-track: #eef1f4;
+    --chart-axis: #5f6368;
+    --chart-label: #262626;
+    --chart-halo: #ffffff;
+    --meter-track: #dceaf9;
+    --meter-urgent-track: #fbeae8;
+  }
+
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --white: 22 28 35;
+    --sky-top: 27 51 80;
+    --sky: 34 56 77;
+    --sky-haze: 29 41 53;
+    --sky-mist: 15 21 27;
+    --ink: 230 234 238;
+    --ink-soft: 194 201 208;
+    --ink-muted: 152 162 173;
+    --ink-strong: 255 255 255;
+    --rule: 43 53 64;
+    --field: 110 120 132;
+    --park: 124 196 127;
+    --park-leaf: 134 196 90;
+    --park-deep: 31 61 26;
+    --park-wash: 22 38 26;
+    --signal: 242 161 155;
+    --signal-wash: 58 31 29;
+    --ochre: 224 180 92;
+    --ochre-wash: 51 41 15;
+
+    /* Lift category hues toward white so they stay readable on dark surfaces. */
+    --accent-lift: 45%;
+
+    --chart-grid: #2b3540;
+    --chart-track: #222b34;
+    --chart-axis: #98a2ad;
+    --chart-label: #e6eaee;
+    --chart-halo: #161c23;
+    --meter-track: #1e2f42;
+    --meter-urgent-track: #3a1f1d;
+  }
+
   html {
     -webkit-text-size-adjust: 100%;
   }
@@ -18,12 +88,12 @@
   }
 
   ::selection {
-    background: #b3d6f6;
-    color: #262626;
+    background: rgb(var(--sky));
+    color: rgb(var(--ink));
   }
 
   :focus-visible {
-    outline: 3px solid #262626;
+    outline: 3px solid rgb(var(--ink));
     outline-offset: 2px;
   }
 
@@ -31,8 +101,8 @@
   .on-dark:focus-visible,
   .btn-primary:focus-visible,
   .btn-danger:focus-visible {
-    outline-color: #262626;
-    box-shadow: 0 0 0 2px #ffffff;
+    outline-color: rgb(var(--ink));
+    box-shadow: 0 0 0 2px rgb(var(--white));
   }
 }
 
@@ -52,13 +122,16 @@
     @apply inline-flex h-12 items-center justify-center gap-2 whitespace-nowrap rounded px-6 text-base font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-60;
   }
   .btn-primary {
-    @apply bg-ink text-white hover:bg-black;
+    @apply bg-ink text-white;
+  }
+  .btn-primary:hover {
+    background-color: rgb(var(--ink-strong));
   }
   .btn-secondary {
     @apply border border-ink bg-white text-ink hover:bg-sky-mist;
   }
   .btn-danger {
-    @apply bg-signal text-white hover:bg-[#8F1E18];
+    @apply bg-signal text-white hover:bg-signal/90;
   }
   .btn-danger-outline {
     @apply border border-signal bg-white text-signal hover:bg-signal-wash;
@@ -73,7 +146,7 @@
   }
   .field:focus-visible {
     outline-offset: 0;
-    border-color: #262626;
+    border-color: rgb(var(--ink));
   }
 
   .label {
@@ -104,6 +177,10 @@
 .docket-tiles {
   filter: saturate(0.55) brightness(1.04);
 }
+/* Dark mode: invert the street tiles and turn the hues back, a dim map in the same layout. */
+:root[data-theme="dark"] .docket-tiles {
+  filter: invert(1) hue-rotate(180deg) saturate(0.45) brightness(0.92) contrast(0.9);
+}
 .docket-pin span {
   display: block;
   width: 22px;
@@ -111,15 +188,24 @@
   border-radius: 9999px;
   background: #b3261e;
   border: 3px solid #ffffff;
-  box-shadow: 0 0 0 2px #262626;
+  box-shadow: 0 0 0 2px rgb(var(--ink));
 }
 .leaflet-container {
   font-family: var(--font-sans), system-ui, sans-serif;
   font-size: 0.875rem;
-  background: #eef5fa;
+  background: rgb(var(--sky-mist));
 }
 .leaflet-container a {
-  color: #262626;
+  color: rgb(var(--ink));
+}
+:root[data-theme="dark"] .leaflet-bar a {
+  background: rgb(var(--white));
+  border-color: rgb(var(--rule));
+  color: rgb(var(--ink));
+}
+:root[data-theme="dark"] .leaflet-container .leaflet-control-attribution {
+  background: rgb(var(--white) / 0.8);
+  color: rgb(var(--ink-muted));
 }
 
 @media (prefers-reduced-motion: reduce) {

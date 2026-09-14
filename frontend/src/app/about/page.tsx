@@ -178,7 +178,7 @@ export default function AboutPage() {
           <NeighborhoodScene className="mt-8 aspect-[5/4] w-full sm:mt-10 sm:aspect-[2/1] lg:aspect-[3/1] lg:max-h-[34rem]" />
           </div>
 
-          <div className={`${styles.bedrock} ${styles.marqueeWrap} overflow-hidden py-4 text-white`}>
+          <div className={`${styles.bedrock} ${styles.marqueeWrap} overflow-hidden py-4 text-snow`}>
             <p className="sr-only">Docket keeps up with: {SOURCES.join(", ")}.</p>
             <div aria-hidden="true" className={styles.marquee}>
               {[0, 1].map((copy) => (
@@ -312,20 +312,21 @@ export default function AboutPage() {
             </div>
           </section>
 
-          <section aria-labelledby="principles-title" className="bg-park-deep text-white">
+          {/* Always a dark green panel, in both themes, so its text uses snow rather than white. */}
+          <section aria-labelledby="principles-title" className="bg-park-deep text-snow">
             <div className={`page py-16 sm:py-24 ${styles.reveal}`}>
-              <p className={`${pixel.className} text-sm text-park-leaf`}>Our promises</p>
-              <h2 id="principles-title" className="display mt-3 max-w-2xl text-[2rem] leading-tight !text-white sm:text-[2.75rem]">
+              <p className={`${pixel.className} text-sm text-[#86C45A]`}>Our promises</p>
+              <h2 id="principles-title" className="display mt-3 max-w-2xl text-[2rem] leading-tight !text-snow sm:text-[2.75rem]">
                 Built to be checked, not just trusted.
               </h2>
               <ul className="mt-10 grid gap-4 md:grid-cols-2 lg:grid-cols-4">
                 {PRINCIPLES.map((principle) => (
-                  <li key={principle.title} className="rounded-2xl border border-white/15 bg-white/5 p-6">
-                    <span aria-hidden="true" className={`${pixel.className} text-3xl text-park-leaf`}>
+                  <li key={principle.title} className="rounded-2xl border border-snow/15 bg-snow/5 p-6">
+                    <span aria-hidden="true" className={`${pixel.className} text-3xl text-[#86C45A]`}>
                       {principle.mark}
                     </span>
                     <h3 className="mt-3 text-xl font-semibold">{principle.title}</h3>
-                    <p className="mt-2 text-base leading-relaxed text-white/80">{principle.body}</p>
+                    <p className="mt-2 text-base leading-relaxed text-snow/80">{principle.body}</p>
                   </li>
                 ))}
               </ul>
@@ -377,20 +378,20 @@ export default function AboutPage() {
             </div>
           </section>
 
-          <section aria-labelledby="cta-title" className={`${styles.night} text-white`}>
+          <section aria-labelledby="cta-title" className={`${styles.night} text-snow`}>
             <div className={`page pt-16 text-center sm:pt-24 ${styles.reveal}`}>
               <p className={`${pixel.className} text-sm text-[#EFF58A]`}>Good Neighbor Agents</p>
-              <h2 id="cta-title" className="display mx-auto mt-3 max-w-2xl text-[2.25rem] leading-tight !text-white sm:text-[3.25rem]">
+              <h2 id="cta-title" className="display mx-auto mt-3 max-w-2xl text-[2.25rem] leading-tight !text-snow sm:text-[3.25rem]">
                 Your block, on the docket.
               </h2>
-              <p className="mx-auto mt-4 max-w-xl text-lg leading-relaxed text-white/80">
+              <p className="mx-auto mt-4 max-w-xl text-lg leading-relaxed text-snow/80">
                 Find your neighborhood group, say hello in the feed, and let Docket keep watch while you sleep.
               </p>
               <div className="mt-8 flex flex-wrap justify-center gap-3">
-                <Link href="/#address" className="on-dark btn rounded-full bg-white text-ink hover:bg-sky-haze">
+                <Link href="/#address" className="on-dark btn rounded-full bg-snow text-coal hover:bg-[#DDEBF6]">
                   Find your group
                 </Link>
-                <Link href="/groups" className="on-dark btn rounded-full border border-white/60 text-white hover:bg-white/10">
+                <Link href="/groups" className="on-dark btn rounded-full border border-snow/60 text-snow hover:bg-snow/10">
                   Browse all groups
                 </Link>
               </div>
