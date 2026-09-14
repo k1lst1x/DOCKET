@@ -1,0 +1,852 @@
+<title>How Docket Reads City Hall</title>
+<meta name="description" content="A builder.aws story about Docket, the neighborhood app for Fremont, California, with an AI agent that reads city hall and cites every fact.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&family=Source+Serif+4:opsz,wght@8..60,500;8..60,600;8..60,700&display=swap">
+<style>
+  /* Docket's own palette, from frontend/src/app/globals.css */
+  :root {
+    color-scheme: light;
+    --ground: #EEF5FA;
+    --paper: #FFFFFF;
+    --haze: #DDEBF6;
+    --sky: #B3D6F6;
+    --ink: #262626;
+    --ink-soft: #474747;
+    --ink-muted: #5F6368;
+    --rule: #DCE3E8;
+    --park: #2F6A31;
+    --park-leaf: #6DB33F;
+    --park-wash: #EAF4E2;
+    --signal: #B3261E;
+    --signal-wash: #FBEAE8;
+    --ochre: #865700;
+    --ochre-wash: #FAF0DC;
+
+    --serif: "Source Serif 4", Georgia, "Times New Roman", serif;
+    --sans: Figtree, system-ui, -apple-system, "Segoe UI", sans-serif;
+    --mono: "IBM Plex Mono", ui-monospace, Consolas, monospace;
+
+    --read: 40rem;
+    --wide: 60rem;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      color-scheme: dark;
+      --ground: #0F151B;
+      --paper: #161C23;
+      --haze: #1D2935;
+      --sky: #22384D;
+      --ink: #E6EAEE;
+      --ink-soft: #C2C9D0;
+      --ink-muted: #98A2AD;
+      --rule: #2B3540;
+      --park: #7CC47F;
+      --park-leaf: #86C45A;
+      --park-wash: #16261A;
+      --signal: #F2A19B;
+      --signal-wash: #3A1F1D;
+      --ochre: #E0B45C;
+      --ochre-wash: #33290F;
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --ground: #0F151B;
+    --paper: #161C23;
+    --haze: #1D2935;
+    --sky: #22384D;
+    --ink: #E6EAEE;
+    --ink-soft: #C2C9D0;
+    --ink-muted: #98A2AD;
+    --rule: #2B3540;
+    --park: #7CC47F;
+    --park-leaf: #86C45A;
+    --park-wash: #16261A;
+    --signal: #F2A19B;
+    --signal-wash: #3A1F1D;
+    --ochre: #E0B45C;
+    --ochre-wash: #33290F;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    margin: 0;
+    background: var(--ground);
+    color: var(--ink);
+    font-family: var(--sans);
+    font-size: 1.0625rem;
+    line-height: 1.7;
+    padding-inline: 20px;
+    padding-block: 0 72px;
+  }
+  a { color: var(--park); text-underline-offset: 3px; text-decoration-thickness: 1px; }
+  a:hover { text-decoration-thickness: 2px; }
+  :focus-visible { outline: 3px solid var(--park-leaf); outline-offset: 3px; border-radius: 4px; }
+
+  .page { max-width: var(--wide); margin-inline: auto; }
+  .col { max-width: var(--read); margin-inline: auto; }
+
+  /* Masthead: set like the header of a city meeting agenda */
+  .masthead {
+    max-width: var(--wide);
+    margin-inline: auto;
+    padding-block: 28px 0;
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    gap: 8px 24px;
+    font-family: var(--mono);
+    font-size: 0.8125rem;
+    letter-spacing: 0.04em;
+    color: var(--ink-muted);
+    border-bottom: 1px solid var(--rule);
+    padding-bottom: 14px;
+  }
+  .masthead b { color: var(--ink); font-weight: 500; }
+
+  header.hero { padding-block: 56px 40px; }
+  .kicker {
+    font-family: var(--mono);
+    font-size: 0.8125rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--park);
+    margin: 0 0 14px;
+  }
+  h1 {
+    font-family: var(--serif);
+    font-weight: 600;
+    font-size: clamp(2.4rem, 6vw, 3.6rem);
+    line-height: 1.06;
+    letter-spacing: -0.015em;
+    margin: 0;
+    text-wrap: balance;
+  }
+  .dek {
+    font-size: 1.25rem;
+    line-height: 1.55;
+    color: var(--ink-soft);
+    margin: 20px 0 0;
+    text-wrap: pretty;
+  }
+  .byline {
+    margin-top: 28px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 18px;
+    font-size: 0.9375rem;
+    color: var(--ink-muted);
+  }
+  .byline strong { color: var(--ink); font-weight: 600; }
+
+  /* Agenda: the post's eight items, in order */
+  .agenda {
+    margin: 36px 0 0;
+    padding: 0;
+    list-style: none;
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 0;
+    border-top: 1px solid var(--rule);
+  }
+  .agenda li { border-bottom: 1px solid var(--rule); }
+  .agenda a {
+    display: flex;
+    gap: 10px;
+    padding: 10px 12px 10px 0;
+    color: var(--ink-soft);
+    text-decoration: none;
+    font-size: 0.9375rem;
+  }
+  .agenda a:hover { color: var(--park); }
+  .agenda .n { font-family: var(--mono); color: var(--ink-muted); font-size: 0.8125rem; padding-top: 2px; }
+  @media (max-width: 720px) { .agenda { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
+  /* Sections */
+  section { padding-block: 44px 8px; scroll-margin-top: 16px; }
+  .item {
+    font-family: var(--mono);
+    font-size: 0.8125rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--park);
+    margin: 0 0 8px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .item::after { content: ""; flex: 1; height: 1px; background: var(--rule); }
+  h2 {
+    font-family: var(--serif);
+    font-weight: 600;
+    font-size: clamp(1.7rem, 3.6vw, 2.15rem);
+    line-height: 1.15;
+    letter-spacing: -0.01em;
+    margin: 0 0 18px;
+    text-wrap: balance;
+  }
+  h3 {
+    font-family: var(--sans);
+    font-weight: 700;
+    font-size: 1.125rem;
+    line-height: 1.35;
+    margin: 28px 0 6px;
+  }
+  p { margin: 0 0 16px; text-wrap: pretty; }
+  .col ul { margin: 0 0 16px; padding-left: 1.2em; }
+  .col li { margin-bottom: 8px; }
+  .col li::marker { color: var(--park-leaf); }
+
+  .pull {
+    font-family: var(--serif);
+    font-size: 1.45rem;
+    line-height: 1.4;
+    font-weight: 500;
+    color: var(--ink);
+    margin: 28px 0;
+    padding-left: 20px;
+    border-left: 3px solid var(--park-leaf);
+    text-wrap: balance;
+  }
+
+  /* Before / after */
+  .compare {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 16px;
+    margin: 24px 0;
+  }
+  .compare > div { padding: 18px 20px; border-radius: 16px; }
+  .compare .before { background: var(--signal-wash); }
+  .compare .after { background: var(--park-wash); }
+  .compare h4 {
+    margin: 0 0 8px;
+    font-family: var(--mono);
+    font-size: 0.8125rem;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+  .compare .before h4 { color: var(--signal); }
+  .compare .after h4 { color: var(--park); }
+  .compare ul { margin: 0; padding-left: 1.1em; font-size: 0.975rem; }
+  .compare li { margin-bottom: 4px; }
+  @media (max-width: 560px) { .compare { grid-template-columns: 1fr; } }
+
+  /* Features */
+  .features { margin: 8px 0 0; display: grid; gap: 0; }
+  .feature {
+    display: grid;
+    grid-template-columns: 9.5rem minmax(0, 1fr);
+    gap: 4px 20px;
+    padding-block: 14px;
+    border-top: 1px solid var(--rule);
+  }
+  .feature:last-child { border-bottom: 1px solid var(--rule); }
+  .feature dt { font-weight: 700; line-height: 1.45; }
+  .feature dt small { display: block; font-family: var(--mono); font-weight: 400; font-size: 0.8125rem; color: var(--ink-muted); }
+  .feature dd { margin: 0; color: var(--ink-soft); }
+  @media (max-width: 560px) { .feature { grid-template-columns: 1fr; } }
+
+  /* Figures */
+  figure { margin: 32px 0; }
+  figure.wide { max-width: var(--wide); margin-inline: auto; }
+  .shot {
+    display: block;
+    width: 100%;
+    max-width: 100%;
+    height: auto;
+    border-radius: 16px;
+    border: 1px solid var(--rule);
+    background: var(--paper);
+    box-shadow: 0 1px 2px rgb(15 30 45 / 0.06), 0 12px 32px -12px rgb(15 30 45 / 0.18);
+  }
+  figcaption {
+    margin-top: 10px;
+    font-size: 0.875rem;
+    line-height: 1.5;
+    color: var(--ink-muted);
+  }
+  figcaption b { color: var(--ink-soft); font-weight: 600; }
+  .pair {
+    max-width: var(--wide);
+    margin: 32px auto;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 20px;
+  }
+  .pair figure { margin: 0; }
+  @media (max-width: 720px) { .pair { grid-template-columns: 1fr; } }
+
+  /* AWS services */
+  .services { margin: 16px 0 0; padding: 0; list-style: none; }
+  .services li {
+    display: grid;
+    grid-template-columns: 11rem minmax(0, 1fr);
+    gap: 2px 20px;
+    padding-block: 14px;
+    border-top: 1px solid var(--rule);
+    margin: 0;
+  }
+  .services li:last-child { border-bottom: 1px solid var(--rule); }
+  .services .name { font-weight: 700; line-height: 1.4; }
+  .services .name span { display: block; font-family: var(--mono); font-size: 0.8125rem; font-weight: 400; color: var(--ink-muted); }
+  .services .what { color: var(--ink-soft); }
+  .services .what em { font-style: normal; color: var(--ink); font-weight: 600; }
+  @media (max-width: 560px) { .services li { grid-template-columns: 1fr; } }
+
+  .note {
+    margin: 24px 0;
+    padding: 16px 20px;
+    border-radius: 16px;
+    background: var(--ochre-wash);
+    color: var(--ink);
+    font-size: 0.975rem;
+  }
+  .note b { color: var(--ochre); }
+
+  /* Diagram */
+  .diagram {
+    max-width: var(--wide);
+    margin: 32px auto;
+    background: var(--paper);
+    border: 1px solid var(--rule);
+    border-radius: 20px;
+    padding: 20px;
+  }
+  .diagram .scroll { overflow-x: auto; }
+  .diagram svg { display: block; width: 100%; min-width: 760px; height: auto; }
+  .d-lane { font-family: var(--mono); font-size: 12px; letter-spacing: 0.08em; fill: var(--ink-muted); }
+  .d-box { fill: var(--paper); stroke: var(--ink-muted); stroke-width: 1.5; }
+  .d-agent { fill: var(--park-wash); stroke: var(--park); stroke-width: 1.5; }
+  .d-store { fill: var(--haze); stroke: var(--ink-muted); stroke-width: 1.2; }
+  .d-band { fill: none; stroke: var(--rule); stroke-width: 1.5; stroke-dasharray: 5 5; }
+  .d-pill { fill: var(--ground); stroke: var(--rule); stroke-width: 1.2; }
+  .d-label { font-family: var(--sans); font-size: 16px; font-weight: 700; fill: var(--ink); text-anchor: middle; }
+  .d-detail { font-family: var(--sans); font-size: 13px; fill: var(--ink-muted); text-anchor: middle; }
+  .d-small { font-family: var(--sans); font-size: 13px; font-weight: 600; fill: var(--ink-soft); text-anchor: middle; }
+  .d-verb { font-family: var(--mono); font-size: 11px; fill: var(--ink-muted); text-anchor: middle; }
+  .d-line { fill: none; stroke: var(--ink-muted); stroke-width: 1.6; }
+  .d-head { fill: var(--ink-muted); }
+
+  /* Challenges */
+  .challenge { padding-block: 18px; border-top: 1px solid var(--rule); }
+  .challenge:last-of-type { border-bottom: 1px solid var(--rule); }
+  .challenge h3 { margin-top: 0; }
+  .challenge dl { margin: 0; display: grid; grid-template-columns: 6.5rem minmax(0, 1fr); gap: 6px 16px; }
+  .challenge dt {
+    font-family: var(--mono);
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    padding-top: 5px;
+  }
+  .challenge dt.bad { color: var(--signal); }
+  .challenge dt.fix { color: var(--park); }
+  .challenge dd { margin: 0; color: var(--ink-soft); }
+  @media (max-width: 480px) {
+    .challenge dl { grid-template-columns: 1fr; gap: 0; }
+    .challenge dd { margin-bottom: 8px; }
+  }
+
+  /* Results */
+  .scores { margin: 20px 0 8px; display: grid; gap: 12px; }
+  .score { display: grid; grid-template-columns: 13rem minmax(0, 1fr) 4.5rem; gap: 14px; align-items: center; }
+  .score .label { font-size: 0.975rem; color: var(--ink-soft); line-height: 1.35; }
+  .bar { height: 12px; border-radius: 6px; background: var(--haze); overflow: hidden; }
+  .bar i { display: block; height: 100%; background: var(--park-leaf); border-radius: 6px; }
+  .score .val { font-family: var(--mono); font-variant-numeric: tabular-nums; text-align: right; font-size: 0.9375rem; }
+  @media (max-width: 560px) {
+    .score { grid-template-columns: minmax(0, 1fr) 4rem; }
+    .score .label { grid-column: 1 / -1; }
+  }
+  .qa {
+    margin: 20px 0;
+    padding: 18px 20px;
+    background: var(--paper);
+    border: 1px solid var(--rule);
+    border-radius: 16px;
+  }
+  .qa p { margin: 0; }
+  .qa .q { font-weight: 600; margin-bottom: 8px; }
+  .qa .a { color: var(--ink-soft); }
+  .qa .a sup { font-family: var(--mono); color: var(--park); font-size: 0.75rem; }
+  .qa + .qa { margin-top: -8px; }
+  .tag {
+    display: inline-block;
+    font-family: var(--mono);
+    font-size: 0.75rem;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--ink-muted);
+    margin-bottom: 6px;
+  }
+
+  .numbers {
+    margin: 24px 0;
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    border-top: 1px solid var(--rule);
+    border-bottom: 1px solid var(--rule);
+  }
+  .numbers div { padding: 16px 12px 16px 0; }
+  .numbers b {
+    display: block;
+    font-family: var(--serif);
+    font-size: 2rem;
+    font-weight: 600;
+    line-height: 1.1;
+    font-variant-numeric: tabular-nums;
+  }
+  .numbers span { font-size: 0.875rem; color: var(--ink-muted); line-height: 1.35; display: block; margin-top: 4px; }
+  @media (max-width: 560px) { .numbers { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
+  .links { margin: 20px 0; padding: 0; list-style: none; display: grid; gap: 10px; }
+  .links li { margin: 0; display: grid; grid-template-columns: 8rem minmax(0, 1fr); gap: 4px 16px; }
+  .links .k { font-family: var(--mono); font-size: 0.8125rem; color: var(--ink-muted); padding-top: 3px; }
+  .links a { overflow-wrap: anywhere; }
+  @media (max-width: 480px) { .links li { grid-template-columns: 1fr; } }
+
+  footer.end {
+    max-width: var(--read);
+    margin: 56px auto 0;
+    padding-top: 20px;
+    border-top: 1px solid var(--rule);
+    font-size: 0.9375rem;
+    color: var(--ink-muted);
+  }
+  footer.end .sign { font-family: var(--serif); font-size: 1.35rem; color: var(--ink); margin: 0 0 6px; }
+
+  @media (prefers-reduced-motion: no-preference) {
+    html { scroll-behavior: smooth; }
+  }
+</style>
+
+<div class="masthead">
+  <span><b>DOCKET</b> · Fremont, California</span>
+  <span>Agents for Humans Hackathon · Good Neighbor Agents track</span>
+</div>
+
+<main class="page">
+  <header class="hero col">
+    <p class="kicker">Builder story</p>
+    <h1>How Docket reads city hall so your block doesn't have to</h1>
+    <p class="dek">We built a neighborhood app for Fremont with an AI helper that reads meeting agendas, minutes and school board notes, then tells neighbors what's coming up. Every fact it shares links back to the page it came from.</p>
+    <div class="byline">
+      <span>By <strong>Bael</strong>, <strong>Phat Le</strong>, <strong>Rohit Maruri</strong> and <strong>Damir Mertl</strong></span>
+      <span>September 2026</span>
+    </div>
+
+    <ol class="agenda" aria-label="What's in this post">
+      <li><a href="#problem"><span class="n">1</span>The problem</a></li>
+      <li><a href="#idea"><span class="n">2</span>The idea</a></li>
+      <li><a href="#built"><span class="n">3</span>What we built</a></li>
+      <li><a href="#aws"><span class="n">4</span>How we used AWS</a></li>
+      <li><a href="#challenges"><span class="n">5</span>What went wrong</a></li>
+      <li><a href="#results"><span class="n">6</span>Results</a></li>
+      <li><a href="#demo"><span class="n">7</span>Demo</a></li>
+      <li><a href="#next"><span class="n">8</span>What's next</a></li>
+    </ol>
+  </header>
+
+  <!-- 1. Problem -->
+  <section id="problem" class="col">
+    <p class="item">Item 1</p>
+    <h2>Keeping up with your own street is a part-time job</h2>
+    <p>Decisions that change a neighborhood are public. A new apartment building, a rezoned lot, a road that will close for months. The trouble is where they live: inside agenda packets that can run hundreds of pages, meeting minutes posted weeks later, and city websites that each work differently.</p>
+    <p>Everything else is scattered too. Road closures sit on a state traffic feed. Earthquake and fire alerts are on federal and state sites. Local news is spread across several outlets, and neighbors talk in group chats that half the street isn't in.</p>
+    <p class="pull">Most people only hear about a change after the meeting where they could have spoken up.</p>
+    <p>That's not because people don't care. It's because nobody has time to read city hall every week.</p>
+  </section>
+
+  <!-- 2. Idea -->
+  <section id="idea" class="col">
+    <p class="item">Item 2</p>
+    <h2>Let an agent do the reading, and make it show its work</h2>
+    <p>AI is good at reading a lot of text quickly. It's also known for making things up, and a made-up council vote or wrong deadline is worse than no answer at all. So we started from one rule:</p>
+    <p class="pull">If Docket can't point to the exact page, it doesn't say it.</p>
+    <p>From there the idea was simple. Put the whole neighborhood in one place: neighbors talking, local news, live alerts, nearby places. Then add a helper that quietly reads the public record in the background and turns it into short, plain updates, each with numbered links to the source. When the sources don't cover a question, it says so instead of guessing.</p>
+    <p>We picked Fremont, California because it's a real city with 32 official neighborhoods, a busy planning department, and public records spread across several different websites. If it works there, the approach can work for other cities.</p>
+
+    <div class="compare">
+      <div class="before">
+        <h4>Without Docket</h4>
+        <ul>
+          <li>Check city, news and alert sites one by one</li>
+          <li>Dig through a long agenda packet for one item</li>
+          <li>Hear about the rezoning after the fact</li>
+        </ul>
+      </div>
+      <div class="after">
+        <h4>With Docket</h4>
+        <ul>
+          <li>One feed for your neighbors and your area</li>
+          <li>Plain summaries with links, before the deadline</li>
+          <li>See how neighbors feel and add your voice</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- 3. What we built -->
+  <section id="built" class="col">
+    <p class="item">Item 3</p>
+    <h2>A neighborhood app with a helper that reads the fine print</h2>
+    <p>Docket looks and feels like a friendly social app. You type your address, it finds which of Fremont's 32 neighborhoods you live in, and you're in. Signing in takes a 6-digit code sent to your email. No password to remember.</p>
+
+    <dl class="features">
+      <div class="feature">
+        <dt>Neighborhood feed<small>home page</small></dt>
+        <dd>Post to your neighborhood or all of Fremont. Add up to four photos or a short video, links and emoji. Reply, like, and see new posts show up as neighbors write them.</dd>
+      </div>
+      <div class="feature">
+        <dt>Ask Docket<small>on every page</small></dt>
+        <dd>A chat bubble that answers questions about Fremont in plain words, with numbered links to the city documents behind each answer. It knows what you're looking at, so you can open a news story and just ask "what does this mean for me?"</dd>
+      </div>
+      <div class="feature">
+        <dt>Local issues and votes<small>group pages</small></dt>
+        <dd>Upcoming agenda items for your area, each with a short summary, pros and cons (marked as either straight from the source or an inference), the comment deadline, and a poll showing how neighbors feel. Polls are clearly labelled as neighbor opinion, never as official votes.</dd>
+      </div>
+      <div class="feature">
+        <dt>Fremont news<small>news page</small></dt>
+        <dd>Stories about city hall, police, fire, housing and traffic, filtered by neighborhood and topic. It drops stories about the other towns named Niles, Centerville and Warm Springs, which turned out to be a real problem.</dd>
+      </div>
+      <div class="feature">
+        <dt>Live now<small>places map</small></dt>
+        <dd>Highway patrol calls, lane closures, earthquakes, wildfires, power outages and weather alerts near Fremont, refreshed every minute and pinned on a map next to schools, parks and shops.</dd>
+      </div>
+      <div class="feature">
+        <dt>Safe to share<small>everywhere</small></dt>
+        <dd>Posts and reviews go through a word filter that catches tricks like "s*x" or "4uck" without blocking normal phrases like "sex offender registry". Photos and videos are checked for what they show before any neighbor can see them.</dd>
+      </div>
+    </dl>
+
+    <h3>What happens behind the scenes</h3>
+    <p>Docket has two AI agents, each running on its own:</p>
+    <ul>
+      <li><strong>The reader</strong> wakes up on a schedule (daily, weekly or monthly, depending on the source). It visits the city's meeting portal, the council and planning commission pages, the school board site, the city's resident reports and the state legislature's daily files. It follows each site's rules for bots, saves the documents, and breaks them into small searchable pieces.</li>
+      <li><strong>The answerer</strong> handles chat. When you ask a question, it searches those pieces, writes an answer using only what it found, and attaches a numbered link for each fact.</li>
+    </ul>
+    <p>Before anything is shown, plain code (not the AI) checks that every dollar amount, date, address and record number in the answer appears word for word in the page it cites. If a fact can't be found there, it's removed.</p>
+  </section>
+
+  <figure class="wide">
+    <img class="shot" src="img/home.png" width="1360" height="900" alt="Docket home page: a neighborhood feed with posts from Niles and Irvington, an address box on the right, and links to news, places, groups and chat.">
+    <figcaption><b>The home feed.</b> Neighbors post to their own area or all of Fremont. This screenshot is from the public preview, which shows sample posts.</figcaption>
+  </figure>
+
+  <!-- 4. AWS -->
+  <section id="aws" class="col">
+    <p class="item">Item 4</p>
+    <h2>How we used AWS, and why</h2>
+    <p>We had two goals: keep every AWS key off people's browsers, and keep the monthly bill to a few dollars. That pushed us toward services that cost nothing when nobody is using them.</p>
+
+    <ul class="services">
+      <li>
+        <div class="name">Amazon Bedrock AgentCore<span>runs both agents</span></div>
+        <div class="what">Hosts the reader and the answerer as two separate services, each with only the permissions it needs. <em>Why:</em> we didn't want to run servers ourselves, and we wanted chat answers to stream in word by word.</div>
+      </li>
+      <li>
+        <div class="name">Amazon Bedrock<span>the AI models</span></div>
+        <div class="what">The <code>gpt-oss-120b</code> model writes answers and checks claims. Titan Text Embeddings turns each piece of a document into numbers so we can search by meaning, not just exact words. <em>Why:</em> pay per use, no model hosting.</div>
+      </li>
+      <li>
+        <div class="name">Strands Agents<span>open-source agent toolkit</span></div>
+        <div class="what">How we wrote the agents: search tools, the step-by-step read, write and check flow, and chat. <em>Why:</em> it deploys straight to AgentCore.</div>
+      </li>
+      <li>
+        <div class="name">Aurora DSQL<span>the database</span></div>
+        <div class="what">Holds posts, votes, reviews, neighborhoods, the documents the reader saved, and chat history. <em>Why:</em> it's a regular SQL database that scales down to almost nothing when idle.</div>
+      </li>
+      <li>
+        <div class="name">Amazon S3 Vectors<span>search by meaning</span></div>
+        <div class="what">Stores those "meaning" numbers so the answerer can find the right paragraph even when you use different words than the city did. <em>Why:</em> much cheaper than running a separate search database.</div>
+      </li>
+      <li>
+        <div class="name">Amazon S3<span>files</span></div>
+        <div class="what">Keeps original PDFs and web pages, plus neighbors' photos and videos in a private bucket. Photos are shown through links that expire. <em>Why:</em> we can always go back to the original document.</div>
+      </li>
+      <li>
+        <div class="name">Amazon Cognito<span>sign-in</span></div>
+        <div class="what">Sends the 6-digit email code (through Amazon SES) and handles sessions. <em>Why:</em> no passwords for neighbors to forget, and no password storage for us to protect.</div>
+      </li>
+      <li>
+        <div class="name">Amazon Rekognition<span>photo and video checks</span></div>
+        <div class="what">Looks at every uploaded photo and video for explicit, violent or hateful content, and reads any words inside a picture. If a file can't be checked, it isn't shown. <em>Why:</em> a neighborhood app has to be safe for everyone on the street.</div>
+      </li>
+      <li>
+        <div class="name">EventBridge Scheduler<span>alarm clock</span></div>
+        <div class="what">Wakes the reader every day, every Monday and on the 1st of each month. <em>Why:</em> no always-on machine just to start a job.</div>
+      </li>
+      <li>
+        <div class="name">Secrets Manager, IAM, CDK<span>the plumbing</span></div>
+        <div class="what">Keeps our web-scraping key out of the code, gives each piece the smallest set of permissions, and sets up the agent services from code.</div>
+      </li>
+      <li>
+        <div class="name">AWS Amplify Hosting<span>the website</span></div>
+        <div class="what">Builds and serves the Next.js website. The site's server talks to the database and the chat agent with its own AWS role, so no keys ever reach a browser.</div>
+      </li>
+    </ul>
+  </section>
+
+  <div class="diagram" role="figure" aria-labelledby="diagram-cap">
+    <div class="scroll">
+      <svg viewBox="0 0 940 550" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <defs>
+          <marker id="head" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0 0 L10 5 L0 10 z" class="d-head"/>
+          </marker>
+        </defs>
+
+        <text x="20" y="40" class="d-lane">WHEN A NEIGHBOR OPENS DOCKET</text>
+
+        <rect x="20" y="80" width="130" height="64" rx="14" class="d-box"/>
+        <text x="85" y="109" class="d-label">Neighbor</text>
+        <text x="85" y="130" class="d-detail">phone or laptop</text>
+
+        <rect x="200" y="70" width="180" height="84" rx="14" class="d-box"/>
+        <text x="290" y="106" class="d-label">Docket website</text>
+        <text x="290" y="128" class="d-detail">Next.js on AWS Amplify</text>
+
+        <rect x="430" y="70" width="190" height="84" rx="14" class="d-agent"/>
+        <text x="525" y="106" class="d-label">Answering agent</text>
+        <text x="525" y="128" class="d-detail">Strands on AgentCore</text>
+
+        <rect x="670" y="70" width="250" height="84" rx="14" class="d-box"/>
+        <text x="795" y="106" class="d-label">Bedrock models</text>
+        <text x="795" y="128" class="d-detail">gpt-oss-120b · Titan Embeddings</text>
+
+        <rect x="140" y="176" width="120" height="34" rx="17" class="d-pill"/>
+        <text x="200" y="198" class="d-small">Cognito</text>
+        <rect x="290" y="176" width="130" height="34" rx="17" class="d-pill"/>
+        <text x="355" y="198" class="d-small">Rekognition</text>
+
+        <path d="M150 112 H198" class="d-line" marker-end="url(#head)"/>
+        <path d="M380 112 H428" class="d-line" marker-end="url(#head)"/>
+        <path d="M620 112 H668" class="d-line" marker-end="url(#head)"/>
+        <path d="M225 154 V174" class="d-line" marker-end="url(#head)"/>
+        <path d="M350 154 V174" class="d-line" marker-end="url(#head)"/>
+        <path d="M275 154 V278" class="d-line" marker-end="url(#head)"/>
+        <path d="M525 154 V278" class="d-line" marker-end="url(#head)"/>
+
+        <rect x="180" y="280" width="740" height="112" rx="18" class="d-band"/>
+        <text x="200" y="304" class="d-lane">STORED ON AWS · SHARED BY THE WEBSITE AND BOTH AGENTS</text>
+
+        <rect x="200" y="318" width="230" height="58" rx="12" class="d-store"/>
+        <text x="315" y="342" class="d-label">Aurora DSQL</text>
+        <text x="315" y="362" class="d-detail">posts, votes, city documents</text>
+
+        <rect x="450" y="318" width="230" height="58" rx="12" class="d-store"/>
+        <text x="565" y="342" class="d-label">S3 Vectors</text>
+        <text x="565" y="362" class="d-detail">search by meaning</text>
+
+        <rect x="700" y="318" width="200" height="58" rx="12" class="d-store"/>
+        <text x="800" y="342" class="d-label">Amazon S3</text>
+        <text x="800" y="362" class="d-detail">original files and photos</text>
+
+        <text x="20" y="428" class="d-lane">IN THE BACKGROUND</text>
+
+        <rect x="20" y="444" width="170" height="84" rx="14" class="d-box"/>
+        <text x="105" y="480" class="d-label">EventBridge</text>
+        <text x="105" y="502" class="d-detail">daily · weekly · monthly</text>
+
+        <rect x="240" y="444" width="190" height="84" rx="14" class="d-agent"/>
+        <text x="335" y="480" class="d-label">Reading agent</text>
+        <text x="335" y="502" class="d-detail">Strands on AgentCore</text>
+
+        <rect x="500" y="444" width="260" height="84" rx="14" class="d-box"/>
+        <text x="630" y="480" class="d-label">Public city records</text>
+        <text x="630" y="502" class="d-detail">agendas, minutes, school board, bills</text>
+
+        <path d="M190 486 H238" class="d-line" marker-end="url(#head)"/>
+        <path d="M430 486 H498" class="d-line" marker-end="url(#head)"/>
+        <text x="465" y="476" class="d-verb">reads</text>
+        <path d="M335 444 V394" class="d-line" marker-end="url(#head)"/>
+      </svg>
+    </div>
+    <figcaption id="diagram-cap"><b>How the pieces connect.</b> The top row runs when someone uses the site. The bottom row runs on a schedule. Both agents share the same storage, and only the website's server (never the browser) talks to AWS.</figcaption>
+  </div>
+
+  <!-- 5. Challenges -->
+  <section id="challenges" class="col">
+    <p class="item">Item 5</p>
+    <h2>What went wrong, and how we fixed it</h2>
+    <p>Plenty. Here are the ones that taught us the most.</p>
+
+    <div class="challenge">
+      <h3>We ran out of free database space in the middle of the build</h3>
+      <dl>
+        <dt class="bad">Problem</dt>
+        <dd>Our first database was on a free plan, and we hit its limit partway through the hackathon.</dd>
+        <dt class="fix">Fix</dt>
+        <dd>We moved everything to AWS in about a day: Aurora DSQL for data, S3 Vectors for search, Cognito for sign-in. The new database doesn't support some features we'd planned on, like built-in search add-ons and automatic rules, so we moved search to S3 Vectors plus a simple keyword search in our own code, and enforced rules like "vote before you review" in the app itself.</dd>
+      </dl>
+    </div>
+
+    <div class="challenge">
+      <h3>City websites blocked our reader</h3>
+      <dl>
+        <dt class="bad">Problem</dt>
+        <dd>We wanted our bot to politely introduce itself by name. The bot firewalls on the city site, the meeting portal and the school board site rejected it every time.</dd>
+        <dt class="fix">Fix</dt>
+        <dd>On those three sites only, we let our fetching service use its normal identity. We still follow every site's rules for bots, wait between requests, and never use tricks to hide who we are.</dd>
+      </dl>
+    </div>
+
+    <div class="challenge">
+      <h3>The AI sometimes cited the wrong page</h3>
+      <dl>
+        <dt class="bad">Problem</dt>
+        <dd>Early answers were mostly right but occasionally pointed a fact at the wrong document, tacked on an extra link that didn't support the sentence, or leaked its own notes like "We must cite evidence 1".</dd>
+        <dt class="fix">Fix</dt>
+        <dd>We stopped trusting the AI to check itself. Code now requires every number, date and address to appear word for word in the cited page, drops links that support nothing in their sentence, and strips out the model's planning notes. If nothing survives, it tries once more, then says it doesn't know.</dd>
+      </dl>
+    </div>
+
+    <div class="challenge">
+      <h3>A 7 PM meeting showed up as the next day</h3>
+      <dl>
+        <dt class="bad">Problem</dt>
+        <dd>Dates were saved in universal time, so an evening meeting in California rolled over to tomorrow. For a deadline, that's a real mistake.</dd>
+        <dt class="fix">Fix</dt>
+        <dd>Every date shown to a neighbor, including dates on source links, is now converted to Fremont time.</dd>
+      </dl>
+    </div>
+
+    <div class="challenge">
+      <h3>Our AWS account lost access to AI models</h3>
+      <dl>
+        <dt class="bad">Problem</dt>
+        <dd>The model we first wanted wasn't available to our account. Later, every model call in the account started failing because of an account-level hold we couldn't fix from code.</dd>
+        <dt class="fix">Fix</dt>
+        <dd>We built on <code>gpt-oss-120b</code>, which was available. When the hold hit, a teammate's AWS account gave our two agents a narrowly scoped role that allows model calls only, so chat kept working while we sorted out billing.</dd>
+      </dl>
+    </div>
+
+    <div class="challenge">
+      <h3>Some photos couldn't be checked</h3>
+      <dl>
+        <dt class="bad">Problem</dt>
+        <dd>The photo checker can't read WebP or GIF files, and some videos failed to process. We also found people can rename a web page to look like a picture.</dd>
+        <dt class="fix">Fix</dt>
+        <dd>The app converts WebP and GIF to JPEG in the browser before upload, reads the first bytes of every file to confirm it really is what it claims, and hides anything that can't be checked. Safe by default.</dd>
+      </dl>
+    </div>
+  </section>
+
+  <!-- 6. Results -->
+  <section id="results" class="col">
+    <p class="item">Item 6</p>
+    <h2>What we ended up with</h2>
+    <p>Both agents are live on Bedrock AgentCore, reading real Fremont records on a schedule. To see whether the answers can be trusted, we wrote 20 questions with known answers from real city documents, plus 5 questions our sources can't answer.</p>
+
+    <div class="scores" role="list">
+      <div class="score" role="listitem">
+        <span class="label">Found the right document</span>
+        <span class="bar" aria-hidden="true"><i style="width:100%"></i></span>
+        <span class="val">20 / 20</span>
+      </div>
+      <div class="score" role="listitem">
+        <span class="label">Gave an answer</span>
+        <span class="bar" aria-hidden="true"><i style="width:95%"></i></span>
+        <span class="val">19 / 20</span>
+      </div>
+      <div class="score" role="listitem">
+        <span class="label">Every link backed its fact</span>
+        <span class="bar" aria-hidden="true"><i style="width:95%"></i></span>
+        <span class="val">19 / 20</span>
+      </div>
+      <div class="score" role="listitem">
+        <span class="label">Cited the expected page</span>
+        <span class="bar" aria-hidden="true"><i style="width:90%"></i></span>
+        <span class="val">18 / 20</span>
+      </div>
+      <div class="score" role="listitem">
+        <span class="label">Said "I don't know" when it should</span>
+        <span class="bar" aria-hidden="true"><i style="width:100%"></i></span>
+        <span class="val">5 / 5</span>
+      </div>
+    </div>
+    <p style="font-size:0.9375rem;color:var(--ink-muted)">From our groundedness test run with <code>gpt-oss-120b</code> and Titan Text Embeddings.</p>
+
+    <div class="qa">
+      <span class="tag">Real answer from the test run</span>
+      <p class="q">Which site did the City Council rezone from Regional Commercial to Tech Industrial in July 2026?</p>
+      <p class="a">The City Council rezoned the 11.21-acre site at 43800 Osgood Road from Regional Commercial (C-R) to Tech Industrial (I-T) in July 2026 <sup>[1]</sup>.</p>
+    </div>
+    <div class="qa">
+      <span class="tag">And a good refusal</span>
+      <p class="q">What is the population of Fremont, California?</p>
+      <p class="a">I don't have anything in my sources about that.</p>
+    </div>
+    <p>That second answer is one of our favorites. The model almost certainly "knows" a population figure, but Docket's sources are city records, not census data. It didn't guess.</p>
+
+    <div class="numbers">
+      <div><b>32</b><span>official Fremont neighborhoods</span></div>
+      <div><b>10</b><span>public record sources the reader follows</span></div>
+      <div><b>6</b><span>live alert feeds on the map</span></div>
+      <div><b>2</b><span>agents deployed on AgentCore</span></div>
+    </div>
+
+    <h3>What makes it interesting</h3>
+    <ul>
+      <li><strong>It would rather say nothing than be wrong.</strong> Trust is the whole product. A neighborhood app that invents a deadline does real harm.</li>
+      <li><strong>The AI is a quiet helper, not the headline.</strong> People come for their neighbors, news and alerts. The agent works in the background and speaks up when it has something it can back up.</li>
+      <li><strong>It's cheap to run.</strong> Everything scales down when no one is using it. We sized the database, search and sign-in to cost about a dollar or two a month at our scale.</li>
+      <li><strong>It's a good neighbor to the websites it reads.</strong> It follows their rules for bots, waits between visits, and keeps the original files so anyone can check.</li>
+    </ul>
+  </section>
+
+  <!-- 7. Demo -->
+  <section id="demo" class="col">
+    <p class="item">Item 7</p>
+    <h2>See it for yourself</h2>
+    <ul class="links">
+      <li><span class="k">Live preview</span><a href="https://k1lst1x.github.io/DOCKET/">k1lst1x.github.io/DOCKET</a></li>
+      <li><span class="k">Source code</span><a href="https://github.com/k1lst1x/DOCKET">github.com/k1lst1x/DOCKET</a></li>
+      <!-- Add the demo video link here before posting:
+      <li><span class="k">Demo video</span><a href="VIDEO_URL">Watch the 5-minute walkthrough</a></li>
+      -->
+    </ul>
+    <div class="note"><b>About the preview:</b> it's a static copy of the real website, so sign-in, posting, voting and chat are turned off there, and some posts are sample data (always labelled "Sample"). The full version runs on AWS.</div>
+    <p>Try asking Docket: <em>"What's on the September 15 City Council agenda?"</em> or <em>"What did the City Council decide about the City charter in July?"</em></p>
+  </section>
+
+  <div class="pair">
+    <figure>
+      <img class="shot" src="img/chat.png" width="1360" height="900" alt="Ask Docket chat page listing what the assistant has read, such as City Council and school board agendas, with suggested questions.">
+      <figcaption><b>Ask Docket.</b> The chat lists exactly what it has read, so you know what it can and can't answer.</figcaption>
+    </figure>
+    <figure>
+      <img class="shot" src="img/news.png" width="1360" height="900" alt="Fremont news page with neighborhood and topic filters and live incident cards for power outages.">
+      <figcaption><b>Fremont news.</b> Filter by neighborhood and topic. Live incidents, like power outages, appear as they happen.</figcaption>
+    </figure>
+  </div>
+
+  <figure class="wide">
+    <img class="shot" src="img/groups.png" width="1360" height="900" alt="Neighborhood groups directory showing Niles Neighbors, Irvington Commons and Mission San Jose Residents, each with its most urgent upcoming item and comment deadline.">
+    <figcaption><b>Neighborhood groups.</b> Each group shows its most urgent upcoming item and exactly when comments close. (Sample groups in the preview.)</figcaption>
+  </figure>
+
+  <!-- 8. Future -->
+  <section id="next" class="col">
+    <p class="item">Item 8</p>
+    <h2>What we'd do next</h2>
+    <ul>
+      <li><strong>Open sign-in to everyone.</strong> Our email service is still in AWS's test mode, so sign-in codes only reach approved addresses. We need a proper sending domain and production access.</li>
+      <li><strong>Finish the move to AWS Amplify.</strong> Hook up the production site to the chat agent, photo uploads and photo checks, and retire the static preview.</li>
+      <li><strong>Replace the last sample data.</strong> Issues now come from real agendas. Next are the groups and stats that still use examples.</li>
+      <li><strong>Better address matching.</strong> The free address lookup we use misses some Fremont addresses. We'd match addresses directly against the city's own neighborhood map.</li>
+      <li><strong>State bills that matter locally.</strong> The reader already pulls the legislature's daily files, but hasn't matched a Fremont bill yet. We want to show bills written by Fremont's own representatives.</li>
+      <li><strong>Heads-up alerts.</strong> A short email or phone notification when something is about to be decided on your street, while there's still time to comment.</li>
+      <li><strong>More cities.</strong> Nothing in the design is special to Fremont except the list of sources. Adding a new city should mostly mean adding its websites.</li>
+    </ul>
+  </section>
+
+  <footer class="end">
+    <p class="sign">Your block, on the docket.</p>
+    <p>Built for the Agents for Humans Hackathon, Good Neighbor Agents track. Docket is open source under the MIT License.</p>
+  </footer>
+</main>

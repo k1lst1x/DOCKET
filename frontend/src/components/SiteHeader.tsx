@@ -48,6 +48,7 @@ const FOOTER_SECTIONS: { title: string; links: { href: string; label: string }[]
     title: "Explore Fremont",
     links: [
       { href: "/news", label: "News" },
+      { href: "/insights", label: "What Fremont is saying" },
       { href: "/places", label: "Places map and live incidents" },
     ],
   },
