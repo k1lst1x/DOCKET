@@ -30,6 +30,7 @@ FREMONT_TZ = ZoneInfo("America/Los_Angeles")
 MAX_BODY = 500
 MIN_COMMENTS = 3
 MAX_NEIGHBORHOODS = 4
+STANCE_WORDS = {"support", "supports", "oppose", "opposition", "mixed", "neutral", "in support"}
 BODY_NAMES = {
     "city_council": "City Council",
     "planning_commission": "Planning Commission",
@@ -55,12 +56,16 @@ def comment_post(topic: dict) -> str:
         (topic["neutral_count"], "neutral"),
     ]
     tally = ", ".join(f"{n} {label}" for n, label in counts if n)
-    themes = [entry["theme"] for entry in topic["themes"][:3]]
+    # A theme that only restates a stance ("support") says nothing the tally doesn't.
+    themes = [entry["theme"] for entry in topic["themes"] if entry["theme"] not in STANCE_WORDS][:3]
     theme_text = f" Most mentioned: {'; '.join(themes)}." if themes else ""
     body = BODY_NAMES.get(topic["body"], topic["body"])
+    # "Item 7A1 Public Correspondence on Councilmember Keng's Referral (...)" -> "Councilmember Keng's Referral (...)"
+    subject = re.sub(r"^(?:Item \w+\s+)?(?:Written\s+)?Public (?:Correspondence|Communications)(?: on)?\s*", "",
+                     topic["title"]).strip() or topic["title"]
     return fit(
         f"Public comment on the {day(topic['meeting_date'])} {body} {topic['item_label']} "
-        f"({topic['title']}): {topic['comment_count']} letters filed in the city's record, {tally}.{theme_text} "
+        f"({subject}): {topic['comment_count']} letters filed in the city's record, {tally}.{theme_text} "
         "Counted by Docket from the published letters."
     )
 

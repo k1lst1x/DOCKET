@@ -92,19 +92,20 @@ class PostTests(unittest.TestCase):
         "body": "city_council",
         "meeting_date": date(2026, 9, 8),
         "item_label": "Item 7A",
-        "title": "Public Correspondence on Councilmember Keng's Referral (North Fremont Community Center, District 1)",
+        "title": "Item 7A1 Public Correspondence on Councilmember Keng's Referral (North Fremont Community Center)",
         "neighborhood_slugs": ["ardenwood", "northgate", "unknown-slug"],
         "comment_count": 30,
         "support_count": 30,
         "oppose_count": 0,
         "mixed_count": 0,
         "neutral_count": 0,
-        "themes": [{"theme": "distance to existing centers", "count": 9}],
+        "themes": [{"theme": "support", "count": 12}, {"theme": "distance to existing centers", "count": 9}],
         "source_url": "https://fremontcityca.iqm2.com/Citizens/Detail_Meeting.aspx?ID=2090",
     }
 
     def test_comment_post_states_counts_and_stays_short(self):
         body = comment_post(self.TOPIC)
+        self.assertIn("Item 7A (Councilmember Keng's Referral (North Fremont Community Center)): 30 letters", body)
         self.assertIn("30 letters filed in the city's record, 30 support.", body)
         self.assertIn("Most mentioned: distance to existing centers.", body)
         self.assertLessEqual(len(body), MAX_BODY)
