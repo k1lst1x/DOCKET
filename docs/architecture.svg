@@ -1,0 +1,43 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="690" viewBox="0 0 1280 690" role="img" aria-labelledby="title desc">
+  <title id="title">DOCKET architecture</title>
+  <desc id="desc">Residents use a Next.js web app. Server routes use Cognito, Aurora DSQL and an AgentCore chat runtime. An AgentCore pipeline reads public civic sources through Firecrawl or HTTP and stores evidence in DSQL, S3 and S3 Vectors.</desc>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#34536a"/></marker>
+    <style>
+      text { font-family: Inter, Arial, sans-serif; fill: #112c3d; }
+      .heading { font-size: 32px; font-weight: 700; }
+      .sub { font-size: 16px; fill: #526978; }
+      .box { stroke: #34536a; stroke-width: 2; rx: 16; }
+      .label { font-size: 19px; font-weight: 700; text-anchor: middle; }
+      .detail { font-size: 14px; text-anchor: middle; fill: #526978; }
+      .line { stroke: #34536a; stroke-width: 2.5; fill: none; marker-end: url(#arrow); }
+    </style>
+  </defs>
+  <rect width="1280" height="690" fill="#f8f6ef"/>
+  <text x="70" y="66" class="heading">DOCKET · civic reading agent architecture</text>
+  <text x="70" y="96" class="sub">Evidence-first neighborhood updates for Fremont</text>
+
+  <rect x="70" y="160" width="190" height="92" class="box" fill="#d9edf1"/>
+  <text x="165" y="198" class="label">Residents</text><text x="165" y="223" class="detail">browser</text>
+  <rect x="335" y="160" width="230" height="92" class="box" fill="#d9edf1"/>
+  <text x="450" y="198" class="label">Next.js web app</text><text x="450" y="223" class="detail">UI + server routes</text>
+  <rect x="650" y="95" width="200" height="92" class="box" fill="#f9ddbd"/>
+  <text x="750" y="133" class="label">Cognito</text><text x="750" y="158" class="detail">identity + sessions</text>
+  <rect x="650" y="250" width="200" height="92" class="box" fill="#d5e8c4"/>
+  <text x="750" y="288" class="label">AgentCore chat</text><text x="750" y="313" class="detail">Strands + citations</text>
+  <rect x="945" y="160" width="220" height="92" class="box" fill="#e2dbf3"/>
+  <text x="1055" y="198" class="label">Aurora DSQL</text><text x="1055" y="223" class="detail">community + evidence data</text>
+
+  <rect x="335" y="455" width="230" height="92" class="box" fill="#d5e8c4"/>
+  <text x="450" y="493" class="label">AgentCore pipeline</text><text x="450" y="518" class="detail">Strands background work</text>
+  <rect x="70" y="455" width="190" height="92" class="box" fill="#f9ddbd"/>
+  <text x="165" y="493" class="label">Public sources</text><text x="165" y="518" class="detail">Firecrawl / HTTP</text>
+  <rect x="650" y="455" width="200" height="92" class="box" fill="#e2dbf3"/>
+  <text x="750" y="493" class="label">Amazon S3</text><text x="750" y="518" class="detail">raw documents</text>
+  <rect x="945" y="455" width="220" height="92" class="box" fill="#e2dbf3"/>
+  <text x="1055" y="493" class="label">S3 Vectors</text><text x="1055" y="518" class="detail">semantic retrieval</text>
+
+  <path d="M260 206 H335" class="line"/><path d="M565 187 H650" class="line"/><path d="M565 230 L650 286" class="line"/><path d="M850 296 H945" class="line"/><path d="M565 220 H945" class="line"/>
+  <path d="M260 501 H335" class="line"/><path d="M565 501 H650" class="line"/><path d="M565 526 L945 526" class="line"/><path d="M450 455 L450 342" class="line"/><path d="M565 470 L945 252" class="line"/>
+  <text x="70" y="632" class="sub">The pipeline performs repetitive collection, extraction, retrieval, and verified generation; residents see the result only when they need context or want to participate.</text>
+</svg>

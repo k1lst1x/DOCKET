@@ -1,5 +1,7 @@
 # Architecture and integration
 
+![DOCKET architecture diagram](architecture.svg)
+
 ## Implemented architecture
 
 ```mermaid

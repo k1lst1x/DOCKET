@@ -140,3 +140,10 @@ keep secrets in ignored local `.env` files.
 
 The frontend calls Aurora DSQL through server routes and invokes the AgentCore chat
 runtime server-side. See [architecture and integration notes](docs/architecture.md).
+
+## Hackathon submission materials
+
+- [Architecture diagram](docs/architecture.svg)
+- [Devpost submission draft](docs/submission.md)
+- [Judge guide](docs/judge-guide.md)
+- [Third-party and pre-existing work disclosure](docs/third-party-and-preexisting-work.md)
