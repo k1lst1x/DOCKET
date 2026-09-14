@@ -34,6 +34,26 @@ def firecrawl_api_key() -> str:
     client = boto3.client("secretsmanager", region_name=AWS_REGION)
     return client.get_secret_value(SecretId=FIRECRAWL_SECRET_ID)["SecretString"].strip()
 
+
+# Google Places API (New) for the chat agent's place lookups: a server key restricted to that one API.
+# Deployed runtimes read it from AWS Secrets Manager. With neither set, place lookups are switched off.
+GOOGLE_PLACES_API_KEY = os.getenv("GOOGLE_PLACES_API_KEY", "").strip()
+GOOGLE_PLACES_SECRET_ID = os.getenv("GOOGLE_PLACES_SECRET_ID", "").strip()
+
+
+def google_places_api_key() -> str:
+    """The Google Places key from the environment, or from AWS Secrets Manager when deployed."""
+    if GOOGLE_PLACES_API_KEY or not GOOGLE_PLACES_SECRET_ID:
+        return GOOGLE_PLACES_API_KEY
+    import boto3
+
+    client = boto3.client("secretsmanager", region_name=AWS_REGION)
+    return client.get_secret_value(SecretId=GOOGLE_PLACES_SECRET_ID)["SecretString"].strip()
+
+
+# The Docket website, for links to issues and the feed in chat answers.
+APP_URL = (os.getenv("APP_URL") or "https://k1lst1x.github.io/DOCKET").rstrip("/")
+
 # Shared Aurora DSQL cluster (IAM auth, no password). The agent owns only agent_* tables.
 # A blank line in .env (e.g. "S3_BUCKET=") counts as unset, so these fall back to the defaults.
 DSQL_ENDPOINT = os.getenv("DSQL_ENDPOINT") or "arucmxa62xrerk4vt7b2kveetu.dsql.us-west-2.on.aws"

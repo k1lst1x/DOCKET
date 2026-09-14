@@ -18,12 +18,14 @@ import re
 import uuid
 from collections.abc import AsyncIterator, Callable
 from dataclasses import asdict, dataclass, field
+from datetime import datetime
+from zoneinfo import ZoneInfo
 
 from strands import Agent, tool
 from strands.hooks import AfterToolCallEvent, HookProvider, HookRegistry
 from strands.models import BedrockModel
 
-from core import retrieval, settings
+from core import live_tools, retrieval, settings
 from core.bedrock_session import bedrock_session
 from core.citations import STRONG_FACT_KINDS, enforce, extract_facts, split_sentences, supports_any
 from core.db import connect, run_with_retry
@@ -33,7 +35,22 @@ log = logging.getLogger("docket.chat")
 
 MAX_QUESTION_CHARS = 2000
 HISTORY_MESSAGES = 6
-RETRIEVAL_TOOLS = {"vector_search", "keyword_search", "search_by_address", "fetch_chunks", "get_document"}
+RETRIEVAL_TOOLS = {
+    "vector_search",
+    "keyword_search",
+    "search_by_address",
+    "fetch_chunks",
+    "get_document",
+    # Live lookups: Docket's own data, public feeds, news, places and the web.
+    "docket_issues",
+    "meeting_decisions",
+    "neighborhood_posts",
+    "live_incidents",
+    "local_news",
+    "find_places",
+    "web_search",
+}
+FREMONT_TZ = ZoneInfo("America/Los_Angeles")
 REFUSAL = "I don't have anything in my sources about that."
 REFUSAL_SENTENCE = re.compile(r"I don['’]t have anything in my sources about that\.?", re.IGNORECASE)
 REASONING_SPAN = re.compile(r"<reasoning>.*?</reasoning>", re.DOTALL | re.IGNORECASE)
@@ -73,27 +90,47 @@ LOCAL_TOPIC = re.compile(
     re.IGNORECASE,
 )
 GROUNDED_REQUEST = (
-    "This question is about Fremont or government, so it must be answered only from the documents. "
-    "Search with vector_search, keyword_search or search_by_address, then answer with cited evidence "
-    f"numbers, or reply exactly: {REFUSAL}"
+    "This question is about Fremont or government, so it must be answered only from your tools' evidence. "
+    "Look it up with the tools that fit (city documents, Docket's issues and posts, live incidents, local "
+    f"news, places or the web), then answer with cited evidence numbers, or reply exactly: {REFUSAL}"
 )
 EMPHASIS = re.compile(r"(?<![\w*])([*_])(?=\S)([^*_\n]+?)(?<=\S)\1(?![\w*])")
 
 SYSTEM_PROMPT = """You are Docket's assistant for residents of Fremont, California.
 
-Two kinds of questions:
-1. Anything about Fremont or local or state government: the City Council, Planning Commission, school board,
-   agendas, minutes, city news, transportation, taxes, budgets, zoning, permits, laws, legislators,
-   neighborhoods or street addresses. For these, answer only from evidence returned by your tools in this
-   turn, following the rules below. Never use your own knowledge for these.
-2. Questions with nothing to do with Fremont or government: greetings, thanks, questions about you, jokes,
-   or general knowledge (science, history, how-to, definitions). For these, do not call tools. Start your
-   reply with the tag [general], then answer briefly and helpfully. If asked what you can do, say you answer
-   questions about Fremont city documents with linked sources and can also help with general questions.
-   Never use [general] for anything in the first kind.
+Your tools are all read-only:
+- vector_search, keyword_search, fetch_chunks, get_document, search_by_address: Fremont public records Docket
+  has read, such as City Council and Planning Commission agendas and minutes, staff reports, school board
+  meetings, city news, transportation plans and state bills.
+- docket_issues: local issues Docket is tracking, with summaries, pros and cons, meeting dates, deadlines,
+  neighbors' votes and reviews on Docket, recorded outcomes and public comment counts.
+- meeting_decisions: decisions recorded from meeting minutes, with the result and the vote.
+- neighborhood_posts: recent posts in Docket's neighborhood feed, by neighbors and by Docket.
+- live_incidents: what is happening near Fremont right now: CHP traffic incidents, Caltrans lane closures,
+  earthquakes, CAL FIRE wildfires, power outages and National Weather Service alerts.
+- local_news: recent news stories about Fremont and its neighborhoods.
+- find_places: restaurants, shops, schools, parks and other places from Google Maps, with address, hours,
+  rating and phone number.
+- web_search: searches the internet and reads the top pages. Use it for current events, businesses, events,
+  prices, anything the other tools don't cover, or when the person asks you to look something up.
 
-Rules for Fremont and government questions:
-- Call vector_search, keyword_search or search_by_address before every factual answer.
+Three kinds of questions:
+1. Anything about Fremont, its neighborhoods, places, news, incidents, or local or state government: the City
+   Council, Planning Commission, school board, agendas, minutes, transportation, taxes, budgets, zoning,
+   permits, laws, legislators or street addresses. Answer only from evidence your tools return in this turn,
+   following the rules below. Use every tool that fits: for example docket_issues and vector_search for an
+   agenda item, live_incidents and local_news for what's going on, find_places for where to go. If the Docket
+   tools find nothing, try web_search. Never use your own knowledge for these.
+2. Current events and anything that changes over time, anywhere: use web_search (and other tools that fit),
+   then answer from the evidence under the same rules.
+3. Timeless general knowledge (science, history, how-to, definitions), greetings, thanks, jokes or questions
+   about you. For these, do not call tools. Start your reply with the tag [general], then answer briefly and
+   helpfully. If asked what you can do, say you answer questions about Fremont with linked sources, using city
+   records, Docket's neighborhood data, live incident feeds, local news, Google Maps and the web, and can also
+   help with general questions. Never use [general] for the first two kinds.
+
+Rules for answers from evidence:
+- Look things up with your tools before every factual answer.
 - Cite every factual sentence with evidence numbers in square brackets, like [2] or [1, 3]. Cite only
   numbers that a tool returned in this turn.
 - Copy numbers, dollar amounts, dates, addresses, section numbers and case or request ids exactly as they
@@ -108,11 +145,22 @@ Rules for Fremont and government questions:
   salute or roll call. Search more than once if the first results only show the start of the agenda.
 - Never describe a neighborhood, place or group of people as good, bad, safe, unsafe, dangerous or
   high-crime. If asked, say Docket doesn't rate neighborhoods and give only cited facts from the evidence.
+  Report incidents as facts with their source, without judging the area.
+- Neighbors' votes, reviews and posts on Docket are residents' opinions. Say so, and never present them as
+  official decisions or votes.
+- A question may end with page context describing what the person is looking at on Docket. Use it to know
+  what "this" or "here" means, then look the item up with your tools; the context itself is not evidence.
 - When asked what someone is legally allowed or required to do, quote the relevant text, cite it, and say
   that this is the text of the source documents, not legal advice.
-- Keep answers to two or three sentences unless the user asks for detail or a list. No greeting. Do not
-  restate the question.
+- Keep answers to two or three sentences unless the user asks for detail or a list. For places, stories or
+  incidents, list up to five, one per line, each cited. No greeting. Do not restate the question.
 """
+
+
+def system_prompt(now: datetime | None = None) -> str:
+    """The system prompt with today's Fremont date, so "right now", "this week" and "upcoming" resolve."""
+    today = (now or datetime.now(FREMONT_TZ)).astimezone(FREMONT_TZ)
+    return f"{SYSTEM_PROMPT}\nToday in Fremont is {today:%A}, {today:%B} {today.day}, {today.year}.\n"
 
 
 @dataclass
@@ -148,6 +196,8 @@ class TurnEvidence:
         self.ref_of: dict[str, int] = {}
         self.retrieval_calls = 0
         self.progress = progress
+        # Live sources looked up this turn, as phrases for a refusal ("local news", "the web").
+        self.searched_live: list[str] = []
 
     def report(self, message: str) -> None:
         """Tell a streaming client what the agent is doing. Progress must never break an answer."""
@@ -268,6 +318,85 @@ def build_tools(turn: TurnEvidence) -> list:
         # The lookup itself is citable evidence, so "which neighborhood is this address in" can be answered.
         return turn.add([address_lookup_evidence(address, located, neighborhood), *items])
 
+    def live(status: str, phrase: str, fetch: Callable[[], list[retrieval.Evidence]]) -> str:
+        """Run a live lookup as numbered evidence. A source that is down or not set up is reported to the
+        model as unavailable, never as an error that ends the turn."""
+        turn.report(status)
+        if phrase not in turn.searched_live:
+            turn.searched_live.append(phrase)
+        try:
+            return turn.add(fetch())
+        except live_tools.LiveUnavailable as error:
+            return f"Not available: {error}"
+        except Exception:
+            log.exception("live lookup failed: %s", phrase)
+            return "Not available: that source could not be reached just now."
+
+    @tool
+    def docket_issues(query: str = "", neighborhood: str = "") -> str:
+        """Local issues and agenda items Docket is tracking: summary, pros and cons, meeting date, deadline,
+        neighbors' stance votes and reviews on Docket, recorded outcome and public comment counts.
+        query: words to match, or empty for the most recent. neighborhood: a Fremont neighborhood name, optional."""
+        return live(
+            "Checking Docket's issues and community votes",
+            "Docket's tracked issues and community votes",
+            lambda: live_tools.docket_issues(query, neighborhood),
+        )
+
+    @tool
+    def meeting_decisions(query: str = "", neighborhood: str = "") -> str:
+        """Decisions recorded from City Council, Planning Commission, Zoning Administrator and school board
+        minutes: the item, the result and the vote. query: words to match, optional. neighborhood: optional."""
+        return live(
+            "Checking recorded meeting decisions",
+            "recorded meeting decisions",
+            lambda: live_tools.meeting_decisions(query, neighborhood),
+        )
+
+    @tool
+    def neighborhood_posts(query: str = "", neighborhood: str = "") -> str:
+        """Recent posts in Docket's neighborhood feed, written by neighbors or by Docket, with likes and replies.
+        query: words to match, optional. neighborhood: a Fremont neighborhood name, optional."""
+        return live(
+            "Reading the neighborhood feed",
+            "neighborhood feed posts",
+            lambda: live_tools.neighborhood_posts(query, neighborhood),
+        )
+
+    @tool
+    def live_incidents(kind: str = "", neighborhood: str = "") -> str:
+        """What is happening near Fremont right now: CHP traffic incidents, Caltrans lane closures, earthquakes,
+        CAL FIRE wildfires, power outages and National Weather Service alerts.
+        kind: one of traffic, closure, quake, fire, outage, alert, or empty for all. neighborhood: optional."""
+        return live(
+            "Checking live incident and alert feeds",
+            "live incident and alert feeds",
+            lambda: live_tools.live_incidents(kind, neighborhood),
+        )
+
+    @tool
+    def local_news(query: str = "", neighborhood: str = "") -> str:
+        """Recent news stories about Fremont and its neighborhoods from local outlets and Google News.
+        query: topic words, optional. neighborhood: a Fremont neighborhood name, optional."""
+        return live("Checking local news", "local news", lambda: live_tools.local_news(query, neighborhood))
+
+    @tool
+    def find_places(query: str, neighborhood: str = "", open_now: bool = False) -> str:
+        """Places in Fremont from Google Maps: restaurants, shops, schools, parks, services. Returns address,
+        hours, rating and phone. query: what to find, like "boba" or "elementary schools". neighborhood: optional.
+        open_now: only places open right now."""
+        return live(
+            "Looking up places on Google Maps",
+            "Google Maps places",
+            lambda: live_tools.find_places(query, neighborhood, open_now),
+        )
+
+    @tool
+    def web_search(query: str) -> str:
+        """Search the internet and read the top pages. Use for current events, anything outside Docket's
+        other tools, or when asked to look something up online. query: a search engine query."""
+        return live("Searching the web", "the web", lambda: live_tools.web_search(query))
+
     return [
         vector_search,
         keyword_search,
@@ -276,6 +405,13 @@ def build_tools(turn: TurnEvidence) -> list:
         list_sources,
         get_recent_outputs,
         search_by_address,
+        docket_issues,
+        meeting_decisions,
+        neighborhood_posts,
+        live_incidents,
+        local_news,
+        find_places,
+        web_search,
     ]
 
 
@@ -350,11 +486,13 @@ SOURCE_KIND_PHRASES = {
 }
 
 
-def searched_summary(sources: list[dict]) -> str:
-    """ "City Council agendas and minutes, city news and state legislator listings" for a refusal."""
+def searched_summary(sources: list[dict], live: list[str] | tuple[str, ...] = ()) -> str:
+    """ "City Council agendas and minutes, city news and state legislator listings" for a refusal, followed by
+    the live sources looked up in the turn ("local news", "the web")."""
     kinds = {source["kind"] for source in sources}
     phrases = [phrase for kind, phrase in SOURCE_KIND_PHRASES.items() if kind in kinds]
     phrases += sorted(source["name"] for source in sources if source["kind"] not in SOURCE_KIND_PHRASES)
+    phrases += [phrase for phrase in live if phrase not in phrases]
     if len(phrases) < 2:
         return "".join(phrases)
     return f"{', '.join(phrases[:-1])} and {phrases[-1]}"
@@ -378,7 +516,7 @@ def finalize(question: str, raw_answer: str, turn: TurnEvidence) -> ChatResponse
     searched = [source["name"] for source in sources]
 
     def refusal(removed: list | None = None) -> ChatResponse:
-        summary = searched_summary(sources)
+        summary = searched_summary(sources, turn.searched_live)
         return ChatResponse(
             answer=f"{REFUSAL} I searched {summary}." if summary else REFUSAL,
             cited_chunk_ids=[],
@@ -584,7 +722,7 @@ async def answer(
     turn = TurnEvidence(progress)
     agent = Agent(
         model=_model(),
-        system_prompt=SYSTEM_PROMPT,
+        system_prompt=system_prompt(),
         tools=build_tools(turn),
         messages=load_history(session),
         hooks=[RetrievalRecorder(turn)],

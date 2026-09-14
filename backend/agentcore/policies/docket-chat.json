@@ -37,6 +37,17 @@
       ]
     },
     {
+      "Sid": "ReadChatLookupApiKeys",
+      "Effect": "Allow",
+      "Action": [
+        "secretsmanager:GetSecretValue"
+      ],
+      "Resource": [
+        "arn:aws:secretsmanager:us-west-2:465083445156:secret:docket/firecrawl-*",
+        "arn:aws:secretsmanager:us-west-2:465083445156:secret:docket/google-places-*"
+      ]
+    },
+    {
       "Sid": "AssumeConfiguredBedrockRole",
       "Effect": "Allow",
       "Action": [

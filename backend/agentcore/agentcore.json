@@ -10,7 +10,7 @@
   "runtimes": [
     {
       "name": "docket_chat",
-      "description": "Resident chat agent for Fremont. Read-only retrieval tools; answers only from cited, scraped sources.",
+      "description": "Resident chat agent for Fremont. Read-only tools over city records, Docket data, live feeds, news, places and the web; cited answers.",
       "build": "CodeZip",
       "entrypoint": "agentcore_chat.py",
       "codeLocation": "./",
@@ -24,6 +24,8 @@
         { "name": "DSQL_ENDPOINT", "value": "arucmxa62xrerk4vt7b2kveetu.dsql.us-west-2.on.aws" },
         { "name": "S3_VECTORS_BUCKET", "value": "docket-vectors-465083445156" },
         { "name": "S3_VECTORS_INDEX", "value": "docket-chunks" },
+        { "name": "FIRECRAWL_SECRET_ID", "value": "docket/firecrawl" },
+        { "name": "GOOGLE_PLACES_SECRET_ID", "value": "docket/google-places" },
         { "name": "PYTHONUTF8", "value": "1" },
         { "name": "BEDROCK_ROLE_ARN", "value": "arn:aws:iam::576884310211:role/DocketBedrockAccess" },
         { "name": "BEDROCK_EXTERNAL_ID", "value": "docket-bedrock-465083445156" }
