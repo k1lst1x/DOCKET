@@ -33,21 +33,65 @@ export function SiteHeader({ tone = "plain" }: { tone?: "sky" | "plain" }) {
   );
 }
 
+const FOOTER_SECTIONS: { title: string; links: { href: string; label: string }[] }[] = [
+  {
+    title: "Your neighborhood",
+    links: [
+      { href: "/", label: "Neighborhood feed" },
+      { href: "/#address", label: "Find your group" },
+      { href: "/groups", label: "All groups" },
+    ],
+  },
+  {
+    title: "Explore Fremont",
+    links: [
+      { href: "/news", label: "News" },
+      { href: "/places", label: "Places map and live incidents" },
+    ],
+  },
+  {
+    title: "Docket",
+    links: [
+      { href: "/chat", label: "Ask Docket" },
+      { href: "/about", label: "About Docket" },
+      { href: "/signin", label: "Sign in" },
+    ],
+  },
+];
+
+/** Site footer: every section of Docket one tap away, from any page. */
 export function SiteFooter() {
   return (
+    // pb-20 leaves room for the chat bubble in the corner.
     <footer className="border-t border-rule bg-white pb-20">
-      <div className="page flex flex-col gap-3 py-8 text-sm text-ink-muted sm:flex-row sm:items-center sm:justify-between">
-        <p className="flex items-center gap-2 text-ink">
-          <DocketMark />
-          <span className="font-semibold">Docket</span>
-          <span className="text-ink-muted">· Fremont city hall, read for your neighborhood</span>
-        </p>
-        <p>
-          Groups, agenda items and votes marked sample are demo data until the reading agent goes live.{" "}
-          <Link href="/about" className="link font-medium">
-            About Docket
+      <div className="page grid gap-8 py-10 lg:grid-cols-[minmax(0,1fr)_minmax(0,2fr)] lg:gap-12">
+        <div>
+          <Link href="/" className="inline-flex items-center gap-2 rounded-full text-ink">
+            {/* Default 32px: the logo is pixel art on a 32px grid. */}
+            <DocketMark />
+            <span className="text-lg font-semibold">Docket</span>
           </Link>
-        </p>
+          <p className="mt-2 max-w-xs text-sm text-ink-muted">Fremont city hall, read for your neighborhood</p>
+        </div>
+        <nav aria-label="Footer" className="grid grid-cols-2 gap-x-6 gap-y-8 sm:grid-cols-3">
+          {FOOTER_SECTIONS.map((section) => (
+            <div key={section.title}>
+              <h2 className="eyebrow">{section.title}</h2>
+              <ul className="mt-3 grid gap-1">
+                {section.links.map((link) => (
+                  <li key={link.label}>
+                    <Link href={link.href} className="inline-block py-1.5 text-base text-ink-soft underline-offset-4 hover:text-ink hover:underline">
+                      {link.label}
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
+        </nav>
+      </div>
+      <div className="page border-t border-rule py-5">
+        <p className="text-sm text-ink-muted">Groups, agenda items and votes marked sample are demo data until the reading agent goes live.</p>
       </div>
     </footer>
   );
