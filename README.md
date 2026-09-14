@@ -690,9 +690,9 @@ DOCKET/
 - [x] Context-aware chat with numbered citations
 - [x] Pipeline agent with verified, cited generation
 - [x] Both AgentCore runtimes deployed, groundedness evals passing
-- [ ] Scheduled ingestion runs (weekly meetings, daily issues and news)
+- [x] Scheduled ingestion runs (weekly meetings, daily issues and news)
 - [ ] Replace sample groups and agenda items with live agent outputs
-- [ ] ArcGIS FeatureServer parser for neighborhood and zoning layers
+- [x] ArcGIS FeatureServer parser for neighborhood and zoning layers
 - [ ] Production Amplify wiring for chat, media and moderation
 - [ ] Email codes for every resident (SES production access)
 
