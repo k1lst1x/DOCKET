@@ -8,6 +8,7 @@ const STATUS: Record<AuthErrorCode, number> = {
   undeliverable: 422,
   busy: 429,
   not_configured: 503,
+  unavailable: 503,
   failed: 502,
 };
 

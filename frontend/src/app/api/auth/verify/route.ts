@@ -43,8 +43,12 @@ export async function POST(request: Request) {
   try {
     session = await recordSignIn(identity, pending.name, pending.join);
   } catch (error) {
-    console.error("[docket] verify: could not save member", error);
-    return authFailure("failed");
+    // Cognito already accepted the code (and used up its session), so this is a server problem, not a wrong code.
+    const hint = /Could not load credentials|CredentialsProviderError/.test(String(error))
+      ? " (the server has no AWS credentials: on Amplify, attach the docket-amplify-compute role from scripts/aws-amplify-role.sh and redeploy)"
+      : "";
+    console.error(`[docket] verify: could not save member${hint}`, error);
+    return authFailure("unavailable");
   }
 
   const response = NextResponse.json({ ok: true, name: session.name, next: pending.next }, { headers: noStore });

@@ -51,7 +51,7 @@ export function SignInFlow({ next }: { next: string }) {
           email={email}
           intro={
             <>
-              If <span className="font-semibold text-ink">{email}</span> belongs to a Docket member, we just emailed it a 6-digit code.
+              If <span className="font-semibold text-ink">{email}</span> belongs to a Docket member, we just emailed it a sign-in code.
             </>
           }
           onVerified={({ next: destination }) => {

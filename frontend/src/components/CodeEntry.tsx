@@ -10,6 +10,7 @@ const MESSAGES: Record<AuthErrorCode, string> = {
   busy: "Too many tries just now. Wait a minute, then try again.",
   undeliverable: "We couldn't email that address.",
   not_configured: "Sign-in isn't set up on this server yet.",
+  unavailable: "Your code was right, but Docket couldn't finish signing you in. Send yourself a new code and try again in a few minutes.",
   failed: "We couldn't check that code. Try again.",
 };
 
@@ -19,7 +20,7 @@ interface CodeEntryProps {
   onVerified: (result: { name: string; next: string }) => void;
 }
 
-/** Six-digit email code: confirm, or send a fresh one. */
+/** The emailed code (Cognito sends 6 digits to confirm a new account and 8 to sign in): confirm, or send a fresh one. */
 export function CodeEntry({ email, intro, onVerified }: CodeEntryProps) {
   const id = useId();
   const inputRef = useRef<HTMLInputElement>(null);
@@ -87,7 +88,7 @@ export function CodeEntry({ email, intro, onVerified }: CodeEntryProps) {
     <form onSubmit={submit} noValidate>
       {intro ? <p className="text-base text-ink-soft">{intro}</p> : null}
       <label htmlFor={id} className="label mt-4">
-        6-digit code
+        Code from the email
       </label>
       <div className="flex flex-col gap-3 sm:flex-row">
         <input

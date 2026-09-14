@@ -143,7 +143,7 @@ export function JoinFlow({ group, member }: { group: JoinGroup; member: SignedIn
               email={joined.email}
               intro={
                 <>
-                  We emailed a 6-digit code to <span className="font-semibold text-ink">{joined.email}</span>. Enter it to confirm your
+                  We emailed a code to<span className="font-semibold text-ink">{joined.email}</span>. Enter it to confirm your
                   email so you can vote and volunteer. You can read everything below either way.
                 </>
               }
@@ -244,7 +244,7 @@ export function JoinFlow({ group, member }: { group: JoinGroup; member: SignedIn
                 className="field rounded-xl"
               />
               <p id="join-email-hint" className="mt-2 text-sm text-ink-soft">
-                We&apos;ll email a 6-digit code so you can vote later. You can read everything without it.
+                We&apos;ll email a code so you can vote later. You can read everything without it.
               </p>
               <FieldError id="join-email-error" message={errors.email} />
             </div>
