@@ -95,8 +95,10 @@ describe("neighborhood areas", () => {
     expect(pacific!.bounds.west).toBeGreaterThanOrEqual(FREMONT.bounds.west);
   });
 
-  it("maps every sample group to its home neighborhood", () => {
+  it("maps neighborhood groups, and old sample group slugs, to their neighborhood", () => {
     for (const group of GROUP_SEEDS) expect(neighborhoodForGroups([group.slug]), group.slug).toBeDefined();
+    expect(neighborhoodForGroups(["weibel"])?.slug).toBe("weibel");
+    expect(neighborhoodForGroups(["niles"])?.slug).toBe("niles");
     expect(neighborhoodForGroups(["niles-neighbors"])?.slug).toBe("niles");
     expect(neighborhoodForGroups(["unknown", "irvington-commons"])?.slug).toBe("irvington");
     expect(neighborhoodForGroups([])).toBeUndefined();

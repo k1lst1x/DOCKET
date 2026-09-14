@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { DEFAULT_NEWS_QUERY, filterNews, paramsToQuery, queryToParams, relevance, searchTerms, type NewsQuery } from "./filter";
+import { aboutNeighborhood, DEFAULT_NEWS_QUERY, filterNews, newsHrefFor, paramsToQuery, queryToParams, relevance, searchTerms, type NewsQuery } from "./filter";
 import type { NewsItem } from "./types";
 
 const NOW = Date.parse("2026-09-13T22:00:00Z");
@@ -68,6 +68,21 @@ describe("filterNews", () => {
     expect(relevance(booms, ["booms"])).toBe(3);
     expect(relevance(booms, ["fireworks"])).toBe(1);
     expect(relevance(booms, ["missing"])).toBe(-1);
+  });
+});
+
+describe("neighborhood news", () => {
+  it("links districts to their filter and other neighborhoods to a name search", () => {
+    expect(newsHrefFor("Mission San Jose")).toBe("/news?area=mission-san-jose");
+    expect(newsHrefFor("Kimber/Gomes")).toBe("/news?q=Kimber%2FGomes");
+  });
+
+  it("matches stories tagged with a neighborhood or naming it", () => {
+    expect(aboutNeighborhood(ITEMS[0], "Niles")).toBe(true);
+    expect(aboutNeighborhood(item("w", { title: "Weibel school fundraiser" }), "Weibel")).toBe(true);
+    expect(aboutNeighborhood(item("w2", { title: "Weibelstrasse in Berlin" }), "Weibel")).toBe(false);
+    expect(aboutNeighborhood(item("g", { title: "Council meets", snippet: "Glenmoor residents asked for a crosswalk." }), "Glenmoor")).toBe(true);
+    expect(aboutNeighborhood(item("x", { title: "BART delays" }), "Weibel")).toBe(false);
   });
 });
 

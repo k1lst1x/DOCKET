@@ -1,5 +1,16 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { firstSentence, getLiveGroup, getLiveWeeklyStats, hasDatabase, listLiveGroups, toOutcome, toWatchItem, type IssueItemRow, type OutcomeDbRow } from "./live-data";
+import {
+  firstSentence,
+  getLiveGroup,
+  getLiveWeeklyStats,
+  hasDatabase,
+  itemScope,
+  listLiveGroups,
+  toOutcome,
+  toWatchItem,
+  type IssueItemRow,
+  type OutcomeDbRow,
+} from "./live-data";
 
 vi.mock("./db", () => ({
   db: () => {
@@ -10,21 +21,22 @@ vi.mock("./db", () => ({
 // The saved sample content (lib/data.ts reads fixtures through the "@/" alias, which tests don't resolve).
 vi.mock("./data", () => {
   const group = {
-    id: "g1",
-    slug: "niles-neighbors",
-    name: "Niles Neighbors",
+    id: "grp_niles",
+    slug: "niles",
+    neighborhoodSlug: "niles",
+    name: "Niles",
     district: "Niles",
-    description: "Sample group",
+    description: "Neighbors in Niles",
     boundary: [],
-    memberCount: 214,
+    memberCount: 0,
     watchlist: [],
-    foundedOn: "2024-01-01",
+    foundedOn: "2026-09-13",
     lastActivityAt: "2026-09-01T00:00:00Z",
-    meets: "monthly",
+    meets: null,
   };
   const sampleItem = { id: "i1", issueId: "sample-cc-1", ref: "CC-1", title: "Sample item", deadline: "2030-01-01T00:00:00Z", deadlineKind: "Comments due" };
   return {
-    getGroup: (slug: string) => (slug === group.slug ? { ...group, items: [sampleItem], outcomes: [] } : null),
+    getGroup: (slug: string) => (slug === group.slug || slug === "niles-neighbors" ? { ...group, items: [sampleItem], citywideItems: [], outcomes: [] } : null),
     listGroups: () => [{ ...group, urgentItem: { ref: "CC-1", title: "Sample item", deadline: "2030-01-01T00:00:00Z", deadlineKind: "Comments due" } }],
     getWeeklyStats: () => ({ source: "sample", pagesRead: 10, documentsRead: 2, itemsSurfaced: 1, neighborhoods: 1, windowStart: "", windowEnd: "", isCurrentWeek: true }),
   };
@@ -47,10 +59,10 @@ const ROW: IssueItemRow = {
 
 describe("group page cards from real issues", () => {
   it("use the meeting time when there's no separate comment deadline", () => {
-    expect(toWatchItem(ROW, "niles-neighbors")).toMatchObject({
+    expect(toWatchItem(ROW, "niles")).toMatchObject({
       id: "za-2026-08-18-2",
       issueId: "za-2026-08-18-2",
-      groupSlug: "niles-neighbors",
+      groupSlug: "niles",
       deadline: "2026-09-22T17:00:00.000Z",
       meetingAt: "2026-09-22T17:00:00.000Z",
       deadlineKind: "Meeting",
@@ -72,6 +84,18 @@ describe("group page cards from real issues", () => {
     expect(firstSentence("No period here")).toBe("No period here");
     expect(firstSentence("x".repeat(400), 20)).toHaveLength(20);
     expect(firstSentence(null)).toBe("");
+  });
+});
+
+describe("which group page an item belongs on", () => {
+  const weibel = { slug: "weibel", neighborhoodSlug: "weibel" };
+  it("puts items on the neighborhood they name, citywide items everywhere, and others nowhere", () => {
+    expect(itemScope({ group_slug: null, neighborhood_slugs: ["weibel"] }, weibel)).toBe("group");
+    expect(itemScope({ group_slug: "weibel", neighborhood_slugs: [] }, weibel)).toBe("group");
+    expect(itemScope({ group_slug: null, neighborhood_slugs: [] }, weibel)).toBe("citywide");
+    expect(itemScope({ group_slug: null, neighborhood_slugs: null }, weibel)).toBe("citywide");
+    expect(itemScope({ group_slug: null, neighborhood_slugs: ["niles"] }, weibel)).toBeNull();
+    expect(itemScope({ group_slug: "niles", neighborhood_slugs: [] }, weibel)).toBeNull();
   });
 });
 
@@ -122,18 +146,19 @@ describe("without a database", () => {
   it("keeps the saved sample content for the static preview", async () => {
     delete process.env.DSQL_ENDPOINT;
     expect(hasDatabase()).toBe(false);
-    const group = await getLiveGroup("niles-neighbors");
-    expect(group).toMatchObject({ slug: "niles-neighbors", live: false });
+    expect(await getLiveGroup("niles")).toMatchObject({ slug: "niles", live: false });
     expect(await getLiveGroup("no-such-group")).toBeNull();
-    expect((await listLiveGroups()).length).toBeGreaterThan(0);
+    const list = await listLiveGroups();
+    expect(list.groups.length).toBeGreaterThan(0);
+    expect(list.citywideCount).toBe(0);
     expect((await getLiveWeeklyStats())?.source).toBe("sample");
   });
 
   it("shows no sample items when the database is configured but unreachable", async () => {
     process.env.DSQL_ENDPOINT = "example.dsql.us-west-2.on.aws";
     const error = vi.spyOn(console, "error").mockImplementation(() => {});
-    expect(await getLiveGroup("niles-neighbors")).toMatchObject({ items: [], outcomes: [], live: false });
-    expect((await listLiveGroups()).every((g) => g.urgentItem === null)).toBe(true);
+    expect(await getLiveGroup("niles")).toMatchObject({ items: [], citywideItems: [], outcomes: [], live: false });
+    expect((await listLiveGroups()).groups.every((g) => g.urgentItem === null)).toBe(true);
     expect(await getLiveWeeklyStats()).toBeNull();
     error.mockRestore();
   });

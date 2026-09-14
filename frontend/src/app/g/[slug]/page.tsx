@@ -12,7 +12,9 @@ import { getSession } from "@/lib/auth";
 import { getGroup } from "@/lib/data";
 import { getLiveGroup } from "@/lib/live-data";
 import { formatDate, formatNumber } from "@/lib/format";
+import { currentGroupSlug } from "@/lib/data";
 import { listMemberships } from "@/lib/members";
+import { newsHrefFor } from "@/lib/news/filter";
 import type { Outcome } from "@/lib/types";
 
 // Reads the signed-in member to show "You're a member" instead of Join.
@@ -36,9 +38,9 @@ async function membershipFor(slug: string): Promise<boolean> {
   const session = await getSession();
   if (!session) return false;
   try {
-    return (await listMemberships(session.memberId)).some((g) => g.slug === slug);
+    return (await listMemberships(session.memberId)).some((g) => currentGroupSlug(g.slug) === slug);
   } catch {
-    return session.groups.some((g) => g.slug === slug);
+    return session.groups.some((g) => currentGroupSlug(g.slug) === slug);
   }
 }
 
@@ -61,6 +63,7 @@ export default async function GroupPage({ params }: { params: Params }) {
             `Fremont neighborhood: ${group.district}`,
             group.description,
             ...group.items.slice(0, 5).map((item) => `Watching: ${item.title} (${item.deadlineKind} ${item.deadline.slice(0, 10)})`),
+            ...group.citywideItems.slice(0, 5).map((item) => `Citywide item: ${item.title} (${item.deadlineKind} ${item.deadline.slice(0, 10)})`),
             ...group.outcomes.slice(0, 2).map((outcome) => `Recently decided: ${outcome.title} (${outcome.result})`),
           ],
         }}
@@ -70,14 +73,14 @@ export default async function GroupPage({ params }: { params: Params }) {
         <section aria-labelledby="group-name" className="relative">
           <div className="page grid gap-10 pb-28 pt-8 sm:pb-32 sm:pt-12 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] lg:items-center lg:gap-14">
             <div>
-              <p className="eyebrow text-ink-soft">Fremont · {group.district}</p>
+              <p className="eyebrow text-ink-soft">Fremont neighborhood group</p>
               <h1 id="group-name" className="display mt-3 text-[2.75rem] leading-[1.02] sm:text-[4rem]">
                 {group.name}
               </h1>
               <p className="mt-5 max-w-read text-lg leading-relaxed text-ink-soft sm:text-xl">{group.description}</p>
               <dl className="mt-8 grid max-w-md grid-cols-3 gap-4 border-y border-ink/20 py-5">
                 <HeroStat label="Members" value={formatNumber(group.memberCount)} />
-                <HeroStat label="Watching" value={String(group.items.length)} />
+                <HeroStat label="Watching" value={String(group.items.length + group.citywideItems.length)} />
                 <HeroStat label="Since" value={group.foundedOn.slice(0, 4)} />
               </dl>
               <div className="mt-8 flex flex-wrap items-center gap-x-5 gap-y-3">
@@ -94,11 +97,12 @@ export default async function GroupPage({ params }: { params: Params }) {
                   </Link>
                 )}
                 <span className="text-base text-ink-soft">
-                  {isMember ? "Open any item below to vote." : "Free."} Meets {group.meets}.
+                  {isMember ? "Open any item below to vote." : "Free, and no password."}
+                  {group.meets ? ` Meets ${group.meets}.` : ""}
                 </span>
               </div>
               <Link
-                href={`/news?area=${group.district.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`}
+                href={newsHrefFor(group.name)}
                 className="mt-4 inline-flex h-11 items-center gap-2 rounded-full border border-ink/25 bg-white/80 px-5 text-base font-semibold text-ink hover:bg-white"
               >
                 <span aria-hidden="true" className="relative flex h-2.5 w-2.5">
@@ -139,10 +143,23 @@ export default async function GroupPage({ params }: { params: Params }) {
               <EmptyState
                 className="mt-8"
                 headingLevel="h3"
-                headline={`Nothing on the agenda for ${group.district} right now.`}
+                headline={
+                  group.citywideItems.length ? `Nothing on the agenda just for ${group.district} right now.` : `Nothing on the agenda for ${group.district} right now.`
+                }
                 body="Docket reads every Fremont agenda as it is posted. When something touches these streets, it shows up here before the deadline to weigh in."
               />
             )}
+
+            {group.citywideItems.length ? (
+              <div className="mt-14">
+                <p className="eyebrow">Citywide</p>
+                <h3 className="display mt-2 text-[1.875rem] leading-tight sm:text-[2.25rem]">On the agenda for all of Fremont</h3>
+                <p className="mt-2 max-w-read text-base text-ink-soft">
+                  These items affect every neighborhood, so they show on every group&apos;s page. Members of any group can vote on them.
+                </p>
+                <IssueBoard items={group.citywideItems} />
+              </div>
+            ) : null}
           </div>
         </section>
 
@@ -157,7 +174,7 @@ export default async function GroupPage({ params }: { params: Params }) {
               </div>
               <p className="text-base text-ink-soft">Open a story or incident to read it here, with a link to its source</p>
             </div>
-            <GroupNews district={group.district} />
+            <GroupNews name={group.name} />
           </div>
         </section>
 

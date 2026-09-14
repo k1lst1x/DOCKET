@@ -10,6 +10,20 @@ const nextConfig: NextConfig = {
   outputFileTracingRoot: path.join(__dirname),
   // Node-only database drivers stay out of the bundler and load at runtime.
   serverExternalPackages: ["pg", "@aws/aurora-dsql-node-postgres-connector"],
+  // Groups are one per official neighborhood now; the prototype's sample group links point at their neighborhood's
+  // group (same map as LEGACY_GROUP_SLUGS in src/lib/data.ts).
+  async redirects() {
+    const legacy: Record<string, string> = {
+      "niles-neighbors": "niles",
+      "irvington-commons": "irvington",
+      "centerville-together": "centerville",
+      "warm-springs-hillside": "warm-springs",
+    };
+    return Object.entries(legacy).flatMap(([from, to]) => [
+      { source: `/g/${from}`, destination: `/g/${to}`, permanent: true },
+      { source: `/g/${from}/:path*`, destination: `/g/${to}/:path*`, permanent: true },
+    ]);
+  },
 };
 
 export default nextConfig;

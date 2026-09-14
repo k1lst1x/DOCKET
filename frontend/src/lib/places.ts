@@ -135,8 +135,9 @@ const slugOf = (name: string) => name.toLowerCase().replace(/[^a-z0-9]+/g, "-").
 /** A member's home neighborhood: the one their first group is in. */
 export function neighborhoodForGroups(groupSlugs: string[]): Area | undefined {
   for (const slug of groupSlugs) {
+    // A group's slug is its neighborhood's; old sessions may still carry a prototype sample group slug.
     const seed = GROUP_SEEDS.find((g) => g.slug === slug);
-    const area = seed ? BY_SLUG.get(slugOf(seed.district)) : undefined;
+    const area = BY_SLUG.get(seed ? slugOf(seed.district) : slug);
     if (area) return area;
   }
   return undefined;

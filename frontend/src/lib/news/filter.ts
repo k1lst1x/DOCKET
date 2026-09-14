@@ -1,3 +1,4 @@
+import { DISTRICT_ALIASES } from "./parse";
 import type { NewsCategory, NewsItem, NewsKind } from "./types";
 
 // Searching, filtering and sorting the news catalog. Pure, so it runs in the browser on every
@@ -28,6 +29,20 @@ const RANGE_MS: Record<NewsRange, number> = { day: DAY_MS, week: 7 * DAY_MS, mon
 const KIND_RANK: Record<NewsKind, number> = { article: 0, community: 1, incident: 2 };
 
 export const areaSlug = (name: string) => name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+
+/**
+ * The news page for a neighborhood: its filter when news is tagged by that area (the five historic
+ * districts), otherwise a search for the neighborhood's name.
+ */
+export const newsHrefFor = (neighborhoodName: string) =>
+  neighborhoodName in DISTRICT_ALIASES ? `/news?area=${areaSlug(neighborhoodName)}` : `/news?q=${encodeURIComponent(neighborhoodName)}`;
+
+/** True when a story is tagged with the neighborhood or names it in its headline or summary. */
+export function aboutNeighborhood(item: NewsItem, neighborhoodName: string): boolean {
+  if (item.neighborhoods.includes(neighborhoodName)) return true;
+  const escaped = neighborhoodName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return new RegExp(`(^|[^A-Za-z])${escaped}([^A-Za-z]|$)`, "i").test(`${item.title} ${item.snippet ?? ""}`);
+}
 const fold = (text: string) => text.normalize("NFKD").replace(/\p{M}/gu, "").toLowerCase();
 
 export function searchTerms(q: string): string[] {

@@ -5,12 +5,14 @@ import type { GroupDetail, GroupSummary, ItemStatus, Outcome, WatchItem, WeeklyS
 // Real Docket data for group pages, the groups list and the home page, from Aurora DSQL: agenda items the
 // agent surfaced (issues), decisions recorded in meeting minutes (agent_meeting_outcomes, written by the
 // backend) and what the agent read this week (agent_documents). Sample rows never appear here.
-// Without a database (the static GitHub Pages preview, CI builds) pages keep the saved sample content.
+// Every group is a Fremont neighborhood. An item belongs to a group when it names the group or its
+// neighborhood; an item that names neither (group_slug NULL, no neighborhoods) is citywide and shows on
+// every group page. Without a database (the static GitHub Pages preview, CI builds) pages keep the saved
+// sample content instead.
 
 export const hasDatabase = () => Boolean(process.env.DSQL_ENDPOINT?.trim());
 
 const DAY_MS = 24 * 60 * 60 * 1000;
-const slugOf = (name: string) => name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
 const iso = (value: Date | string | number | null | undefined) => (value === null || value === undefined ? null : new Date(value).toISOString());
 
 export interface IssueItemRow {
@@ -60,6 +62,14 @@ export function toWatchItem(row: IssueItemRow, groupSlug: string): WatchItem | n
     documentId: "",
     surfacedAt: iso(row.surfaced_at) ?? meetingAt,
   };
+}
+
+/** Where an item belongs: to this group (by group or neighborhood), to all of Fremont, or elsewhere. */
+export function itemScope(row: { group_slug: string | null; neighborhood_slugs: unknown }, group: { slug: string; neighborhoodSlug: string }): "group" | "citywide" | null {
+  const neighborhoods = Array.isArray(row.neighborhood_slugs) ? row.neighborhood_slugs : [];
+  if (row.group_slug === group.slug || neighborhoods.includes(group.neighborhoodSlug)) return "group";
+  if (!row.group_slug && neighborhoods.length === 0) return "citywide";
+  return null;
 }
 
 export interface OutcomeDbRow {
@@ -114,21 +124,35 @@ export function toOutcome(row: OutcomeDbRow): Outcome | null {
 
 const errorCode = (error: unknown) => (error as { code?: string } | null)?.code;
 
-async function liveItems(groupSlug: string, neighborhood: string): Promise<WatchItem[]> {
-  const { rows } = await db().query<IssueItemRow>(
-    `SELECT i.id, i.ref, i.title, i.body, i.meeting_at, i.deadline, i.deadline_kind, i.topic, i.status, i.citation, i.surfaced_at, a.summary
-     FROM issues i LEFT JOIN issue_analyses a ON a.issue_id = i.id
-     WHERE i.is_sample = false AND i.status IN ('watching', 'approved')
-       AND (i.group_slug = $1 OR $2 IN (SELECT jsonb_array_elements_text(i.neighborhood_slugs)))
-       AND coalesce(i.deadline, i.meeting_at) > now()
+type ScopedIssueRow = IssueItemRow & { group_slug: string | null; neighborhood_slugs: unknown };
+
+const OPEN_REAL_ISSUES = `SELECT i.id, i.ref, i.title, i.body, i.meeting_at, i.deadline, i.deadline_kind, i.topic, i.status, i.citation,
+         i.surfaced_at, i.group_slug, i.neighborhood_slugs, a.summary
+  FROM issues i LEFT JOIN issue_analyses a ON a.issue_id = i.id
+  WHERE i.is_sample = false AND i.status IN ('watching', 'approved') AND coalesce(i.deadline, i.meeting_at) > now()`;
+
+async function liveItems(group: { slug: string; neighborhoodSlug: string }): Promise<{ items: WatchItem[]; citywideItems: WatchItem[] }> {
+  const { rows } = await db().query<ScopedIssueRow>(
+    `${OPEN_REAL_ISSUES}
+       AND (i.group_slug = $1
+            OR $2 IN (SELECT jsonb_array_elements_text(i.neighborhood_slugs))
+            OR (i.group_slug IS NULL AND jsonb_array_length(i.neighborhood_slugs) = 0))
      ORDER BY coalesce(i.deadline, i.meeting_at)
-     LIMIT 20`,
-    [groupSlug, neighborhood],
+     LIMIT 40`,
+    [group.slug, group.neighborhoodSlug],
   );
-  return rows.flatMap((row) => toWatchItem(row, groupSlug) ?? []);
+  const items: WatchItem[] = [];
+  const citywideItems: WatchItem[] = [];
+  for (const row of rows) {
+    const scope = itemScope(row, group);
+    const item = toWatchItem(row, group.slug);
+    if (!item || !scope) continue;
+    (scope === "group" ? items : citywideItems).push(item);
+  }
+  return { items, citywideItems };
 }
 
-async function liveOutcomes(groupSlug: string, neighborhood: string): Promise<Outcome[]> {
+async function liveOutcomes(group: { slug: string; neighborhoodSlug: string }): Promise<Outcome[]> {
   try {
     const { rows } = await db().query<OutcomeDbRow>(
       `SELECT o.id, o.body, to_char(o.meeting_date, 'YYYY-MM-DD') AS meeting_date, o.item_label, o.title, o.result, o.action_text, o.vote, o.source_url
@@ -136,10 +160,12 @@ async function liveOutcomes(groupSlug: string, neighborhood: string): Promise<Ou
        WHERE (i.is_sample IS NOT TRUE)
          AND (i.group_slug = $1
               OR $2 IN (SELECT jsonb_array_elements_text(o.neighborhood_slugs))
-              OR $2 IN (SELECT jsonb_array_elements_text(i.neighborhood_slugs)))
+              OR $2 IN (SELECT jsonb_array_elements_text(i.neighborhood_slugs))
+              OR (jsonb_array_length(o.neighborhood_slugs) = 0
+                  AND (i.id IS NULL OR (i.group_slug IS NULL AND jsonb_array_length(i.neighborhood_slugs) = 0))))
        ORDER BY o.meeting_date DESC
        LIMIT 10`,
-      [groupSlug, neighborhood],
+      [group.slug, group.neighborhoodSlug],
     );
     return rows.flatMap((row) => toOutcome(row) ?? []);
   } catch (error) {
@@ -162,37 +188,55 @@ export type LiveGroup = GroupDetail & {
   live: boolean;
 };
 
-/** A group with its real open items, recent decisions and member count. */
+/** A group with its real open items (its own and citywide), recent decisions and member count. */
 export async function getLiveGroup(slug: string, now = Date.now()): Promise<LiveGroup | null> {
   const group = getGroup(slug, now);
   if (!group) return null;
   if (!hasDatabase()) return { ...group, live: false };
-  const neighborhood = slugOf(group.district);
   try {
-    const [items, outcomes, memberCount] = await Promise.all([liveItems(slug, neighborhood), liveOutcomes(slug, neighborhood), liveMemberCount(slug)]);
-    return { ...group, items, outcomes, memberCount, live: true };
+    const [{ items, citywideItems }, outcomes, memberCount] = await Promise.all([liveItems(group), liveOutcomes(group), liveMemberCount(group.slug)]);
+    return { ...group, items, citywideItems, outcomes, memberCount, live: true };
   } catch (error) {
     console.error("[docket] group data unavailable", error);
     // No sample items on the live site, even when the database is briefly unreachable.
-    return { ...group, items: [], outcomes: [], live: false };
+    return { ...group, items: [], citywideItems: [], outcomes: [], live: false };
   }
 }
 
-/** Every group, with its real member count and most urgent open item. */
-export async function listLiveGroups(now = Date.now()): Promise<GroupSummary[]> {
+export interface LiveGroupList {
+  groups: GroupSummary[];
+  /** Open items for all of Fremont, which every group sees. */
+  citywideCount: number;
+}
+
+/** Every group with its real member count and most urgent open item of its own, most members first. */
+export async function listLiveGroups(now = Date.now()): Promise<LiveGroupList> {
   const groups = listGroups(now);
-  if (!hasDatabase()) return groups;
-  const details = await Promise.all(groups.map((g) => getLiveGroup(g.slug, now)));
-  return groups.map((group, i) => {
-    const detail = details[i];
-    if (!detail?.live) return { ...group, urgentItem: null };
-    const urgent = detail.items[0];
-    return {
-      ...group,
-      memberCount: detail.memberCount,
-      urgentItem: urgent ? { ref: urgent.ref, title: urgent.title, deadline: urgent.deadline, deadlineKind: urgent.deadlineKind } : null,
-    };
-  });
+  if (!hasDatabase()) return { groups, citywideCount: 0 };
+  try {
+    const [members, issues] = await Promise.all([
+      db().query<{ group_slug: string; n: number }>(
+        "SELECT ms.group_slug, count(*)::int AS n FROM memberships ms JOIN members m ON m.id = ms.member_id WHERE m.is_sample = false GROUP BY ms.group_slug",
+      ),
+      db().query<ScopedIssueRow>(`${OPEN_REAL_ISSUES} ORDER BY coalesce(i.deadline, i.meeting_at) LIMIT 500`),
+    ]);
+    const counts = new Map(members.rows.map((r) => [r.group_slug, Number(r.n)]));
+    const citywideCount = issues.rows.filter((row) => !row.group_slug && (!Array.isArray(row.neighborhood_slugs) || row.neighborhood_slugs.length === 0)).length;
+    const list = groups.map((group) => {
+      const own = issues.rows.find((row) => itemScope(row, { slug: group.slug, neighborhoodSlug: group.slug }) === "group");
+      const urgent = own ? toWatchItem(own, group.slug) : null;
+      return {
+        ...group,
+        memberCount: counts.get(group.slug) ?? 0,
+        urgentItem: urgent ? { ref: urgent.ref, title: urgent.title, deadline: urgent.deadline, deadlineKind: urgent.deadlineKind } : null,
+      };
+    });
+    list.sort((a, b) => b.memberCount - a.memberCount || Number(Boolean(b.urgentItem)) - Number(Boolean(a.urgentItem)) || a.name.localeCompare(b.name));
+    return { groups: list, citywideCount };
+  } catch (error) {
+    console.error("[docket] group list unavailable", error);
+    return { groups: groups.map((g) => ({ ...g, memberCount: 0, urgentItem: null })), citywideCount: 0 };
+  }
 }
 
 /** What the agent read and surfaced in the last seven days. Null when there's nothing to report or no data. */

@@ -53,8 +53,11 @@ export interface Outcome {
 
 export interface Group {
   id: string;
+  /** Same as the neighborhood's slug. */
   slug: string;
+  neighborhoodSlug: string;
   name: string;
+  /** The neighborhood's name, for display. */
   district: string;
   description: string;
   boundary: LngLat[];
@@ -62,11 +65,15 @@ export interface Group {
   watchlist: string[];
   foundedOn: string;
   lastActivityAt: string;
-  meets: string;
+  /** When the group meets, once members set it. */
+  meets: string | null;
 }
 
 export interface GroupDetail extends Group {
+  /** Open items for this neighborhood. */
   items: WatchItem[];
+  /** Open items for all of Fremont, shown on every group page. */
+  citywideItems: WatchItem[];
   outcomes: Outcome[];
 }
 

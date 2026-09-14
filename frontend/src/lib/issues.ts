@@ -5,7 +5,8 @@ import { moderateText } from "./moderation";
 // Issue pages: AI analysis, polls, votes and reviews, all in Aurora DSQL.
 // Rules:
 //   * Members vote when they belong to the issue's group, or to a group whose
-//     neighborhood the issue affects. One vote per poll per member (changeable).
+//     neighborhood the issue affects; on citywide issues, members of any group vote.
+//     One vote per poll per member (changeable).
 //   * "pass" gives up the vote on the stance poll but still counts as taking part.
 //   * Reviews are readable and writable only after voting or passing; the
 //     database enforces this with a foreign key from reviews to votes.
@@ -82,10 +83,12 @@ async function memberGroups(query: (sql: string, params: unknown[]) => Promise<{
 }
 
 function eligibleGroup(groups: MemberGroup[], issue: { group_slug: string | null; neighborhood_slugs: string[] }) {
+  // A citywide item (no group, no neighborhoods) affects everyone: members of any group can vote.
+  const citywide = !issue.group_slug && (issue.neighborhood_slugs ?? []).length === 0;
   return (
     groups.find((g) => g.slug === issue.group_slug) ??
-    groups.find((g) => issue.neighborhood_slugs.includes(g.neighborhood_slug)) ??
-    null
+    groups.find((g) => (issue.neighborhood_slugs ?? []).includes(g.neighborhood_slug)) ??
+    (citywide ? (groups[0] ?? null) : null)
   );
 }
 

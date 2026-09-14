@@ -68,7 +68,9 @@ try {
   await upsertRows(
     "groups (slug, name, neighborhood_slug, description, watchlist, meets, founded_on, is_sample)",
     "slug text, name text, neighborhood_slug text, description text, watchlist jsonb, meets text, founded_on date, is_sample boolean",
-    GROUP_SEEDS.map((g) => ({
+    // Real neighborhood groups (migration 0006) use the neighborhood's slug; never overwrite one with a
+    // sample seed that happens to share it (mission-san-jose).
+    GROUP_SEEDS.filter((g) => g.slug !== slugOf(g.district)).map((g) => ({
       slug: g.slug,
       name: g.name,
       neighborhood_slug: slugOf(g.district),

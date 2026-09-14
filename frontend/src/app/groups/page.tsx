@@ -3,7 +3,7 @@ import Link from "next/link";
 import { Deadline } from "@/components/Deadline";
 import { EmptyState } from "@/components/EmptyState";
 import { SiteFooter, SiteHeader } from "@/components/SiteHeader";
-import { formatNumber, plural, relativeSince } from "@/lib/format";
+import { formatNumber, plural } from "@/lib/format";
 import { listLiveGroups } from "@/lib/live-data";
 
 export const metadata: Metadata = {
@@ -14,7 +14,7 @@ export const metadata: Metadata = {
 export const revalidate = 300;
 
 export default async function GroupsPage() {
-  const groups = await listLiveGroups();
+  const { groups, citywideCount } = await listLiveGroups();
 
   return (
     <>
@@ -25,8 +25,8 @@ export default async function GroupsPage() {
             <p className="eyebrow">Directory</p>
             <h1 className="display mt-2 text-[2.5rem] leading-tight sm:text-[3.5rem]">Neighborhood groups in Fremont</h1>
             <p className="mt-3 max-w-read text-lg text-ink-soft">
-              {plural(groups.length, "group")}, most recently active first. Each one hears about the city-hall items that touch
-              its streets.
+              Every one of Fremont&apos;s {groups.length} official neighborhoods has a group. Each one hears about the city-hall items
+              that touch its streets{citywideCount ? `, plus ${plural(citywideCount, "citywide item")} open to everyone right now` : ""}.
             </p>
           </div>
         </section>
@@ -47,8 +47,6 @@ export default async function GroupsPage() {
                       <span>
                         <span className="font-mono text-ink">{formatNumber(g.memberCount)}</span> members
                       </span>
-                      <span>{g.district}</span>
-                      <span>Active {relativeSince(g.lastActivityAt)}</span>
                     </p>
                   </div>
                   <div className="md:border-l md:border-rule md:pl-8">

@@ -3,18 +3,19 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { timeAgo } from "@/components/places/LivePanel";
-import { areaSlug, DEFAULT_NEWS_QUERY, filterNews } from "@/lib/news/filter";
+import { aboutNeighborhood, DEFAULT_NEWS_QUERY, filterNews, newsHrefFor } from "@/lib/news/filter";
 import { alertToNewsItem } from "@/lib/news/incidents";
 import { newsCategoryInfo, type NewsItem } from "@/lib/news/types";
 import { NewsDialog } from "./NewsDialog";
 import { useNewsCatalog } from "./useNewsCatalog";
 
-// A group page's news: the latest stories that name its neighborhood, and live incidents and alerts
-// there, each opening in a popup with a link to its source. Refreshes every minute.
+// A group page's news: the latest stories tagged with or naming its neighborhood, and live incidents
+// inside it plus Fremont's weather and disaster alerts, each opening in a popup with a link to its
+// source. Refreshes every minute.
 
 const SHOWN = 6;
 
-export function GroupNews({ district }: { district: string }) {
+export function GroupNews({ name }: { name: string }) {
   const { catalog, status, preview } = useNewsCatalog();
   const [now, setNow] = useState(() => Date.now());
   const [openItem, setOpenItem] = useState<NewsItem | null>(null);
@@ -24,10 +25,12 @@ export function GroupNews({ district }: { district: string }) {
     return () => window.clearInterval(timer);
   }, []);
 
-  const slug = areaSlug(district);
-  const local = useMemo(() => filterNews(catalog?.items ?? [], { ...DEFAULT_NEWS_QUERY, area: slug }, now), [catalog, slug, now]);
+  const local = useMemo(() => filterNews(catalog?.items ?? [], DEFAULT_NEWS_QUERY, now).filter((item) => aboutNeighborhood(item, name)), [catalog, name, now]);
   const stories = useMemo(() => local.filter((i) => i.kind !== "incident"), [local]);
-  const incidents = useMemo(() => [...(catalog?.alerts ?? []).map(alertToNewsItem), ...local.filter((i) => i.kind === "incident")], [catalog, local]);
+  const incidents = useMemo(
+    () => [...(catalog?.alerts ?? []).map(alertToNewsItem), ...local.filter((i) => i.kind === "incident" && i.neighborhoods.includes(name))],
+    [catalog, local, name],
+  );
   const pool = useMemo(() => [...stories, ...incidents], [stories, incidents]);
   const loading = status === "loading" && !catalog;
 
@@ -43,25 +46,18 @@ export function GroupNews({ district }: { district: string }) {
 
       <div className="mt-3 grid gap-4 lg:grid-cols-2">
         <Column
-          title={`Latest ${district} news`}
+          title={`Latest ${name} news`}
           items={stories}
           loading={loading}
           now={now}
           onOpen={setOpenItem}
-          empty={preview ? "News articles load on the full Docket site." : `No recent stories name ${district}. Citywide stories are on the News page.`}
+          empty={preview ? "News articles load on the full Docket site." : `No recent stories name ${name}. Citywide stories are on the News page.`}
         />
-        <Column
-          title="Live incidents and alerts"
-          items={incidents}
-          loading={loading}
-          now={now}
-          onOpen={setOpenItem}
-          empty={`No live incidents in ${district} right now.`}
-        />
+        <Column title="Live incidents and alerts" items={incidents} loading={loading} now={now} onOpen={setOpenItem} empty={`No live incidents in ${name} right now.`} />
       </div>
 
-      <Link href={`/news?area=${slug}`} className="btn btn-secondary mt-5 h-11 rounded-full px-5">
-        All {district} news and filters
+      <Link href={newsHrefFor(name)} className="btn btn-secondary mt-5 h-11 rounded-full px-5">
+        More {name} news
       </Link>
 
       <NewsDialog item={openItem} onClose={() => setOpenItem(null)} pool={pool} onOpenItem={setOpenItem} />

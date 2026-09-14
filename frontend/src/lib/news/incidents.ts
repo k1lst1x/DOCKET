@@ -1,12 +1,10 @@
 import type { LiveAlert, LiveIncident } from "../live/types";
 import { neighborhoodAt } from "../places";
-import { DISTRICT_ALIASES } from "./parse";
 import type { NewsCategory, NewsItem } from "./types";
 
 // Live incidents (CHP, closures, outages, wildfires, earthquakes) as news items, so the news page
-// can list, search and filter them alongside articles.
-
-const DISTRICTS = new Set(Object.keys(DISTRICT_ALIASES));
+// can list, search and filter them alongside articles. Each is tagged with the Fremont neighborhood
+// it's in (any of the 32), so every neighborhood group page can show its own incidents.
 
 const CATEGORY: Record<LiveIncident["kind"], NewsCategory> = {
   traffic: "traffic",
@@ -29,7 +27,7 @@ export function incidentToNewsItem(incident: LiveIncident): NewsItem {
     publishedAt: incident.startedAt,
     snippet: incident.subtitle,
     category: CATEGORY[incident.kind],
-    neighborhoods: neighborhood && DISTRICTS.has(neighborhood) ? [neighborhood] : [],
+    neighborhoods: neighborhood ? [neighborhood] : [],
     kind: "incident",
     severity: incident.severity,
     incident: { kind: incident.kind, lat: incident.lat, lng: incident.lng, updatedAt: incident.updatedAt, endsAt: incident.endsAt, magnitude: incident.magnitude },
