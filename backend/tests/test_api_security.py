@@ -44,6 +44,16 @@ class PipelineAuthorizationTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         generate.assert_awaited_once_with("Budget", "summary", None, crawl=False)
 
+    def test_generate_rejects_a_whitespace_only_topic_before_running_the_graph(self):
+        with patch("api.main.run_generation", new=AsyncMock()) as generate:
+            response = self.client.post(
+                "/generate",
+                json={"topic": "   ", "kind": "summary"},
+                headers={"Authorization": "Bearer test-operator-token"},
+            )
+        self.assertEqual(response.status_code, 422)
+        generate.assert_not_awaited()
+
     def test_ingest_reaches_runner_with_valid_operator_token(self):
         with patch("api.main.run_ingest", return_value={"run_id": "run-1", "counts": {}}) as ingest:
             response = self.client.post(
@@ -53,6 +63,16 @@ class PipelineAuthorizationTests(unittest.TestCase):
             )
         self.assertEqual(response.status_code, 200)
         ingest.assert_called_once_with(["fremont"], 2, 7)
+
+    def test_ingest_rejects_blank_source_ids_before_running_the_subprocess(self):
+        with patch("api.main.run_ingest") as ingest:
+            response = self.client.post(
+                "/ingest/run",
+                json={"sources": ["  "], "max_docs": 2, "lookback_days": 7},
+                headers={"Authorization": "Bearer test-operator-token"},
+            )
+        self.assertEqual(response.status_code, 422)
+        ingest.assert_not_called()
 
 
 class AgentCorePolicyTests(unittest.TestCase):
