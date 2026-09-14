@@ -33,6 +33,7 @@ from core import live_tools, retrieval, settings
 from core.bedrock_session import bedrock_session
 from core.citations import STRONG_FACT_KINDS, enforce, extract_facts, split_sentences, supports_any
 from core.db import connect, run_with_retry
+from core.embed import embed_text
 from core.geo import geocode, neighborhood_at
 
 log = logging.getLogger("docket.chat")
@@ -762,7 +763,9 @@ def recite_request(removed: list[dict]) -> str:
     )
 
 
+@cache
 def _model() -> BedrockModel:
+    """One model client per process, shared by every turn; building a boto3 client each turn costs time."""
     return BedrockModel(model_id=settings.BEDROCK_MODEL_ID, boto_session=bedrock_session())
 
 
@@ -770,21 +773,39 @@ def is_general(raw_answer: str) -> bool:
     return bool(GENERAL_TAG.match(raw_answer.replace("*", "").strip()))
 
 
-async def answer(
-    question: str,
-    session_id: str | None = None,
-    user_id: str | None = None,
-    group_id: str | None = None,
-    progress: Callable[[str], None] | None = None,
+def warm() -> None:
+    """Open the database connection and load what a first question needs (sources, keyword index,
+    neighborhoods, model and embedding clients), so the first resident in a new runtime session doesn't wait
+    for them. Failures are only logged: the turn that needs something loads it again."""
+    started = time.monotonic()
+    steps: dict[str, Callable[[], object]] = {
+        "database": lambda: retrieval._query("SELECT 1"),
+        "sources": _searched_sources,
+        "neighborhoods": live_tools.neighborhoods,
+        "model client": _model,
+        "embeddings": lambda: embed_text("Fremont"),
+        "vector index client": retrieval.vector_store,
+        "keyword index": retrieval.warm_keyword_index,  # last: it reads every chunk
+    }
+    for name, step in steps.items():
+        try:
+            step()
+        except Exception:
+            log.warning("chat warm-up step failed: %s", name, exc_info=True)
+    log.info("chat warm-up finished in %.1fs", time.monotonic() - started)
+
+
+async def _run_turn(
+    question: str, session_id: str | None, user_id: str | None, progress: Callable[[str], None] | None
 ) -> ChatResponse:
-    question = question.strip()[:MAX_QUESTION_CHARS]
-    session = resolve_session(session_id, user_id)
+    """One checked answer, not saved yet. Database work runs in worker threads, so progress keeps streaming."""
+    session, history = await asyncio.to_thread(open_session, session_id, user_id)
     turn = TurnEvidence(progress)
     agent = Agent(
         model=_model(),
         system_prompt=system_prompt(),
         tools=build_tools(turn),
-        messages=load_history(session),
+        messages=history,
         hooks=[RetrievalRecorder(turn)],
         callback_handler=None,
     )
@@ -796,14 +817,14 @@ async def answer(
         log.warning("general-knowledge reply to a local question; asking for a cited answer")
         raw = final_text(await agent.invoke_async(GROUNDED_REQUEST))
     turn.report("Checking every fact against its source")
-    response = finalize(question, raw, turn)
+    response = await asyncio.to_thread(finalize, question, raw, turn)
     if response.refused and response.removed_sentences:
         # Nothing survived enforcement, usually because a fact was cited to the wrong evidence number or
         # facts from two documents were merged. Ask once to re-cite from the same evidence; the retry goes
         # through the same enforcement, so a wrong answer can still only become a refusal.
         first_removed = response.removed_sentences
         retry = await agent.invoke_async(recite_request(first_removed))
-        response = finalize(question, final_text(retry), turn)
+        response = await asyncio.to_thread(finalize, question, final_text(retry), turn)
         response.removed_sentences = first_removed + response.removed_sentences
         log.warning("chat answer re-cited after enforcement removed everything; refused=%s", response.refused)
     response.session_id = session
@@ -811,7 +832,19 @@ async def answer(
         log.warning(
             "chat answer had %d sentence(s) removed by citation enforcement", len(response.removed_sentences)
         )
-    persist_turn(session, user_id, group_id, question, response)
+    return response
+
+
+async def answer(
+    question: str,
+    session_id: str | None = None,
+    user_id: str | None = None,
+    group_id: str | None = None,
+    progress: Callable[[str], None] | None = None,
+) -> ChatResponse:
+    question = question.strip()[:MAX_QUESTION_CHARS]
+    response = await _run_turn(question, session_id, user_id, progress)
+    await asyncio.to_thread(persist_turn, response.session_id, user_id, group_id, question, response)
     return response
 
 
@@ -821,8 +854,10 @@ async def stream_answer(
     """Status events while the agent works, then the checked answer in small pieces, then a final event.
 
     Progress is streamed live (searches, address lookups, citation checks). Nothing the model writes is
-    streamed before enforcement has run over the whole answer.
+    streamed before enforcement has run over the whole answer. The answer goes out as soon as it is checked;
+    saving it to the chat history happens in the background.
     """
+    question = question.strip()[:MAX_QUESTION_CHARS]
     loop = asyncio.get_running_loop()
     queue: asyncio.Queue[str] = asyncio.Queue()
 
@@ -830,17 +865,31 @@ async def stream_answer(
         loop.call_soon_threadsafe(queue.put_nowait, message)
 
     yield {"type": "status", "message": "Reading your question"}
-    task = asyncio.create_task(answer(question, session_id, user_id, group_id, progress=progress))
+    task = asyncio.create_task(_run_turn(question, session_id, user_id, progress))
     last = None
-    while not task.done() or not queue.empty():
-        try:
-            message = await asyncio.wait_for(queue.get(), timeout=0.25)
-        except TimeoutError:
-            continue
+    getter: asyncio.Future | None = None
+    try:
+        # Wake on whichever comes first, progress or the finished answer, so the answer never sits out a
+        # polling interval.
+        while not task.done():
+            getter = getter or asyncio.ensure_future(queue.get())
+            done, _ = await asyncio.wait({getter, task}, return_when=asyncio.FIRST_COMPLETED)
+            if getter in done:
+                message, getter = getter.result(), None
+                if message != last:
+                    last = message
+                    yield {"type": "status", "message": message}
+    finally:
+        if getter is not None:
+            getter.cancel()  # an unfinished get has taken nothing from the queue
+    while not queue.empty():
+        message = queue.get_nowait()
         if message != last:
             last = message
             yield {"type": "status", "message": message}
     response = task.result()
+    # Scheduled before the answer is sent, so the turn is saved even if the reader disconnects.
+    save_turn_in_background(response.session_id, user_id, group_id, question, response)
     words = response.answer.split(" ")
     for start in range(0, len(words), 8):
         piece = " ".join(words[start : start + 8])
