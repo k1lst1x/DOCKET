@@ -6,7 +6,9 @@ import { formatMonthDay, plural } from "@/lib/format";
 import { getLiveWeeklyStats } from "@/lib/live-data";
 import type { WeeklyStats } from "@/lib/types";
 
-export const revalidate = 300;
+// Rendered per request: on Amplify, ISR regeneration runs after the response and its database reads time
+// out when Lambda freezes (x-nextjs-cache stays STALE), so the reading stat never appeared.
+export const dynamic = "force-dynamic";
 
 // Home: the neighborhood feed, with finding your group and the rest of Docket alongside.
 export default async function Home() {

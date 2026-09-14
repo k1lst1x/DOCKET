@@ -30,11 +30,9 @@ await writeFile(path.join(stage, 'next.config.mjs'), `export default ${JSON.stri
   output: 'export', basePath, trailingSlash: true, poweredByHeader: false,
   images: { unoptimized: true },
 })};\n`);
-for (const name of ['app/page.tsx', 'groups/page.tsx']) {
-  await replace(`src/app/${name}`, 'export const revalidate = 300;', 'export const dynamic = "force-static";');
-}
-// Group and join pages read the session to show member state; Pages has no session.
-for (const name of ['g/[slug]/page.tsx', 'g/[slug]/join/page.tsx']) {
+// Group and join pages read the session to show member state; the directory, the feed's reading stat and
+// insights read the database per request. Pages has neither a session nor a database.
+for (const name of ['g/[slug]/page.tsx', 'g/[slug]/join/page.tsx', 'groups/page.tsx', 'app/page.tsx', 'insights/page.tsx']) {
   await replace(`src/app/${name}`, 'export const dynamic = "force-dynamic";', 'export const dynamic = "force-static";');
 }
 await replace('src/app/g/[slug]/page.tsx', 'import { getGroup } from "@/lib/data";', 'import { getGroup, listGroups } from "@/lib/data";');

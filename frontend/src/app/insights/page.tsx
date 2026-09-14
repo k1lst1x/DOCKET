@@ -19,8 +19,10 @@ export const metadata: Metadata = {
   description: "Public comments residents filed on Fremont agenda items, counted by stance and theme, with the letters behind every number.",
 };
 
-// Rebuilt every five minutes from the pipeline's tables; the static preview has no database and shows the empty state.
-export const revalidate = 300;
+// Read from the pipeline's tables per request: on Amplify, ISR regeneration runs after the response and its
+// database reads time out when Lambda freezes, so the page kept its empty build-time copy. The static preview
+// has no database and shows the empty state.
+export const dynamic = "force-dynamic";
 
 const pct = (part: number, whole: number) => (whole ? `${Math.round((part / whole) * 100)}%` : "0%");
 const meetingDay = (date: string) => formatDate(`${date}T12:00:00-07:00`);

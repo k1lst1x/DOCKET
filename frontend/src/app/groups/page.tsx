@@ -12,7 +12,9 @@ export const metadata: Metadata = {
   description: "Every Fremont neighborhood group on Docket, with the most urgent city-hall item each one is watching.",
 };
 
-export const revalidate = 300;
+// Rendered per request: on Amplify the build has no database access and ISR never replaced that copy
+// (x-nextjs-cache stayed STALE), so the directory showed no activity. Its three queries are small.
+export const dynamic = "force-dynamic";
 
 export default async function GroupsPage() {
   const [{ groups: listed, citywideCount }, counts] = await Promise.all([listLiveGroups(), getActivityCounts()]);
