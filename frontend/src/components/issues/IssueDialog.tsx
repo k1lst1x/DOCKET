@@ -160,9 +160,12 @@ export function IssueDialog({ issueId, onClose, fallbackTitle }: IssueDialogProp
       onClick={(e) => {
         if (e.target === dialogRef.current) dialogRef.current?.close();
       }}
-      className="m-0 h-[100svh] max-h-none w-full max-w-none bg-transparent p-0 backdrop:bg-[rgba(24,33,43,0.55)] backdrop:backdrop-blur-[2px] sm:m-auto sm:h-auto sm:max-h-[92svh] sm:w-[min(66rem,calc(100vw-3rem))] sm:rounded-2xl"
+      // overflow-clip: browsers give modal dialogs overflow:auto, so posting a vote or review (focus moves,
+      // forms remount) could scroll the transparent dialog itself and push the white panel out of view,
+      // leaving only a thin scrollbar strip. Only the inner content area scrolls now.
+      className="m-0 h-[100svh] max-h-none w-full max-w-none overflow-clip bg-transparent p-0 backdrop:bg-[rgba(24,33,43,0.55)] backdrop:backdrop-blur-[2px] sm:m-auto sm:h-auto sm:max-h-[92svh] sm:w-[min(66rem,calc(100vw-3rem))] sm:rounded-2xl"
     >
-      <div className="flex h-[100svh] flex-col overflow-hidden bg-canvas sm:h-auto sm:max-h-[92svh] sm:rounded-2xl">
+      <div className="flex h-[100svh] w-full flex-col overflow-hidden bg-canvas sm:h-auto sm:max-h-[92svh] sm:rounded-2xl">
         <header className="flex items-center gap-3 border-b border-rule px-4 py-2.5 sm:px-6">
           <p className="min-w-0 flex-1 truncate text-sm text-ink-muted">
             {ready ? (detail.group ? detail.group.name : "Citywide") : "Neighborhood item"}

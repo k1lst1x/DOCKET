@@ -111,7 +111,7 @@ for (const file of ['src/app/layout.tsx', 'src/app/globals.css', 'src/components
     throw new Error(`Shared design changed in Pages build: ${file}`);
   }
 }
-for (const route of ['groups', 'places', 'chat', 'find', 'start', 'g/niles-neighbors', 'g/niles-neighbors/join']) {
+for (const route of ['groups', 'places', 'chat', 'find', 'start', 'g/niles-neighbors', 'g/niles-neighbors/join', 'g/niles-neighbors/news']) {
   await readFile(path.join(output, route, 'index.html'));
 }
 for (const match of html.matchAll(/(?:src|href)="([^"?#]+)"/g)) {

@@ -80,6 +80,16 @@ export default async function GroupPage({ params }: { params: Params }) {
                   {isMember ? "Open any item below to vote." : "Free."} Meets {group.meets}.
                 </span>
               </div>
+              <Link
+                href={`/g/${group.slug}/news`}
+                className="mt-4 inline-flex h-11 items-center gap-2 rounded-full border border-ink/25 bg-white/80 px-5 text-base font-semibold text-ink hover:bg-white"
+              >
+                <span aria-hidden="true" className="relative flex h-2.5 w-2.5">
+                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#d93025] opacity-60" />
+                  <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-[#d93025]" />
+                </span>
+                {group.district} news, live
+              </Link>
             </div>
             <figure className="overflow-hidden rounded-2xl border border-ink/10 bg-white">
               <BoundaryMap label={`Map of the ${group.name} boundary`} boundary={group.boundary} className="h-72 sm:h-[26rem]" />
