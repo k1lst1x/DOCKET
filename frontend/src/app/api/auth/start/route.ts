@@ -6,7 +6,7 @@ import { allowCodeRequest } from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
 
-/** Sign-in page: email a one-time code to an existing member. */
+/** Sign-in page: email a one-time code, creating the account first for a new email. */
 export async function POST(request: Request) {
   if (!isSameOrigin(request)) return NextResponse.json({ error: "failed" }, { status: 403 });
   if (!allowCodeRequest(request)) return authFailure("busy");

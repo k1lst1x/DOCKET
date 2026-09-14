@@ -97,28 +97,25 @@ async function startSignIn(s: Settings, email: string): Promise<CodeChallenge> {
 }
 
 /**
- * Emails a code. With a name (the join form) a new account is created first;
- * an existing account falls through to a normal sign-in code.
+ * Emails a code. An email without an account gets one first (with the join
+ * form's name, if any); an existing account falls through to a sign-in code.
+ * Sign-up always runs first because the app client hides user existence: for
+ * an unknown email, InitiateAuth returns a fake challenge and no email is sent.
  */
 export async function sendCode(email: string, name: string | null): Promise<CodeChallenge> {
   const s = settings();
   try {
-    if (name) {
-      try {
-        const out = await cognito(s.region).send(
-          new SignUpCommand({
-            ClientId: s.clientId,
-            Username: email,
-            UserAttributes: [
-              { Name: "email", Value: email },
-              { Name: "name", Value: name },
-            ],
-          }),
-        );
-        return { kind: "signup", cognitoSession: out.Session ?? null };
-      } catch (error) {
-        if (errorName(error) !== "UsernameExistsException") throw error;
-      }
+    try {
+      const out = await cognito(s.region).send(
+        new SignUpCommand({
+          ClientId: s.clientId,
+          Username: email,
+          UserAttributes: [{ Name: "email", Value: email }, ...(name ? [{ Name: "name", Value: name }] : [])],
+        }),
+      );
+      return { kind: "signup", cognitoSession: out.Session ?? null };
+    } catch (error) {
+      if (errorName(error) !== "UsernameExistsException") throw error;
     }
     return await startSignIn(s, email);
   } catch (error) {
