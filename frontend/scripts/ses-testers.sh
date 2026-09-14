@@ -7,6 +7,7 @@
 #   add     emails each person the AWS verification link (they must click it), and pre-registers
 #           their Cognito account with their name so their first sign-in is a normal code
 #   list    shows each tester's SES verification status and Cognito account status
+#   resend  sends a fresh verification link (links expire after 24 hours); no emails = everyone unverified
 #   remove  stops codes to an address within 10 minutes (the Cognito account and Docket data stay)
 #
 # The list lives in SES, not in the repo, so nobody's email is committed. Safe to re-run.
@@ -14,6 +15,7 @@
 # Usage (from frontend/; the docket CLI profile or a valid `aws login`):
 #   bash scripts/ses-testers.sh add "person@example.com=Full Name" ["other@example.com=Other Name" ...]
 #   bash scripts/ses-testers.sh list
+#   bash scripts/ses-testers.sh resend [person@example.com ...]
 #   bash scripts/ses-testers.sh remove person@example.com
 
 set -euo pipefail
@@ -82,6 +84,27 @@ list() {
     done
 }
 
+resend() {
+  local email status targets=("$@")
+  if [ "${#targets[@]}" -eq 0 ]; then
+    mapfile -t targets < <(aws_ sesv2 list-email-identities --query "EmailIdentities[?IdentityType=='EMAIL_ADDRESS' && VerificationStatus!='SUCCESS'].IdentityName" --output text | tr '\t' '\n' | sed '/^$/d')
+  fi
+  [ "${#targets[@]}" -gt 0 ] || { echo "everyone on the list is verified"; return; }
+  for email in "${targets[@]}"; do
+    email=$(lower "$email")
+    status=$(ses_status "$email")
+    case "$status" in
+      SUCCESS) echo "$email: already verified" ;;
+      NOT_ADDED) echo "$email: not on the list; use add" ;;
+      *)
+        # SES v1's VerifyEmailIdentity sends a fresh link for an existing, unverified identity.
+        aws_ ses verify-email-identity --email-address "$email" >/dev/null
+        echo "$email: new verification email sent (was $status)"
+        ;;
+    esac
+  done
+}
+
 remove() {
   local from email
   from=$(sender)
@@ -97,13 +120,13 @@ remove() {
 }
 
 case "${1:-}" in
-  add | list | remove)
+  add | list | resend | remove)
     command="$1"
     shift
     "$command" "$@"
     ;;
   *)
-    sed -n '2,17p' "$0"
+    sed -n '2,19p' "$0"
     exit 1
     ;;
 esac

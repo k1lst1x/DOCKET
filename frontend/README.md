@@ -81,7 +81,7 @@ Nobody has to confirm the code before reading a group's items.
   The server checks first (`src/lib/ses-recipients.ts`) and tells anyone else to ask
   for access. Add testers with
   `bash scripts/ses-testers.sh add "person@example.com=Full Name"` (they click the AWS
-  verification email once); `list` and `remove` manage the list. The list lives in SES,
+  verification email once, within 24 hours); `list`, `resend` and `remove` manage the list. The list lives in SES,
   never in the repo.
 
 ## GitHub Pages preview
