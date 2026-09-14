@@ -47,9 +47,9 @@ const NOT_CONNECTED =
 const UNAVAILABLE = "The assistant is temporarily unavailable. Please try again in a moment.";
 
 const SUGGESTIONS = [
+  "What's happening in Fremont today?",
+  "Any traffic incidents or power outages right now?",
   "What's on the September 15 City Council agenda?",
-  "What is the Fremont-Decoto Land Development Plan?",
-  "What did the City Council decide about the City charter in July?",
 ];
 
 const isHttpUrl = (url: string) => /^https?:\/\//i.test(url);
