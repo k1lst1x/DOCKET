@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { judgeLabels, judgeText, reviewNotice, sniffContentType, sniffMatches } from "./media-moderation";
+import { judgeLabels, judgeText, judgeVideoLabels, reviewNotice, sniffContentType, sniffMatches } from "./media-moderation";
 
 const bytes = (...values: (number | string)[]) =>
   Uint8Array.from(values.flatMap((v) => (typeof v === "string" ? [...v].map((c) => c.charCodeAt(0)) : [v])));
@@ -81,6 +81,93 @@ describe("moderation labels", () => {
     expect(judgeLabels([{ Name: "Explicit Nudity", Confidence: 55 }])).toEqual([]);
     expect(judgeLabels([{ Name: "Graphic Violence", Confidence: 79.9 }])).toEqual([]);
     expect(judgeLabels([{ Confidence: 99 }, {}])).toEqual([]);
+  });
+
+  it("match what Rekognition actually returned for test pictures with no words in them", () => {
+    // Responses from DetectModerationLabels (model 7.0) on 2026-09-13: a middle-finger emoji, a Nazi flag, a pill emoji.
+    expect(
+      judgeLabels([
+        { Name: "Middle Finger", ParentName: "Rude Gestures", Confidence: 87 },
+        { Name: "Rude Gestures", ParentName: "", Confidence: 87 },
+      ]),
+    ).toEqual(["gesture"]);
+    expect(
+      judgeLabels([
+        { Name: "Nazi Party", ParentName: "Hate Symbols", Confidence: 100 },
+        { Name: "Hate Symbols", ParentName: "", Confidence: 100 },
+      ]),
+    ).toEqual(["hate"]);
+    expect(
+      judgeLabels([
+        { Name: "Pills", ParentName: "Products", Confidence: 98 },
+        { Name: "Products", ParentName: "Drugs & Tobacco", Confidence: 98 },
+        { Name: "Drugs & Tobacco", ParentName: "", Confidence: 98 },
+      ]),
+    ).toEqual([]);
+  });
+
+  it("block every blocked label in AWS's published model 7 taxonomy, with its parents", () => {
+    const withParents = (name: string, parent: string, top: string, confidence = 95) => [
+      { Name: name, ParentName: parent, Confidence: confidence },
+      { Name: parent, ParentName: top, Confidence: confidence },
+      { Name: top, ParentName: "", Confidence: confidence },
+    ];
+    expect(judgeLabels(withParents("Exposed Female Nipple", "Explicit Nudity", "Explicit"))).toEqual(["sexual"]);
+    expect(judgeLabels([{ Name: "Explicit Sexual Activity", ParentName: "Explicit", Confidence: 90 }, { Name: "Explicit", Confidence: 90 }])).toEqual(["sexual"]);
+    expect(judgeLabels(withParents("Implied Nudity", "Non-Explicit Nudity", "Non-Explicit Nudity of Intimate parts and Kissing"))).toEqual(["nudity"]);
+    expect(judgeLabels(withParents("Obstructed Male Genitalia", "Obstructed Intimate Parts", "Non-Explicit Nudity of Intimate parts and Kissing"))).toEqual(["nudity"]);
+    expect(judgeLabels(withParents("Self-Harm", "Graphic Violence", "Violence"))).toEqual(["violence"]);
+    expect(judgeLabels(withParents("Corpses", "Death and Emaciation", "Visually Disturbing"))).toEqual(["disturbing"]);
+    expect(judgeLabels(withParents("Air Crash", "Crashes", "Visually Disturbing"))).toEqual(["disturbing"]);
+    expect(judgeLabels([{ Name: "White Supremacy", ParentName: "Hate Symbols", Confidence: 75 }, { Name: "Hate Symbols", Confidence: 75 }])).toEqual(["hate"]);
+    expect(judgeLabels([{ Name: "Extremist", ParentName: "Hate Symbols", Confidence: 66 }, { Name: "Hate Symbols", Confidence: 66 }])).toEqual(["hate"]);
+  });
+
+  it("let an allowed specific label speak for its parent, without excusing a blocked one", () => {
+    // A house fire or fireworks: Rekognition files explosions under Graphic Violence.
+    const fire = [
+      { Name: "Explosions and Blasts", ParentName: "Graphic Violence", Confidence: 93 },
+      { Name: "Graphic Violence", ParentName: "Violence", Confidence: 93 },
+      { Name: "Violence", ParentName: "", Confidence: 93 },
+    ];
+    expect(judgeLabels(fire)).toEqual([]);
+    expect(judgeLabels([...fire, { Name: "Blood & Gore", ParentName: "Graphic Violence", Confidence: 88 }])).toEqual(["violence"]);
+    // A bare back is fine; implied nudity in the same picture is not.
+    const back = [
+      { Name: "Bare Back", ParentName: "Non-Explicit Nudity", Confidence: 97 },
+      { Name: "Non-Explicit Nudity", ParentName: "Non-Explicit Nudity of Intimate parts and Kissing", Confidence: 97 },
+      { Name: "Non-Explicit Nudity of Intimate parts and Kissing", Confidence: 97 },
+    ];
+    expect(judgeLabels(back)).toEqual([]);
+    expect(judgeLabels([...back, { Name: "Implied Nudity", ParentName: "Non-Explicit Nudity", Confidence: 91 }])).toEqual(["nudity"]);
+    // A weapon on its own is allowed; weapon violence is not.
+    expect(judgeLabels([{ Name: "Weapons", ParentName: "Violence", Confidence: 99 }, { Name: "Violence", Confidence: 99 }])).toEqual([]);
+    expect(judgeLabels([{ Name: "Weapon Violence", ParentName: "Graphic Violence", Confidence: 85 }, { Name: "Graphic Violence", ParentName: "Violence", Confidence: 85 }])).toEqual(["violence"]);
+  });
+
+  it("judge labels AWS adds later by their category", () => {
+    expect(judgeLabels([{ Name: "Hateful Salute", ParentName: "Hate Symbols", Confidence: 70 }])).toEqual(["hate"]);
+    expect(judgeLabels([{ Name: "Obscene Gesture", ParentName: "Rude Gestures", Confidence: 85 }])).toEqual(["gesture"]);
+    expect(judgeLabels([{ Name: "Illegal Drugs", ParentName: "Drugs & Tobacco Paraphernalia & Use", Confidence: 93 }])).toEqual(["drugs"]);
+    expect(judgeLabels([{ Name: "Street Fight", ParentName: "Violence", Confidence: 92 }])).toEqual(["violence"]);
+    expect(judgeLabels([{ Name: "Street Fight", ParentName: "Violence", Confidence: 85 }])).toEqual([]);
+    expect(judgeLabels([{ Name: "Wetsuit", ParentName: "Swimwear or Underwear", Confidence: 99 }])).toEqual([]);
+    expect(judgeLabels([{ Name: "Something New", ParentName: "Unknown Category", Confidence: 99 }])).toEqual([]);
+  });
+
+  it("judge video labels moment by moment", () => {
+    const at = (Timestamp: number, Name: string, ParentName: string, Confidence = 92) => ({ Timestamp, ModerationLabel: { Name, ParentName, Confidence } });
+    // Fireworks at 1s don't excuse graphic violence (with no allowed detail) at 9s.
+    expect(
+      judgeVideoLabels([
+        at(1000, "Explosions and Blasts", "Graphic Violence"),
+        at(1000, "Graphic Violence", "Violence"),
+        at(9000, "Graphic Violence", "Violence"),
+      ]),
+    ).toEqual(["violence"]);
+    expect(judgeVideoLabels([at(1000, "Explosions and Blasts", "Graphic Violence"), at(1000, "Graphic Violence", "Violence"), at(2000, "Alcoholic Beverages", "Alcohol")])).toEqual([]);
+    expect(judgeVideoLabels([at(4000, "Middle Finger", "Rude Gestures"), at(4000, "Rude Gestures", ""), { Timestamp: 5000 }])).toEqual(["gesture"]);
+    expect(judgeVideoLabels([])).toEqual([]);
   });
 
   it("list each reason once", () => {

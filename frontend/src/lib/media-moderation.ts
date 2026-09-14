@@ -15,60 +15,170 @@ export interface ModerationLabelLike {
   Confidence?: number;
 }
 
-interface Rule {
-  reason: ReviewReason;
+interface Policy {
+  /** Null means allowed. */
+  reason: ReviewReason | null;
   /** Minimum Rekognition confidence (0-100) to block. */
   min: number;
-  /** Label names, from Rekognition's current (v7) and older (v6) moderation taxonomies. */
-  names: string[];
 }
 
-// Rules match a label's own name only, never its parent: a parent such as "Violence" or
-// "Drugs & Tobacco" also covers things a neighborhood feed allows (weapons in a safety report,
-// smoking, alcohol, swimwear, kissing), so only the specific labels below block.
-export const MEDIA_RULES: Rule[] = [
-  {
-    reason: "sexual",
-    min: 60,
-    names: [
-      "Explicit",
-      "Explicit Nudity",
-      "Explicit Sexual Activity",
-      "Sexual Activity",
-      "Sex Toys",
-      "Adult Toys",
-      "Exposed Female Genitalia",
-      "Exposed Male Genitalia",
-      "Exposed Buttocks or Anus",
-      "Exposed Female Nipple",
-      "Graphic Female Nudity",
-      "Graphic Male Nudity",
-      "Illustrated Explicit Nudity",
-      "Sexual Situations",
-    ],
-  },
-  {
-    reason: "nudity",
-    min: 80,
-    names: ["Nudity", "Partial Nudity", "Implied Nudity", "Obstructed Intimate Parts", "Obstructed Female Nipple", "Obstructed Male Genitalia", "Partially Exposed Buttocks", "Partially Exposed Female Breast"],
-  },
-  { reason: "violence", min: 80, names: ["Graphic Violence", "Graphic Violence Or Gore", "Physical Violence", "Weapon Violence", "Self-Harm", "Self Injury", "Blood & Gore"] },
-  { reason: "disturbing", min: 80, names: ["Corpses", "Emaciated Bodies", "Death and Emaciation", "Hanging", "Air Crash"] },
-  { reason: "hate", min: 60, names: ["Hate Symbols", "Nazi Party", "White Supremacy", "Extremist"] },
-  { reason: "gesture", min: 80, names: ["Rude Gestures", "Middle Finger"] },
-  { reason: "drugs", min: 85, names: ["Drug Use", "Drug Paraphernalia"] },
+const block = (reason: ReviewReason, min: number): Policy => ({ reason, min });
+const ALLOW: Policy = { reason: null, min: Infinity };
+
+/**
+ * Every label in Rekognition's content moderation taxonomy, with what Docket does about it. Model 7
+ * names come from AWS's published label list (rekognition-moderation-labels.csv); model 6 names are
+ * kept because older video results can still use them. Names match without regard to case.
+ */
+const LABEL_POLICY: [string, Policy][] = [
+  // Explicit (model 7)
+  ["Explicit", block("sexual", 60)],
+  ["Explicit Nudity", block("sexual", 60)],
+  ["Exposed Male Genitalia", block("sexual", 60)],
+  ["Exposed Female Genitalia", block("sexual", 60)],
+  ["Exposed Buttocks or Anus", block("sexual", 60)],
+  ["Exposed Female Nipple", block("sexual", 60)],
+  ["Explicit Sexual Activity", block("sexual", 60)],
+  ["Sex Toys", block("sexual", 60)],
+  // Non-explicit nudity and kissing: partial or covered-up nudity blocks; bare backs, shirtless men and kissing don't.
+  ["Non-Explicit Nudity of Intimate parts and Kissing", ALLOW],
+  ["Non-Explicit Nudity", ALLOW],
+  ["Bare Back", ALLOW],
+  ["Exposed Male Nipple", ALLOW],
+  ["Partially Exposed Buttocks", block("nudity", 80)],
+  ["Partially Exposed Female Breast", block("nudity", 80)],
+  ["Implied Nudity", block("nudity", 80)],
+  ["Obstructed Intimate Parts", block("nudity", 80)],
+  ["Obstructed Female Nipple", block("nudity", 80)],
+  ["Obstructed Male Genitalia", block("nudity", 80)],
+  ["Kissing on the Lips", ALLOW],
+  // Swimwear or underwear: beach days and pool openings.
+  ["Swimwear or Underwear", ALLOW],
+  ["Female Swimwear or Underwear", ALLOW],
+  ["Male Swimwear or Underwear", ALLOW],
+  // Violence: violence blocks. A weapon on its own (a safety report) and fire or explosions (a house fire,
+  // fireworks) are allowed, even though Rekognition files explosions under Graphic Violence.
+  ["Violence", ALLOW],
+  ["Weapons", ALLOW],
+  ["Graphic Violence", block("violence", 80)],
+  ["Weapon Violence", block("violence", 80)],
+  ["Physical Violence", block("violence", 80)],
+  ["Self-Harm", block("violence", 80)],
+  ["Blood & Gore", block("violence", 80)],
+  ["Explosions and Blasts", ALLOW],
+  // Visually disturbing
+  ["Visually Disturbing", block("disturbing", 80)],
+  ["Death and Emaciation", block("disturbing", 80)],
+  ["Emaciated Bodies", block("disturbing", 80)],
+  ["Corpses", block("disturbing", 80)],
+  ["Crashes", block("disturbing", 80)],
+  ["Air Crash", block("disturbing", 80)],
+  // Drugs & tobacco: model 7 only recognizes pills and smoking, which ordinary posts show (a pharmacy, a smoke-free park).
+  ["Drugs & Tobacco", ALLOW],
+  ["Products", ALLOW],
+  ["Pills", ALLOW],
+  ["Drugs & Tobacco Paraphernalia & Use", ALLOW],
+  ["Smoking", ALLOW],
+  // Alcohol and gambling: restaurants, breweries, a casino night fundraiser.
+  ["Alcohol", ALLOW],
+  ["Alcohol Use", ALLOW],
+  ["Drinking", ALLOW],
+  ["Alcoholic Beverages", ALLOW],
+  ["Gambling", ALLOW],
+  // Rude gestures and hate symbols
+  ["Rude Gestures", block("gesture", 80)],
+  ["Middle Finger", block("gesture", 80)],
+  ["Hate Symbols", block("hate", 60)],
+  ["Nazi Party", block("hate", 60)],
+  ["White Supremacy", block("hate", 60)],
+  ["Extremist", block("hate", 60)],
+  // Model 6 names
+  ["Nudity", block("sexual", 60)],
+  ["Graphic Male Nudity", block("sexual", 60)],
+  ["Graphic Female Nudity", block("sexual", 60)],
+  ["Sexual Activity", block("sexual", 60)],
+  ["Illustrated Explicit Nudity", block("sexual", 60)],
+  ["Adult Toys", block("sexual", 60)],
+  ["Suggestive", ALLOW],
+  ["Partial Nudity", block("nudity", 80)],
+  ["Barechested Male", ALLOW],
+  ["Revealing Clothes", ALLOW],
+  ["Sexual Situations", block("sexual", 80)],
+  ["Graphic Violence Or Gore", block("violence", 80)],
+  ["Self Injury", block("violence", 80)],
+  ["Hanging", block("disturbing", 80)],
+  ["Drugs", ALLOW],
+  ["Drug Products", ALLOW],
+  ["Drug Use", block("drugs", 80)],
+  ["Drug Paraphernalia", block("drugs", 85)],
+  ["Tobacco", ALLOW],
+  ["Tobacco Products", ALLOW],
 ];
 
-const RULE_BY_NAME = new Map(MEDIA_RULES.flatMap((rule) => rule.names.map((name) => [name.toLowerCase(), rule] as const)));
+/**
+ * For a label name Docket doesn't know yet (AWS adds labels over time), what its parent category
+ * implies. Categories where anything new is likely harmful block; mixed ones block only when
+ * Rekognition is very sure; harmless ones stay allowed.
+ */
+const UNKNOWN_CHILD_OF: [string, Policy][] = [
+  ["Explicit", block("sexual", 60)],
+  ["Explicit Nudity", block("sexual", 60)],
+  ["Non-Explicit Nudity of Intimate parts and Kissing", block("nudity", 90)],
+  ["Non-Explicit Nudity", block("nudity", 90)],
+  ["Obstructed Intimate Parts", block("nudity", 80)],
+  ["Suggestive", block("nudity", 90)],
+  ["Violence", block("violence", 90)],
+  ["Graphic Violence", block("violence", 80)],
+  ["Visually Disturbing", block("disturbing", 80)],
+  ["Death and Emaciation", block("disturbing", 80)],
+  ["Crashes", block("disturbing", 80)],
+  ["Drugs & Tobacco", block("drugs", 90)],
+  ["Products", block("drugs", 90)],
+  ["Drugs & Tobacco Paraphernalia & Use", block("drugs", 90)],
+  ["Drugs", block("drugs", 90)],
+  ["Rude Gestures", block("gesture", 80)],
+  ["Hate Symbols", block("hate", 60)],
+  ["Swimwear or Underwear", ALLOW],
+  ["Alcohol", ALLOW],
+  ["Gambling", ALLOW],
+  ["Tobacco", ALLOW],
+];
 
-/** Reasons to block, from Rekognition moderation labels. Empty means nothing Docket blocks was found. */
+const key = (name: string | undefined) => (name ?? "").trim().toLowerCase();
+const POLICY = new Map(LABEL_POLICY.map(([name, policy]) => [key(name), policy]));
+const FALLBACK = new Map(UNKNOWN_CHILD_OF.map(([name, policy]) => [key(name), policy]));
+
+const policyFor = (label: ModerationLabelLike): Policy | undefined => POLICY.get(key(label.Name)) ?? FALLBACK.get(key(label.ParentName));
+
+/**
+ * Reasons to block, from the moderation labels Rekognition returned for one picture (or one moment of
+ * a video). Empty means nothing Docket blocks was found. Rekognition returns a label's parent
+ * categories alongside it; when a specific label is allowed (explosions under Graphic Violence), its
+ * parent doesn't block on that label's behalf. A blocked specific label still blocks.
+ */
 export function judgeLabels(labels: ModerationLabelLike[]): ReviewReason[] {
+  const coveredByAllowedChild = new Set(labels.filter((l) => policyFor(l)?.reason === null && key(l.ParentName)).map((l) => key(l.ParentName)));
+  const blockedChildOf = new Set(labels.filter((l) => policyFor(l)?.reason && key(l.ParentName)).map((l) => key(l.ParentName)));
   const reasons = new Set<ReviewReason>();
   for (const label of labels) {
-    const rule = RULE_BY_NAME.get((label.Name ?? "").trim().toLowerCase());
-    if (rule && (label.Confidence ?? 0) >= rule.min) reasons.add(rule.reason);
+    const name = key(label.Name);
+    if (!name) continue;
+    if (coveredByAllowedChild.has(name) && !blockedChildOf.has(name)) continue;
+    const policy = policyFor(label);
+    if (policy?.reason && (label.Confidence ?? 0) >= policy.min) reasons.add(policy.reason);
   }
   return [...reasons];
+}
+
+/** A video's labels, judged moment by moment so an allowed label at one moment can't excuse another. */
+export function judgeVideoLabels(detections: { Timestamp?: number; ModerationLabel?: ModerationLabelLike }[]): ReviewReason[] {
+  const moments = new Map<number, ModerationLabelLike[]>();
+  for (const detection of detections) {
+    if (!detection.ModerationLabel) continue;
+    const at = detection.Timestamp ?? -1;
+    moments.set(at, [...(moments.get(at) ?? []), detection.ModerationLabel]);
+  }
+  return [...new Set([...moments.values()].flatMap((labels) => judgeLabels(labels)))];
 }
 
 /** Words in a photo (Rekognition text detection) go through the same language filter as posts. */

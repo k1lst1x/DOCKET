@@ -4,11 +4,11 @@ import {
   GetContentModerationCommand,
   RekognitionClient,
   StartContentModerationCommand,
-  type ModerationLabel,
+  type ContentModerationDetection,
 } from "@aws-sdk/client-rekognition";
 import { createHash } from "node:crypto";
 import { db } from "./db";
-import { judgeLabels, judgeText, sniffMatches, type ReviewReason, type ReviewStatus } from "./media-moderation";
+import { judgeLabels, judgeText, judgeVideoLabels, sniffMatches, type ReviewReason, type ReviewStatus } from "./media-moderation";
 import { mediaBucket, readFileStart, setUploadState } from "./media-storage";
 import type { PostMediaKind } from "./post-media";
 
@@ -135,7 +135,7 @@ async function refreshVideo(review: MediaReview): Promise<MediaReview> {
   if (review.kind !== "video" || review.status !== "pending") return review;
   if (Date.now() - review.checkedAt < REFRESH_MS) return review;
   if (!review.jobId) return startVideo(review);
-  const labels: ModerationLabel[] = [];
+  const detections: ContentModerationDetection[] = [];
   let nextToken: string | undefined;
   try {
     for (let page = 0; page < 20; page++) {
@@ -148,7 +148,7 @@ async function refreshVideo(review: MediaReview): Promise<MediaReview> {
         console.warn(`[docket] video check failed for ${review.key}: ${result.StatusMessage ?? "unknown"}`);
         return save({ ...review, status: "failed", reasons: ["unreadable"] });
       }
-      for (const item of result.ModerationLabels ?? []) if (item.ModerationLabel) labels.push(item.ModerationLabel);
+      detections.push(...(result.ModerationLabels ?? []));
       nextToken = result.NextToken;
       if (!nextToken) break;
     }
@@ -157,7 +157,7 @@ async function refreshVideo(review: MediaReview): Promise<MediaReview> {
     if (errorName(error) === "ResourceNotFoundException") return startVideo(review);
     throw error;
   }
-  const reasons = judgeLabels(labels);
+  const reasons = judgeVideoLabels(detections);
   const done = await save({ ...review, status: reasons.length ? "blocked" : "approved", reasons });
   if (reasons.length) await setUploadState(review.key, "pending").catch((error) => console.error("[docket] couldn't mark a blocked video for deletion", error));
   return done;
