@@ -1,5 +1,7 @@
+import json
 import os
 import unittest
+from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
 from fastapi.testclient import TestClient
@@ -51,6 +53,20 @@ class PipelineAuthorizationTests(unittest.TestCase):
             )
         self.assertEqual(response.status_code, 200)
         ingest.assert_called_once_with(["fremont"], 2, 7)
+
+
+class AgentCorePolicyTests(unittest.TestCase):
+    def test_optional_bedrock_role_is_limited_to_the_deployment_account(self):
+        root = Path(__file__).resolve().parents[1]
+        target = json.loads((root / "agentcore" / "aws-targets.json").read_text(encoding="utf-8"))[0]
+        account = target["account"]
+        expected_role = f"arn:aws:iam::{account}:role/DocketBedrockAccess"
+
+        for name in ("docket-chat.json", "docket-pipeline.json"):
+            policy = json.loads((root / "agentcore" / "policies" / name).read_text(encoding="utf-8"))
+            statement = next(item for item in policy["Statement"] if item["Action"] == ["sts:AssumeRole"])
+            self.assertEqual(statement["Resource"], [expected_role])
+            self.assertNotIn("*", statement["Resource"][0])
 
 
 if __name__ == "__main__":

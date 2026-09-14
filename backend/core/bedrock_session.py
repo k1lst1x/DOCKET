@@ -1,7 +1,7 @@
 """Boto3 session for Amazon Bedrock model calls (the reasoning model and Titan embeddings).
 
-By default model calls use this account's credentials. When BEDROCK_ROLE_ARN is set, they run in the
-account that owns that role instead: the session assumes the role and refreshes its temporary credentials
+By default model calls use this account's credentials. When BEDROCK_ROLE_ARN is set, they run in the configured deployment account
+that owns the DocketBedrockAccess role instead: the session assumes the role and refreshes its temporary credentials
 before they expire. Everything else (AgentCore, DSQL, S3, S3 Vectors, Secrets Manager) stays in this account.
 """
 

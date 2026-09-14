@@ -13,6 +13,7 @@ Both run Python 3.11 as CodeZip in us-west-2, with OpenTelemetry on. Their IAM p
 - The DSQL cluster.
 - The S3 Vectors index.
 - Pipeline only: raw S3 writes and the Firecrawl secret.
+- Optional Bedrock role assumption is limited to `DocketBedrockAccess` in the configured deployment account; when moving to another account, update the target and both checked policy files together.
 
 ## 0. Before you start
 
