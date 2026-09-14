@@ -125,9 +125,15 @@ def _coordinate(value: object) -> float | None:
     return number if math.isfinite(number) and number != 0 else None
 
 
+EMAIL = re.compile(r"[\w.+-]+@[\w-]+(?:\.[\w-]+)+")
+PHONE = re.compile(r"(?:\+?1[\s.-]?)?\(?\b\d{3}\)?[\s.-]?\d{3}[\s.-]?\d{4}\b")
+
+
 def _description(value: object) -> str:
+    """What the resident wrote, with email addresses and phone numbers masked (like the website's map)."""
     if not isinstance(value, str):
         return ""
+    value = PHONE.sub("[phone]", EMAIL.sub("[email]", value))
     lines = [" ".join(line.split()) for line in value.replace("\r\n", "\n").replace("\r", "\n").split("\n")]
     return re.sub(r"\n{3,}", "\n\n", "\n".join(lines)).strip()
 

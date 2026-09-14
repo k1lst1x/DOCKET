@@ -245,6 +245,16 @@ class CitySourcedTests(NeighborhoodCase):
         ref = citysourced.record_ref(record, date(2026, 9, 14))
         self.assertIn("- Status as of September 14, 2026: Closed (Site Cleared)", ref.inline_text)
 
+    def test_contact_details_in_descriptions_are_masked(self):
+        record = {
+            **CITYSOURCED_RESPONSE["Results"][1],
+            "Description": "Tent blocking the path. Call me at (510) 555-0142 or +1 510.555.0199, jane.doe@example.com",
+        }
+        ref = citysourced.record_ref(record, date(2026, 9, 14))
+        self.assertIn("Tent blocking the path. Call me at [phone] or [phone], [email]", ref.inline_text)
+        for private in ("555-0142", "555.0199", "jane.doe@example.com"):
+            self.assertNotIn(private, ref.inline_text)
+
     def test_lookup_names_from_objects_reprs_and_broken_reprs(self):
         self.assertEqual(citysourced.lookup_name({"NameEN": "Closed"}), "Closed")
         self.assertEqual(citysourced.lookup_name("{'Id': 'a', 'Name': 'Graffiti'}"), "Graffiti")
