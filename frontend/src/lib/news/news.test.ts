@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { LiveIncident } from "../live/types";
-import type { LngLat } from "../types";
-import { incidentNearBoundary } from "./near";
+import { incidentToNewsItem, newsworthyIncident } from "./incidents";
 import {
   aboutAnotherFremont,
   aboutElsewhere,
@@ -11,6 +10,7 @@ import {
   isPromotional,
   mentionsFremontArea,
   mentionsNeighborhood,
+  neighborhoodsMentioned,
   parseFeed,
   titleKey,
   toText,
@@ -95,6 +95,12 @@ describe("place matching", () => {
     expect(mentionsNeighborhood("Warm springs weather", "Irvington")).toBe(false);
   });
 
+  it("lists every neighborhood a story names, skipping same-name towns elsewhere", () => {
+    expect(neighborhoodsMentioned("Traffic from Niles backs up into Centerville")).toEqual(["Niles", "Centerville"]);
+    expect(neighborhoodsMentioned("10 Niles students achieve perfect scores on their Ohio State Tests")).toEqual([]);
+    expect(neighborhoodsMentioned("Fremont council meets tonight")).toEqual([]);
+  });
+
   it("recognizes the Fremont area and screens out other Fremonts", () => {
     expect(mentionsFremontArea("I-880 in Fremont shut down by crash")).toBe(true);
     expect(mentionsFremontArea("Ardenwood Historic Farm reopens its barn")).toBe(true);
@@ -107,17 +113,18 @@ describe("place matching", () => {
     expect(isLocalSource("East Bay Times")).toBe(true);
     expect(isLocalSource("wfmj.com")).toBe(false);
     expect(isLocalSource(null)).toBe(false);
+    expect(aboutAnotherFremont("Fremont, Nebraska man arrested")).toBe(true);
+    expect(aboutAnotherFremont("Fremont Tribune: county fair results")).toBe(true);
+    expect(aboutAnotherFremont("Fremont police arrest suspect")).toBe(false);
   });
 
   it("screens out press releases and law-firm ads, but not reporting about lawsuits", () => {
     expect(isPromotional("openPR.com", "Top Fremont Realtor Named #1 Real Estate Team")).toBe(true);
     expect(isPromotional("Pacific Attorney Group", "Pedestrian Killed in Fremont Crash")).toBe(true);
     expect(isPromotional("Arash Law", "60-Year-Old Pedestrian Killed in Fremont")).toBe(true);
+    expect(isPromotional("MaxPreps", "Irvington High School (Fremont, CA) Volleyball")).toBe(true);
     expect(isPromotional("The Mercury News", "Fremont sued over housing element")).toBe(false);
     expect(isPromotional("SFGATE", "Fremont: 81-Year-Old Man Dies After Falling From E-Bike")).toBe(false);
-    expect(aboutAnotherFremont("Fremont, Nebraska man arrested")).toBe(true);
-    expect(aboutAnotherFremont("Fremont Tribune: county fair results")).toBe(true);
-    expect(aboutAnotherFremont("Fremont police arrest suspect")).toBe(false);
   });
 
   it("dedupes headlines across outlets by letters and digits", () => {
@@ -125,34 +132,42 @@ describe("place matching", () => {
   });
 });
 
-describe("incidentNearBoundary", () => {
-  const square: LngLat[] = [
-    [-121.99, 37.57],
-    [-121.97, 37.57],
-    [-121.97, 37.59],
-    [-121.99, 37.59],
-  ];
-  const incident = (kind: LiveIncident["kind"], lat: number, lng: number, magnitude: number | null = null): LiveIncident => ({
-    id: `${kind}-${lat}`,
-    kind,
-    title: kind,
-    subtitle: null,
-    severity: "minor",
-    lat,
-    lng,
-    startedAt: null,
+describe("incidentToNewsItem", () => {
+  const base: LiveIncident = {
+    id: "chp-1",
+    kind: "traffic",
+    title: "Collision, no injuries",
+    subtitle: "I680 S / Mission Blvd · CHP Dublin",
+    severity: "moderate",
+    lat: 37.4794,
+    lng: -121.9189,
+    startedAt: "2026-09-13T19:08:00.000Z",
     updatedAt: null,
     endsAt: null,
-    magnitude,
-    sourceName: "Test",
-    sourceUrl: null,
+    magnitude: null,
+    sourceName: "CHP",
+    sourceUrl: "https://cad.chp.ca.gov/Traffic.aspx",
+  };
+
+  it("lists incidents as news in their neighborhood and topic", () => {
+    expect(incidentToNewsItem(base)).toEqual({
+      id: "live:chp-1",
+      title: "Collision, no injuries",
+      url: "https://cad.chp.ca.gov/Traffic.aspx",
+      source: "CHP",
+      publishedAt: "2026-09-13T19:08:00.000Z",
+      snippet: "I680 S / Mission Blvd · CHP Dublin",
+      category: "traffic",
+      neighborhoods: ["Warm Springs"],
+      kind: "incident",
+      severity: "moderate",
+    });
+    expect(incidentToNewsItem({ ...base, kind: "quake", lat: 37.87, lng: -121.8 })).toMatchObject({ category: "disaster", neighborhoods: [] });
   });
 
-  it("keeps road incidents within 2 km, fires within 80 km and felt or close quakes", () => {
-    expect(incidentNearBoundary(incident("traffic", 37.58, -121.98), square)).toBe(true);
-    expect(incidentNearBoundary(incident("traffic", 37.53, -121.98), square)).toBe(false);
-    expect(incidentNearBoundary(incident("fire", 37.2, -121.7), square)).toBe(true);
-    expect(incidentNearBoundary(incident("quake", 37.87, -121.8, 2.6), square)).toBe(false);
-    expect(incidentNearBoundary(incident("quake", 37.87, -121.8, 3.8), square)).toBe(true);
+  it("leaves small earthquakes to the map", () => {
+    expect(newsworthyIncident(base)).toBe(true);
+    expect(newsworthyIncident({ ...base, kind: "quake", magnitude: 1.7 })).toBe(false);
+    expect(newsworthyIncident({ ...base, kind: "quake", magnitude: 2.5 })).toBe(true);
   });
 });

@@ -54,7 +54,7 @@ export function AccountLink() {
     return (
       <Link
         href={`/signin?next=${encodeURIComponent(pathname)}`}
-        className="inline-flex h-10 items-center rounded-full border border-ink/25 bg-white/60 px-3 text-base font-medium text-ink hover:bg-white sm:px-4"
+        className="inline-flex h-10 items-center whitespace-nowrap rounded-full border border-ink/25 bg-white/60 px-3 text-[0.9375rem] font-medium text-ink hover:bg-white sm:px-4 sm:text-base"
       >
         Sign in
       </Link>

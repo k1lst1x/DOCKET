@@ -1,8 +1,7 @@
-import type { IssueMarker } from "../issue-types";
-import type { LiveAlert, LiveIncident } from "../live/types";
+import type { LiveAlert } from "../live/types";
 
-// Neighborhood news pages: articles and community posts about a neighborhood, plus live incidents,
-// alerts and city issues for the same area.
+// The Fremont news page: articles, community posts and live incidents, each tagged with the
+// neighborhoods it names, so the page can search, sort and filter one combined list.
 
 export type NewsCategory = "safety" | "disaster" | "traffic" | "housing" | "cityhall" | "community";
 
@@ -17,17 +16,28 @@ export const NEWS_CATEGORIES: { id: NewsCategory; label: string; icon: string; c
 
 export const newsCategoryInfo = (id: NewsCategory) => NEWS_CATEGORIES.find((c) => c.id === id) ?? NEWS_CATEGORIES[NEWS_CATEGORIES.length - 1];
 
+export type NewsKind = "article" | "community" | "incident";
+
+export const NEWS_KINDS: { id: NewsKind; label: string }[] = [
+  { id: "article", label: "Articles" },
+  { id: "community", label: "Community posts" },
+  { id: "incident", label: "Live incidents" },
+];
+
 export interface NewsItem {
   id: string;
   title: string;
-  url: string;
+  /** Link to the story or the incident's official source, when there is one. */
+  url: string | null;
   source: string;
   publishedAt: string | null;
   snippet: string | null;
   category: NewsCategory;
-  /** Mentions the neighborhood by name (or a landmark in it), rather than Fremont in general. */
-  inNeighborhood: boolean;
-  kind: "article" | "community";
+  /** Docket neighborhood groups the item names or happens in; empty for Fremont-wide items. */
+  neighborhoods: string[];
+  kind: NewsKind;
+  /** Live incidents only. */
+  severity: "minor" | "moderate" | "severe" | null;
 }
 
 export interface NewsSourceStatus {
@@ -39,14 +49,11 @@ export interface NewsSourceStatus {
   error: string | null;
 }
 
-export interface NewsSnapshot {
+export interface NewsCatalog {
   generatedAt: string;
-  group: { slug: string; name: string; district: string };
   items: NewsItem[];
-  incidents: LiveIncident[];
   alerts: LiveAlert[];
-  issues: IssueMarker[];
-  /** False when issue vote totals couldn't be read from the database. */
-  issuesLive: boolean;
+  /** The neighborhoods items can be filtered by. */
+  neighborhoods: string[];
   sources: NewsSourceStatus[];
 }

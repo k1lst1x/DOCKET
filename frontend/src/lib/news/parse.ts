@@ -216,8 +216,8 @@ export const isLocalSource = (source: string | null) => {
   return Boolean(name) && LOCAL_SOURCES.some((local) => name.includes(local));
 };
 
-/** Paid press releases and law-firm ads written to look like news. */
-const PROMOTIONAL_SOURCES = /(openpr|financialcontent|einpresswire|ein presswire|accesswire|newswire|press release|attorneys?|law (group|firm|offices?)|\blaw\b|injury lawyers?|lawyers?)/i;
+/** Paid press releases, law-firm ads written to look like news, and sports schedule pages. */
+const PROMOTIONAL_SOURCES = /(openpr|financialcontent|einpresswire|ein presswire|accesswire|newswire|press release|attorneys?|law (group|firm|offices?)|\blaw\b|injury lawyers?|lawyers?|maxpreps)/i;
 export const isPromotional = (source: string | null, title: string) =>
   PROMOTIONAL_SOURCES.test(source ?? "") || /\b(top|best) [a-z ]*realtor|named #1|passes \d+ client reviews/i.test(title);
 
@@ -237,6 +237,11 @@ export const aboutAnotherFremont = (text: string) => OTHER_FREMONTS.test(text);
 
 /** About another Fremont, or another town sharing this neighborhood's name (Niles, Ohio). */
 export const aboutElsewhere = (text: string, district: string) => aboutAnotherFremont(text) || (ELSEWHERE[district]?.test(text) ?? false);
+
+/** The Docket neighborhoods a story names, ignoring same-name places elsewhere (Niles, Ohio). */
+export function neighborhoodsMentioned(text: string): string[] {
+  return Object.keys(DISTRICT_ALIASES).filter((district) => mentionsNeighborhood(text, district) && !(ELSEWHERE[district]?.test(text) ?? false));
+}
 
 /** Headlines differ in punctuation and case across outlets; compare on letters and digits. */
 export const titleKey = (title: string) => fold(title).replace(/[^a-z0-9]+/g, " ").trim();

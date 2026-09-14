@@ -15,12 +15,12 @@ export function DocketMark({ className = "h-8 w-8" }: { className?: string }) {
 export function SiteHeader({ tone = "plain" }: { tone?: "sky" | "plain" }) {
   return (
     <header className={tone === "sky" ? "relative z-20" : "border-b border-rule bg-white"}>
-      <div className="page flex items-center justify-between gap-2 py-3 sm:py-4">
+      <div className="page flex items-center justify-between gap-1 py-3 sm:gap-2 sm:py-4">
         <Link href="/" className="flex shrink-0 items-center gap-2.5 rounded-full text-[1.375rem] font-semibold tracking-tight text-ink">
           <DocketMark />
           <span className="hidden min-[400px]:inline">Docket</span>
         </Link>
-        <nav aria-label="Main" className="flex items-center gap-2 sm:gap-4">
+        <nav aria-label="Main" className="flex items-center gap-1 sm:gap-4">
           <NavLinks />
           <Link href="/#address" className="btn btn-primary hidden h-11 rounded-full px-5 lg:inline-flex">
             Find your group

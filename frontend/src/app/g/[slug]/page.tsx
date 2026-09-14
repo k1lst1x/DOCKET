@@ -81,7 +81,7 @@ export default async function GroupPage({ params }: { params: Params }) {
                 </span>
               </div>
               <Link
-                href={`/g/${group.slug}/news`}
+                href={`/news?area=${group.district.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`}
                 className="mt-4 inline-flex h-11 items-center gap-2 rounded-full border border-ink/25 bg-white/80 px-5 text-base font-semibold text-ink hover:bg-white"
               >
                 <span aria-hidden="true" className="relative flex h-2.5 w-2.5">
