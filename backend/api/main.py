@@ -15,7 +15,7 @@ from typing import Literal
 
 from fastapi import Depends, FastAPI, Header, HTTPException, status
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
@@ -52,11 +52,27 @@ class GenerateRequest(BaseModel):
     group_id: str | None = None
     crawl: bool = False  # true starts the graph at the crawler instead of the researcher
 
+    @field_validator("topic")
+    @classmethod
+    def topic_has_content(cls, value: str) -> str:
+        value = value.strip()
+        if len(value) < 3:
+            raise ValueError("topic must contain at least 3 non-space characters")
+        return value
+
 
 class IngestRequest(BaseModel):
     sources: list[str] = []
     max_docs: int = Field(default=10, ge=1, le=200)
     lookback_days: int = Field(default=120, ge=1, le=3650)
+
+    @field_validator("sources")
+    @classmethod
+    def source_ids_are_not_blank(cls, values: list[str]) -> list[str]:
+        cleaned = [value.strip() for value in values]
+        if any(not value for value in cleaned):
+            raise ValueError("sources must contain non-empty source ids")
+        return cleaned
 
 
 def _require_uuid(value: str) -> str:

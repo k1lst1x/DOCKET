@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { safeNextPath, signToken, verifyToken } from "./auth";
+import { isSameOrigin, safeNextPath, signToken, verifyToken } from "./auth";
 
 describe("signed tokens", () => {
   it("round-trips and rejects the wrong type, expiry and forged bodies", () => {
@@ -23,4 +23,11 @@ it("only allows same-site next paths", () => {
   expect(safeNextPath("https://evil.example")).toBe("/");
   expect(safeNextPath("/\\evil.example")).toBe("/");
   expect(safeNextPath(undefined, "/groups")).toBe("/groups");
+});
+
+it("requires the full origin for cookie-backed mutations", () => {
+  expect(isSameOrigin(new Request("https://docket.example/api/posts", { headers: { origin: "https://docket.example" } }))).toBe(true);
+  expect(isSameOrigin(new Request("https://docket.example/api/posts", { headers: { origin: "http://docket.example" } }))).toBe(false);
+  expect(isSameOrigin(new Request("https://docket.example/api/posts", { headers: { origin: "https://docket.example:444" } }))).toBe(false);
+  expect(isSameOrigin(new Request("https://docket.example/api/posts"))).toBe(false);
 });
