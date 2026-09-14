@@ -24,7 +24,9 @@
         { "name": "DSQL_ENDPOINT", "value": "arucmxa62xrerk4vt7b2kveetu.dsql.us-west-2.on.aws" },
         { "name": "S3_VECTORS_BUCKET", "value": "docket-vectors-465083445156" },
         { "name": "S3_VECTORS_INDEX", "value": "docket-chunks" },
-        { "name": "PYTHONUTF8", "value": "1" }
+        { "name": "PYTHONUTF8", "value": "1" },
+        { "name": "BEDROCK_ROLE_ARN", "value": "arn:aws:iam::576884310211:role/DocketBedrockAccess" },
+        { "name": "BEDROCK_EXTERNAL_ID", "value": "docket-bedrock-465083445156" }
       ],
       "additionalPolicies": ["agentcore/policies/docket-chat.json"]
     },
@@ -46,7 +48,9 @@
         { "name": "S3_VECTORS_BUCKET", "value": "docket-vectors-465083445156" },
         { "name": "S3_VECTORS_INDEX", "value": "docket-chunks" },
         { "name": "FIRECRAWL_SECRET_ID", "value": "docket/firecrawl" },
-        { "name": "PYTHONUTF8", "value": "1" }
+        { "name": "PYTHONUTF8", "value": "1" },
+        { "name": "BEDROCK_ROLE_ARN", "value": "arn:aws:iam::576884310211:role/DocketBedrockAccess" },
+        { "name": "BEDROCK_EXTERNAL_ID", "value": "docket-bedrock-465083445156" }
       ],
       "additionalPolicies": ["agentcore/policies/docket-pipeline.json"]
     }

@@ -13,7 +13,7 @@ Both run Python 3.11 as CodeZip in us-west-2, with OpenTelemetry on. Their IAM p
 - The DSQL cluster.
 - The S3 Vectors index.
 - Pipeline only: raw S3 writes and the Firecrawl secret.
-- Optional Bedrock role assumption is limited to `DocketBedrockAccess` in the configured deployment account; when moving to another account, update the target and both checked policy files together.
+- Bedrock role assumption is limited to the one `DocketBedrockAccess` role named by each runtime's `BEDROCK_ROLE_ARN` (currently account 576884310211, with `BEDROCK_EXTERNAL_ID`), or the deployment account's when unset. When the Bedrock account changes, update `agentcore.json` and both policy files together; `tests/test_api_security.py` checks they match.
 
 ## 0. Before you start
 
