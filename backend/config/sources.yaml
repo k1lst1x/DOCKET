@@ -152,6 +152,24 @@ sources:
     enabled: true
     verify_pattern: 'data-district="10"'
 
+  # Documents the team supplied as files (not crawled). They are loaded with the pipeline's
+  # ingest_manifest action; enabled: false keeps them out of crawls.
+  - id: fremont-zoning-administrator
+    name: City of Fremont Zoning Administrator - agendas, correspondence and notices
+    url: https://city.fremont.gov/zoningadministrator
+    kind: zoning
+    crawl_strategy: manual_upload
+    parser: manual_upload
+    enabled: false
+
+  - id: docket-bill-research-notes
+    name: Docket research notes on California bills affecting Fremont (September 13, 2026 snapshot)
+    url: https://www.fremont.gov/government/legislative-affairs
+    kind: state_legislation
+    crawl_strategy: manual_upload
+    parser: manual_upload
+    enabled: false
+
   - id: fremont-neighborhoods-gis
     name: City of Fremont Neighborhoods GIS layer (32 official areas)
     url: https://services2.arcgis.com/AVso4yDITKsybTJg/arcgis/rest/services/Neighborhoods/FeatureServer/0/query?where=1%3D1&returnCountOnly=true&f=json

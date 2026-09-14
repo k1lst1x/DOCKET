@@ -73,6 +73,20 @@ def _run_ingest_job(job_id: str, task_id: int, sources: list[str], max_docs: int
         app.complete_async_task(task_id)
 
 
+def _run_manifest_job(job_id: str, task_id: int, manifest_key: str) -> None:
+    from scripts.ingest_manifest import ingest_manifest
+
+    state: dict = {"status": "failed"}
+    try:
+        state = {"status": "succeeded", **ingest_manifest(manifest_key)}
+    except Exception:
+        log.exception("manifest job %s crashed", job_id)
+    finally:
+        with _jobs_lock:
+            JOBS[job_id] = {**JOBS.get(job_id, {}), **state}
+        app.complete_async_task(task_id)
+
+
 @app.entrypoint
 def invoke(payload, context):
     if not isinstance(payload, dict):
@@ -94,6 +108,16 @@ def invoke(payload, context):
                 args=(job_id, task_id, sources, max_docs, lookback_days),
                 daemon=True,
             ).start()
+            return {"job_id": job_id, "status": "running"}
+        if action == "ingest_manifest":
+            manifest_key = payload.get("manifest_key")
+            if not isinstance(manifest_key, str) or not manifest_key.startswith("uploads/"):
+                return {"error": "manifest_key must be uploads/<name>.json"}
+            job_id = str(uuid.uuid4())
+            task_id = app.add_async_task("ingest_manifest", {"job_id": job_id})
+            with _jobs_lock:
+                JOBS[job_id] = {"status": "running", "manifest_key": manifest_key}
+            threading.Thread(target=_run_manifest_job, args=(job_id, task_id, manifest_key), daemon=True).start()
             return {"job_id": job_id, "status": "running"}
         if action == "status":
             with _jobs_lock:

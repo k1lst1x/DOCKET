@@ -49,6 +49,16 @@
       ]
     },
     {
+      "Sid": "ReadUploadedDocuments",
+      "Effect": "Allow",
+      "Action": [
+        "s3:GetObject"
+      ],
+      "Resource": [
+        "arn:aws:s3:::docket-raw-465083445156-us-west-2/uploads/*"
+      ]
+    },
+    {
       "Sid": "ReadFirecrawlKey",
       "Effect": "Allow",
       "Action": [
