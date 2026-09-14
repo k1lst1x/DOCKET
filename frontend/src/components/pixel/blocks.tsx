@@ -8,7 +8,7 @@ const EARTH: Palette = { h: "#8CC63F", g: "#6DB33F", G: "#4E9A3A", d: "#8B5A2B",
 const LOG_ROWS = ["bBnbBbnB", "bBbbBnbB", "nBbbBbbB", "bBbnBbbB", "bBbbBbnB", "bBnbBbbB", "bBbbBnbB", "nBbbBbbB"];
 const PLANK_ROWS = ["qppppPpq", "ppqppPpp", "pppqpPpp", "PPPPPPPP", "pPpqpppp", "pPppqppp", "qPpppppq", "PPPPPPPP"];
 
-export const TEXTURES = {
+const TEXTURES = {
   grass: {
     palette: EARTH,
     rows: ["hgGghgGg", "gGghgGhg", "GgGgGgdG", "dGdDgdGd", "dDedDded", "edDdeDdD", "DdedDedd", "deDdddeD"],
