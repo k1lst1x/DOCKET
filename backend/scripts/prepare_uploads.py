@@ -19,9 +19,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from pypdf import PdfReader
-
 from core import settings
+from pypdf import PdfReader
 
 RESEARCH_DATE = "2026-09-13T12:00:00-07:00"  # "research date: September 13, 2026" in every note
 COUNCIL_SEP_8 = "https://fremontcityca.iqm2.com/Citizens/Detail_Meeting.aspx?ID=2090"  # stored meeting page
@@ -36,7 +35,9 @@ HOME_ADDRESS = re.compile(
 # Civic buildings and project sites named in public records stay; they are not anyone's home.
 PUBLIC_ADDRESSES = ("3300 capitol", "39550 liberty", "3800 beard", "3100 mowry")
 # Neighbors' house numbers listed after a street address ("4402, 4405, 4410, ... Calypso Terrace").
-HOUSE_NUMBER_LIST = re.compile(r"\b\d{4}(?:,\s*\d{4})+,?\s+(?=[A-Z][a-z]+\s+(?:Terrace|Ter|Drive|Dr|Road|Rd|Court|Ct)\b)")
+HOUSE_NUMBER_LIST = re.compile(
+    r"\b\d{4}(?:,\s*\d{4})+,?\s+(?=[A-Z][a-z]+\s+(?:Terrace|Ter|Drive|Dr|Road|Rd|Court|Ct)\b)"
+)
 
 
 def redact(text: str) -> tuple[str, int]:

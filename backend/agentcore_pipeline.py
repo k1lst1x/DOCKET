@@ -20,7 +20,6 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from bedrock_agentcore.runtime import BedrockAgentCoreApp  # noqa: E402
-
 from core.db import connect  # noqa: E402
 from core.generation_graph import generate as run_generation  # noqa: E402
 from core.jobs import IngestFailed, run_ingest  # noqa: E402

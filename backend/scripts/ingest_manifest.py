@@ -18,7 +18,6 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import boto3
-
 from core import settings
 from core.chunking import chunk_pages
 from core.db import connect

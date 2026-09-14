@@ -11,15 +11,16 @@ from prepare_uploads import redact, research_note  # noqa: E402
 
 class RedactionTests(unittest.TestCase):
     def test_private_emails_and_home_addresses_are_redacted(self):
+        # Made-up residents and addresses in the formats the real letters use.
         text = (
-            "From: Gloria Wang <mughsin@hotmail.com>\n"
-            "3777 Foxswallow Ter., Fremont CA 94555\n"
-            "34262, Eucalyptus Terrace, Fremont, CA-94555\n"
-            "33766 Whimbrel Rd, Fremont, CA\n"
-            "My neighbors at 4402, 4405, 4410 Calypso Terrace"
+            "From: Pat Example <pat.example@example.com>\n"
+            "1234 Sample Ter., Fremont CA 94555\n"
+            "45678, Placeholder Terrace, Fremont, CA-94555\n"
+            "23456 Invented Rd, Fremont, CA\n"
+            "My neighbors at 1001, 1003, 1005 Fictional Terrace"
         )
         cleaned, count = redact(text)
-        for private in ("mughsin", "Foxswallow", "Eucalyptus", "Whimbrel", "4405"):
+        for private in ("pat.example", "Sample Ter", "Placeholder", "Invented", "1003"):
             self.assertNotIn(private, cleaned)
         self.assertGreaterEqual(count, 5)
 
