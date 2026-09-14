@@ -1,0 +1,99 @@
+.sky {
+  background: linear-gradient(180deg, #8dc2f5 0%, #b3d6f6 48%, #ddebf6 100%);
+}
+
+.night {
+  background: linear-gradient(180deg, #0e1a2b 0%, #172b45 100%);
+}
+
+/* Bedrock band with the running list of sources. */
+.bedrock {
+  background-color: #262626;
+  background-image:
+    linear-gradient(90deg, rgba(255, 255, 255, 0.04) 50%, transparent 50%),
+    linear-gradient(rgba(0, 0, 0, 0.18) 50%, transparent 50%);
+  background-size: 16px 16px;
+}
+
+.marquee {
+  display: flex;
+  width: max-content;
+  animation: marquee 48s linear infinite;
+}
+.marqueeWrap:hover .marquee {
+  animation-play-state: paused;
+}
+@keyframes marquee {
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+/* A page of news rides along the three steps. */
+.courierTrack {
+  background-image: linear-gradient(90deg, #7a7f85 50%, transparent 50%);
+  background-size: 8px 2px;
+  background-repeat: repeat-x;
+  background-position: center;
+}
+.courierPaper {
+  animation: courierPaper 7s steps(28) infinite;
+}
+@keyframes courierPaper {
+  0% {
+    left: 0%;
+    opacity: 0;
+  }
+  6% {
+    opacity: 1;
+  }
+  94% {
+    opacity: 1;
+  }
+  100% {
+    left: calc(100% - 20px);
+    opacity: 0;
+  }
+}
+
+.pixelShadow {
+  box-shadow: 4px 4px 0 0 #262626;
+  transition:
+    transform 150ms steps(2),
+    box-shadow 150ms steps(2);
+}
+.pixelShadow:hover {
+  transform: translate(-2px, -2px);
+  box-shadow: 6px 6px 0 0 #262626;
+}
+
+/* Sections rise in as they scroll into view, where the browser supports scroll timelines. */
+@supports (animation-timeline: view()) {
+  @media (prefers-reduced-motion: no-preference) {
+    .reveal {
+      animation: reveal linear both;
+      animation-timeline: view();
+      animation-range: entry 0% entry 70%;
+    }
+  }
+}
+@keyframes reveal {
+  from {
+    opacity: 0;
+    transform: translateY(32px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .marquee,
+  .courierPaper {
+    animation: none;
+  }
+  .courierPaper {
+    display: none;
+  }
+}

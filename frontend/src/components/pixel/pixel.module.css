@@ -1,0 +1,604 @@
+/* Pixel-art scenes. Motion steps in whole pixels where it can, and stops for reduced motion. */
+
+.scene {
+  display: block;
+  width: 100%;
+  height: 100%;
+  shape-rendering: crispEdges;
+}
+
+/* ---------- Shared sprite motion ---------- */
+
+.cloud {
+  animation: drift var(--dur, 90s) linear infinite;
+  animation-delay: var(--delay, 0s);
+}
+@keyframes drift {
+  from {
+    transform: translateX(var(--from, -80px));
+  }
+  to {
+    transform: translateX(var(--to, 560px));
+  }
+}
+
+.hop {
+  animation: hop var(--dur, 4s) step-end infinite;
+  animation-delay: var(--delay, 0s);
+}
+@keyframes hop {
+  0%,
+  70% {
+    transform: translateY(0);
+  }
+  73% {
+    transform: translateY(-3px);
+  }
+  78% {
+    transform: translateY(0);
+  }
+  82% {
+    transform: translateY(-2px);
+  }
+  86%,
+  100% {
+    transform: translateY(0);
+  }
+}
+
+.blink {
+  animation: blink var(--blink, 5s) step-end infinite;
+}
+@keyframes blink {
+  0% {
+    opacity: 1;
+  }
+  92% {
+    opacity: 0;
+  }
+  96% {
+    opacity: 1;
+  }
+}
+
+.wingUp {
+  animation: wingUp 0.36s step-end infinite;
+}
+.wingDown {
+  opacity: 0;
+  animation: wingDown 0.36s step-end infinite;
+}
+@keyframes wingUp {
+  0% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0;
+  }
+}
+@keyframes wingDown {
+  0% {
+    opacity: 0;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+.bob {
+  animation: bob 2s step-end infinite;
+}
+@keyframes bob {
+  0% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-1px);
+  }
+}
+
+/* ---------- Neighborhood scene: the courier bird carries city hall news to the tree ---------- */
+
+.courier {
+  transform: translate(150px, 49px);
+  animation: courier 16s linear infinite;
+}
+@keyframes courier {
+  0%,
+  10% {
+    transform: translate(150px, 49px);
+  }
+  14% {
+    transform: translate(148px, 28px);
+  }
+  20% {
+    transform: translate(176px, 14px);
+  }
+  26% {
+    transform: translate(220px, 24px);
+  }
+  32% {
+    transform: translate(254px, 70px);
+  }
+  36%,
+  60% {
+    transform: translate(284px, 89px);
+  }
+  64% {
+    transform: translate(256px, 80px);
+  }
+  70% {
+    transform: translate(226px, 40px);
+  }
+  78% {
+    transform: translate(190px, 16px);
+  }
+  86% {
+    transform: translate(150px, 28px);
+  }
+  90%,
+  100% {
+    transform: translate(150px, 49px);
+  }
+}
+
+.courierPerched {
+  animation: courierPerched 16s step-end infinite;
+}
+@keyframes courierPerched {
+  0% {
+    opacity: 1;
+  }
+  10% {
+    opacity: 0;
+  }
+  36% {
+    opacity: 1;
+  }
+  60% {
+    opacity: 0;
+  }
+  90% {
+    opacity: 1;
+  }
+}
+
+.courierOut {
+  opacity: 0;
+  animation: courierOut 16s step-end infinite;
+}
+@keyframes courierOut {
+  0% {
+    opacity: 0;
+  }
+  10% {
+    opacity: 1;
+  }
+  36% {
+    opacity: 0;
+  }
+}
+
+.courierBack {
+  opacity: 0;
+  animation: courierBack 16s step-end infinite;
+}
+@keyframes courierBack {
+  0% {
+    opacity: 0;
+  }
+  60% {
+    opacity: 1;
+  }
+  90% {
+    opacity: 0;
+  }
+}
+
+.courierPaper {
+  animation: courierPaper 16s step-end infinite;
+}
+@keyframes courierPaper {
+  0% {
+    opacity: 1;
+  }
+  36% {
+    opacity: 0;
+  }
+  90% {
+    opacity: 1;
+  }
+}
+
+/* The news spreads: one bubble after another once the courier lands. */
+.bubble {
+  transform-box: fill-box;
+  transform-origin: 30% 100%;
+  animation: bubble 16s linear infinite both;
+  animation-delay: var(--delay, 0s);
+}
+@keyframes bubble {
+  0%,
+  37% {
+    transform: scale(0);
+  }
+  38.5% {
+    transform: scale(1.2);
+  }
+  39.5%,
+  56% {
+    transform: scale(1);
+  }
+  57.5%,
+  100% {
+    transform: scale(0);
+  }
+}
+
+.walker {
+  transform: translate(206px, 116px);
+  animation: walker 14s linear infinite;
+}
+@keyframes walker {
+  0% {
+    transform: translate(206px, 116px);
+  }
+  42%,
+  50% {
+    transform: translate(254px, 116px);
+  }
+  92%,
+  100% {
+    transform: translate(206px, 116px);
+  }
+}
+.walkerRight {
+  animation: walkerRight 14s step-end infinite;
+}
+@keyframes walkerRight {
+  0% {
+    opacity: 1;
+  }
+  46% {
+    opacity: 0;
+  }
+  96% {
+    opacity: 1;
+  }
+}
+.walkerLeft {
+  opacity: 0;
+  animation: walkerLeft 14s step-end infinite;
+}
+@keyframes walkerLeft {
+  0% {
+    opacity: 0;
+  }
+  46% {
+    opacity: 1;
+  }
+  96% {
+    opacity: 0;
+  }
+}
+.stride {
+  animation: wingUp 0.5s step-end infinite;
+}
+.strideAlt {
+  opacity: 0;
+  animation: wingDown 0.5s step-end infinite;
+}
+
+.leaf {
+  opacity: 0;
+  animation: fall var(--dur, 7s) steps(16) infinite;
+  animation-delay: var(--delay, 0s);
+}
+@keyframes fall {
+  0% {
+    transform: translate(0, 0);
+    opacity: 0;
+  }
+  8% {
+    opacity: 1;
+  }
+  100% {
+    transform: translate(var(--dx, -10px), var(--dy, 48px));
+    opacity: 0;
+  }
+}
+
+.flag {
+  animation: wingUp 0.8s step-end infinite;
+}
+.flagAlt {
+  opacity: 0;
+  animation: wingDown 0.8s step-end infinite;
+}
+
+/* The hero scene draws past its box (birds rising over the headline); only the tree takes clicks. */
+.open {
+  overflow: visible;
+  pointer-events: none;
+}
+.treeTarget {
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+/* ---------- Flocks crossing the whole hero ---------- */
+
+.flock {
+  --bird: clamp(16px, 1.7vw, 30px);
+}
+.flight {
+  position: absolute;
+  left: -12%;
+  width: var(--bird);
+  height: calc(var(--bird) * 0.875);
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+}
+.glide {
+  position: absolute;
+  width: var(--bird);
+  height: calc(var(--bird) * 0.875);
+  animation: glide 1.8s ease-in-out infinite;
+}
+@keyframes glide {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-6px);
+  }
+}
+.routeHigh {
+  animation-name: routeHigh;
+}
+@keyframes routeHigh {
+  0% {
+    left: -12%;
+    top: 12%;
+  }
+  20% {
+    top: 4%;
+  }
+  40% {
+    top: 14%;
+  }
+  60%,
+  100% {
+    left: 112%;
+    top: 7%;
+  }
+}
+.routeMid {
+  animation-name: routeMid;
+}
+@keyframes routeMid {
+  0% {
+    left: 112%;
+    top: 38%;
+  }
+  22% {
+    top: 27%;
+  }
+  44% {
+    top: 42%;
+  }
+  66%,
+  100% {
+    left: -12%;
+    top: 33%;
+  }
+}
+.routeLow {
+  animation-name: routeLow;
+}
+@keyframes routeLow {
+  0% {
+    left: -12%;
+    top: 60%;
+  }
+  18% {
+    top: 50%;
+  }
+  36% {
+    top: 64%;
+  }
+  54%,
+  100% {
+    left: 112%;
+    top: 56%;
+  }
+}
+
+/* Shaking the tree: the canopy jitters, leaves burst out, birds take off and come back. */
+.fly,
+.burst {
+  opacity: 0;
+}
+.shaking .canopy {
+  animation: shake 0.3s step-end 4;
+}
+@keyframes shake {
+  0% {
+    transform: translateX(1px);
+  }
+  25% {
+    transform: translateX(-1px);
+  }
+  50% {
+    transform: translateX(1px);
+  }
+  75% {
+    transform: translateX(0);
+  }
+}
+/* Scattered birds climb toward the middle of the hero, over the headline, then settle back. */
+.shaking .scatter {
+  animation: scatter 3.2s ease-in-out both;
+}
+@keyframes scatter {
+  0% {
+    transform: translate(0, 0);
+  }
+  25% {
+    transform: translate(var(--sx, 0px), -64px);
+  }
+  50% {
+    transform: translate(calc(var(--sx, 0px) * 1.6), -112px);
+  }
+  75% {
+    transform: translate(calc(var(--sx, 0px) * 0.8), -84px);
+  }
+  100% {
+    transform: translate(0, 0);
+  }
+}
+.shaking .fly {
+  animation: showWhileScattered 3.2s step-end both;
+}
+.shaking .perch {
+  animation: hideWhileScattered 3.2s step-end both;
+}
+@keyframes showWhileScattered {
+  0% {
+    opacity: 1;
+  }
+  96% {
+    opacity: 0;
+  }
+}
+@keyframes hideWhileScattered {
+  0% {
+    opacity: 0;
+  }
+  96% {
+    opacity: 1;
+  }
+}
+.shaking .burst {
+  animation: fall 1.8s steps(12) both;
+  animation-delay: var(--delay, 0s);
+}
+
+/* ---------- Night scene ---------- */
+
+.twinkle {
+  animation: twinkle var(--dur, 3s) step-end infinite;
+  animation-delay: var(--delay, 0s);
+}
+@keyframes twinkle {
+  0% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.25;
+  }
+  62% {
+    opacity: 1;
+  }
+}
+
+.firefly {
+  animation: firefly var(--dur, 6s) ease-in-out infinite;
+  animation-delay: var(--delay, 0s);
+}
+@keyframes firefly {
+  0%,
+  100% {
+    transform: translate(0, 0);
+    opacity: 0.15;
+  }
+  25% {
+    transform: translate(3px, -2px);
+    opacity: 1;
+  }
+  50% {
+    transform: translate(6px, 1px);
+    opacity: 0.35;
+  }
+  75% {
+    transform: translate(2px, 3px);
+    opacity: 1;
+  }
+}
+
+.snore {
+  opacity: 0;
+  animation: snore 3.6s steps(9) infinite;
+  animation-delay: var(--delay, 0s);
+}
+@keyframes snore {
+  0% {
+    transform: translate(0, 0);
+    opacity: 0;
+  }
+  20% {
+    opacity: 1;
+  }
+  100% {
+    transform: translate(5px, -12px);
+    opacity: 0;
+  }
+}
+
+.glow {
+  animation: glow 4s ease-in-out infinite;
+  animation-delay: var(--delay, 0s);
+}
+@keyframes glow {
+  0%,
+  100% {
+    opacity: 0.3;
+  }
+  50% {
+    opacity: 0.6;
+  }
+}
+
+/* ---------- Error scenes ---------- */
+
+.lookRight {
+  animation: wingUp 3s step-end infinite;
+}
+.lookLeft {
+  opacity: 0;
+  animation: wingDown 3s step-end infinite;
+}
+
+.wobble {
+  animation: wobble 2.4s step-end infinite;
+}
+@keyframes wobble {
+  0%,
+  60% {
+    transform: translate(0, 0);
+  }
+  64% {
+    transform: translate(1px, -2px);
+  }
+  68% {
+    transform: translate(-1px, 0);
+  }
+  72% {
+    transform: translate(1px, -1px);
+  }
+  76%,
+  100% {
+    transform: translate(0, 0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .scene,
+  .scene * {
+    animation: none !important;
+  }
+  .flock {
+    display: none;
+  }
+}
