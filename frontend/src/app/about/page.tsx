@@ -13,17 +13,22 @@ const pixel = Silkscreen({ subsets: ["latin"], weight: "400", display: "swap" })
 export const metadata: Metadata = {
   title: "About",
   description:
-    "Docket is a civic reading agent for Fremont, California. It reads city hall agendas, minutes and staff reports, and tells each neighborhood what changed, with sources.",
+    "Docket is the neighborhood app for Fremont, California: a feed for neighbors, local news and live incidents, a places map, neighborhood groups and community votes, with an AI agent that reads city hall and cites its sources.",
 };
 
 const SOURCES = [
   "City Council agendas",
   "Planning Commission minutes",
   "Staff reports",
-  "Adopted ordinances",
-  "Fremont city news",
-  "Caltrans road work",
+  "FUSD board meetings",
+  "Fremont App service requests",
+  "California bills",
+  "City of Fremont news",
+  "Tri-City Voice",
+  "Patch Fremont",
+  "r/Fremont",
   "CHP incidents",
+  "Caltrans lane closures",
   "USGS earthquakes",
   "CAL FIRE",
   "National Weather Service alerts",
@@ -32,43 +37,99 @@ const SOURCES = [
 
 const STEPS: { icon: PixelIconName; title: string; body: string }[] = [
   {
-    icon: "reads",
-    title: "Reads",
-    body: "The pipeline agent watches public Fremont records in the background: agendas, minutes, staff reports and city news. It respects robots.txt and keeps the original documents.",
+    icon: "groups",
+    title: "Find your block",
+    body: "Enter a Fremont street address or the nearest cross street. Docket places you in one of the city's 32 official neighborhoods and shows its group. Joining takes an emailed code, no password.",
   },
   {
-    icon: "checks",
-    title: "Checks",
-    body: "Long packets become short updates, but every claim is checked against the retrieved evidence first. Anything that can't be backed up doesn't get published.",
+    icon: "reads",
+    title: "Docket keeps watch",
+    body: "In the background it reads agendas, minutes, staff reports, school board meetings and state bills, and gathers local news plus traffic, fire, earthquake, weather and outage alerts for Fremont.",
   },
   {
     icon: "tells",
-    title: "Tells your block",
-    body: "Updates reach the neighborhood they affect, with a link to the source, what it means locally and how long you have to weigh in.",
+    title: "Your block weighs in",
+    body: "Talk with neighbors in the feed, open any story or incident without leaving Docket, vote on local issues, and ask about what's on your screen, with sources you can check.",
   },
 ];
 
 const FEATURES: { icon: PixelIconName; href: string; title: string; body: string }[] = [
-  { icon: "feed", href: "/", title: "Neighborhood feed", body: "Post, reply and like with neighbors in any Fremont neighborhood." },
-  { icon: "groups", href: "/groups", title: "Neighborhood groups", body: "Join your group and see what it's watching at city hall." },
-  { icon: "places", href: "/places", title: "Places map", body: "Schools, parks and food, plus civic issues and live incidents." },
-  { icon: "news", href: "/news", title: "Fremont news", body: "Police, fire, traffic and city hall news in one searchable page." },
-  { icon: "chat", href: "/chat", title: "Ask Docket", body: "Ask about city documents in plain language. Answers come with numbered sources." },
-  { icon: "votes", href: "/groups", title: "Community votes", body: "Say how you feel about an issue and read neighbors' reviews and pros and cons." },
+  {
+    icon: "feed",
+    href: "/",
+    title: "Neighborhood feed",
+    body: "Post to your neighborhood or all of Fremont with photos, a short video, links and emoji. Reply, like and watch new posts arrive.",
+  },
+  {
+    icon: "groups",
+    href: "/groups",
+    title: "Neighborhood groups",
+    body: "Find your group by address, join with an email code, and follow what city hall has on the agenda for your area.",
+  },
+  {
+    icon: "places",
+    href: "/places",
+    title: "Places map",
+    body: "Explore schools, parks, restaurants and more in any neighborhood, with photos, hours and ratings on Google Maps.",
+  },
+  {
+    icon: "news",
+    href: "/news",
+    title: "Fremont news",
+    body: "Stories about city hall, police, fire, housing and traffic, filtered to Fremont and searchable by neighborhood, topic and source.",
+  },
+  {
+    icon: "tells",
+    href: "/places",
+    title: "Live incidents",
+    body: "CHP calls, Caltrans lane closures, earthquakes, wildfires, weather alerts and power outages near Fremont, refreshed every minute.",
+  },
+  {
+    icon: "votes",
+    href: "/groups",
+    title: "Community votes",
+    body: "Take a stance on a local issue, read pros and cons that cite their sources, and review it for your neighbors.",
+  },
+  {
+    icon: "chat",
+    href: "/chat",
+    title: "Ask Docket",
+    body: "Ask about Fremont's public records in plain language and get answers with numbered sources. It knows which page or story you have open.",
+  },
+  {
+    icon: "reads",
+    href: "/groups",
+    title: "City hall, read for you",
+    body: "An AI agent works through council and planning agendas, minutes, school board meetings and state bills, and turns them into short, cited updates.",
+  },
+  {
+    icon: "checks",
+    href: "/",
+    title: "Safe to share",
+    body: "Posts, reviews, names, photos and videos are checked for abuse, including disguised words and disguised files, before neighbors see them.",
+  },
 ];
 
 const PRINCIPLES = [
   {
+    mark: "§",
     title: "Every claim links to the record",
-    body: "Summaries cite the agenda, minutes or staff report they came from. Docket is a guide to the public record, never a substitute for it.",
+    body: "Agent summaries and answers cite the agenda, minutes or report they came from, and a fact that isn't in its source gets removed. Docket points you to the public record; it doesn't replace it.",
   },
   {
+    mark: "✓",
     title: "Neighbors' votes are opinions",
     body: "Community polls show how residents feel. They are never presented as official council votes.",
   },
   {
+    mark: "!",
+    title: "Checked before neighbors see it",
+    body: "Words, photos and videos go through automatic checks first. If a file can't be checked, it isn't shown.",
+  },
+  {
+    mark: "#",
     title: "Sample data says so",
-    body: "Groups, agenda items and votes that the live agent hasn't read yet are clearly marked as sample data.",
+    body: "Groups, agenda items, posts and votes that aren't live yet are clearly marked as sample data.",
   },
 ];
 
@@ -78,6 +139,7 @@ const STACK = [
   "Aurora DSQL",
   "Amazon S3 Vectors",
   "Amazon Cognito",
+  "Amazon Rekognition",
   "Next.js on AWS Amplify",
   "Google Maps Platform",
 ];
@@ -97,18 +159,18 @@ export default function AboutPage() {
               Made for Fremont, California
             </p>
             <h1 id="about-title" className="display mx-auto mt-5 max-w-3xl text-[2.5rem] leading-[1.05] sm:text-[4rem]">
-              City hall, read for your neighborhood.
+              Your whole neighborhood, in one place.
             </h1>
             <p className="mx-auto mt-5 max-w-2xl text-lg leading-relaxed text-ink-soft sm:text-xl">
-              Docket is a civic reading agent. It works through Fremont agendas, minutes and staff reports, then tells your block
-              what changed, why it matters, and when you can still speak up.
+              Docket is where Fremont neighbors talk, catch local news and live incidents, explore places nearby and weigh in on what
+              city hall is deciding. Its AI agent reads the public record for you and cites every source.
             </p>
             <div className="mt-8 flex flex-wrap justify-center gap-3">
               <Link href="/#address" className="btn btn-primary rounded-full">
                 Find your group
               </Link>
-              <Link href="/chat" className="btn btn-secondary rounded-full border-ink/30 bg-white/70">
-                Ask Docket a question
+              <Link href="/" className="btn btn-secondary rounded-full border-ink/30 bg-white/70">
+                Open the neighborhood feed
               </Link>
             </div>
           </section>
@@ -117,7 +179,7 @@ export default function AboutPage() {
           </div>
 
           <div className={`${styles.bedrock} ${styles.marqueeWrap} overflow-hidden py-4 text-white`}>
-            <p className="sr-only">Docket reads: {SOURCES.join(", ")}.</p>
+            <p className="sr-only">Docket keeps up with: {SOURCES.join(", ")}.</p>
             <div aria-hidden="true" className={styles.marquee}>
               {[0, 1].map((copy) => (
                 <ul key={copy} className="flex shrink-0 items-center">
@@ -137,11 +199,12 @@ export default function AboutPage() {
               <div>
                 <p className={`${pixel.className} text-sm text-park`}>The problem</p>
                 <h2 id="why-title" className="display mt-3 text-[2rem] leading-tight sm:text-[2.75rem]">
-                  City decisions are public. Following them is a part-time job.
+                  Keeping up with your own street shouldn&apos;t be a part-time job.
                 </h2>
                 <p className="mt-5 text-lg leading-relaxed text-ink-soft">
-                  To learn whether a decision touches your street, you have to dig through agendas, meeting minutes, staff reports and
-                  city news spread across several sites. By the time it makes sense, the chance to respond has often passed.
+                  City decisions hide in agenda packets and meeting minutes. Road closures, fires and outages sit on state and federal
+                  feeds. Local stories are spread across several news sites, and neighbors talk in group chats and forums. By the time it
+                  all adds up, the meeting is over and the chance to speak has passed.
                 </p>
               </div>
               <div className="grid gap-4 sm:grid-cols-2">
@@ -150,7 +213,7 @@ export default function AboutPage() {
                   <ul className="mt-4 grid gap-3 text-base text-ink-soft">
                     <li className="flex gap-3">
                       <span aria-hidden="true" className="mt-2 h-2 w-2 shrink-0 bg-signal" />
-                      Search several city sites every week
+                      Check city sites, news sites and alert feeds one by one
                     </li>
                     <li className="flex gap-3">
                       <span aria-hidden="true" className="mt-2 h-2 w-2 shrink-0 bg-signal" />
@@ -158,7 +221,7 @@ export default function AboutPage() {
                     </li>
                     <li className="flex gap-3">
                       <span aria-hidden="true" className="mt-2 h-2 w-2 shrink-0 bg-signal" />
-                      Hear about it after the meeting
+                      Hear about it from a neighbor, after the fact
                     </li>
                   </ul>
                 </div>
@@ -167,15 +230,15 @@ export default function AboutPage() {
                   <ul className="mt-4 grid gap-3 text-base text-ink">
                     <li className="flex gap-3">
                       <span aria-hidden="true" className="mt-2 h-2 w-2 shrink-0 bg-park" />
-                      One update for the blocks it affects
+                      One feed for your neighbors and your neighborhood
                     </li>
                     <li className="flex gap-3">
                       <span aria-hidden="true" className="mt-2 h-2 w-2 shrink-0 bg-park" />
-                      A plain summary with a link to the source
+                      News, incidents and city hall, sorted for your area
                     </li>
                     <li className="flex gap-3">
                       <span aria-hidden="true" className="mt-2 h-2 w-2 shrink-0 bg-park" />
-                      Time to speak up before the deadline
+                      Plain summaries with sources, before the deadline
                     </li>
                   </ul>
                 </div>
@@ -187,7 +250,7 @@ export default function AboutPage() {
             <div className={`page py-16 sm:py-24 ${styles.reveal}`}>
               <p className={`${pixel.className} text-center text-sm text-park`}>How it works</p>
               <h2 id="how-title" className="display mx-auto mt-3 max-w-2xl text-center text-[2rem] leading-tight sm:text-[2.75rem]">
-                A quiet agent that does the reading.
+                Neighbors talk. Docket keeps watch.
               </h2>
 
               <div aria-hidden="true" className={`relative mx-[16%] mt-12 hidden h-5 md:block ${styles.courierTrack}`}>
@@ -219,7 +282,7 @@ export default function AboutPage() {
                 <div>
                   <p className={`${pixel.className} text-sm text-park`}>What you can do</p>
                   <h2 id="features-title" className="display mt-3 max-w-xl text-[2rem] leading-tight sm:text-[2.75rem]">
-                    Everything happening on your block, in one place.
+                    Talk, explore, stay informed and speak up.
                   </h2>
                 </div>
               </div>
@@ -255,11 +318,11 @@ export default function AboutPage() {
               <h2 id="principles-title" className="display mt-3 max-w-2xl text-[2rem] leading-tight !text-white sm:text-[2.75rem]">
                 Built to be checked, not just trusted.
               </h2>
-              <ul className="mt-10 grid gap-4 md:grid-cols-3">
-                {PRINCIPLES.map((principle, i) => (
+              <ul className="mt-10 grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+                {PRINCIPLES.map((principle) => (
                   <li key={principle.title} className="rounded-2xl border border-white/15 bg-white/5 p-6">
                     <span aria-hidden="true" className={`${pixel.className} text-3xl text-park-leaf`}>
-                      {["§", "✓", "#"][i]}
+                      {principle.mark}
                     </span>
                     <h3 className="mt-3 text-xl font-semibold">{principle.title}</h3>
                     <p className="mt-2 text-base leading-relaxed text-white/80">{principle.body}</p>
@@ -274,11 +337,12 @@ export default function AboutPage() {
               <div>
                 <p className={`${pixel.className} text-sm text-park`}>Under the hood</p>
                 <h2 id="stack-title" className="display mt-3 text-[2rem] leading-tight sm:text-[2.75rem]">
-                  Two agents, one source of truth.
+                  One neighborhood app, two reading agents.
                 </h2>
                 <p className="mt-5 text-lg leading-relaxed text-ink-soft">
-                  Docket runs on two Amazon Bedrock AgentCore runtimes built with Strands Agents. The pipeline agent ingests public
-                  records, stores the evidence and writes verified updates. The chat agent answers residents&apos; questions with
+                  The Next.js web app runs the feed, groups, news, map and votes, with sign-in through Amazon Cognito and data in
+                  Aurora DSQL. Two Amazon Bedrock AgentCore runtimes built with Strands Agents do the reading: the pipeline agent
+                  ingests public records and writes verified updates, and the chat agent answers residents&apos; questions with
                   citations from that same corpus. AWS credentials stay on the server.
                 </p>
                 <ul className="mt-6 flex flex-wrap gap-2">
@@ -291,6 +355,7 @@ export default function AboutPage() {
               </div>
               <div className="grid gap-3 font-mono text-sm">
                 {[
+                  { name: "docket_web", body: "Feed → groups → news → places → votes", tone: "bg-white border-rule" },
                   { name: "docket_pipeline", body: "Fetch → extract → embed → verify → publish", tone: "bg-park-wash border-park/30" },
                   { name: "docket_chat", body: "Question → retrieve evidence → cited answer", tone: "bg-sky-mist border-sky-top" },
                 ].map((runtime) => (
@@ -305,7 +370,9 @@ export default function AboutPage() {
                     <p className="mt-2 text-ink-soft">{runtime.body}</p>
                   </div>
                 ))}
-                <p className="px-1 text-ink-muted">Evidence lives in Aurora DSQL, Amazon S3 and S3 Vectors.</p>
+                <p className="px-1 text-ink-muted">
+                  Evidence lives in Aurora DSQL, Amazon S3 and S3 Vectors. Photos and videos stay in a private S3 bucket.
+                </p>
               </div>
             </div>
           </section>
@@ -317,7 +384,7 @@ export default function AboutPage() {
                 Your block, on the docket.
               </h2>
               <p className="mx-auto mt-4 max-w-xl text-lg leading-relaxed text-white/80">
-                Find your neighborhood group and let Docket keep watch while you sleep.
+                Find your neighborhood group, say hello in the feed, and let Docket keep watch while you sleep.
               </p>
               <div className="mt-8 flex flex-wrap justify-center gap-3">
                 <Link href="/#address" className="on-dark btn rounded-full bg-white text-ink hover:bg-sky-haze">
