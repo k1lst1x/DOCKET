@@ -12,7 +12,10 @@ import string
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
+from email.utils import parsedate_to_datetime
 from urllib.parse import parse_qs, urlsplit
+from xml.etree import ElementTree
+from zoneinfo import ZoneInfo
 
 from core.fetcher import Artifact
 from core.registry import Source, get_source
@@ -286,7 +289,50 @@ def _arcgis_featureserver(source: Source, artifact: Artifact) -> list[DocumentRe
     return [DocumentRef(source.url, source.name, "gis_layer", inline_text=f"{summary}\n\n{body}\n", locator="layer")]
 
 
+RSS_CONTENT = "{http://purl.org/rss/1.0/modules/content/}encoded"
+FREMONT_TZ = ZoneInfo("America/Los_Angeles")
+
+
+def _rss_feed(source: Source, artifact: Artifact) -> list[DocumentRef]:
+    """News items from an RSS 2.0 feed.
+
+    An item whose feed entry carries the full article (content:encoded) is stored from that text; others
+    are fetched from their link. params: mention_terms (keep only items whose title or article text names
+    one of them), exclude_category_prefixes (drop sponsored or opinion categories, case-insensitive).
+    Publication times are converted to Fremont local time like the city's own listings.
+    """
+    root = ElementTree.fromstring(artifact.raw)
+    terms = [term.lower() for term in source.params.get("mention_terms", [])]
+    excluded = tuple(prefix.lower() for prefix in source.params.get("exclude_category_prefixes", []))
+    refs = []
+    for item in root.iter("item"):
+        title = _visible_text(item.findtext("title") or "")
+        link = (item.findtext("link") or "").strip()
+        if not title or not link.startswith(("https://", "http://")):
+            continue
+        categories = [_visible_text(category.text or "").lower() for category in item.findall("category")]
+        if excluded and any(category.startswith(excluded) for category in categories):
+            continue
+        article = _visible_text(item.findtext(RSS_CONTENT) or "")
+        if terms and not any(re.search(rf"\b{re.escape(term)}\b", f"{title} {article}".lower()) for term in terms):
+            continue
+        published = None
+        if item.findtext("pubDate"):
+            try:
+                published = parsedate_to_datetime(item.findtext("pubDate")).astimezone(FREMONT_TZ)
+                published = published.replace(tzinfo=None)
+            except (TypeError, ValueError):
+                published = None
+        if article:
+            inline = f"# {title}\n\n{article}"
+            refs.append(DocumentRef(link, title, "news", published, inline_text=inline, locator="article"))
+        else:
+            refs.append(DocumentRef(link, title, "news", published))
+    return _dedupe(refs)
+
+
 PARSERS: dict[str, Callable[[Source, Artifact], list[DocumentRef]]] = {
+    "rss_feed": _rss_feed,
     "iqm2_calendar": _iqm2_calendar,
     "civicplus_agenda_center": _civicplus_agenda_center,
     "civicplus_news": _civicplus_news,

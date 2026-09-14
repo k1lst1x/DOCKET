@@ -170,6 +170,34 @@ sources:
     parser: manual_upload
     enabled: false
 
+  # News and transportation feeds (robots.txt checked 2026-09-13: Tri-City Voice allows all but
+  # /blogs/* with Crawl-delay: 1; Alameda CTC allows all).
+  - id: tricityvoice-news
+    name: Tri-City Voice - local news naming Fremont
+    url: https://www.tricityvoice.com/feed/
+    kind: news
+    crawl_strategy: rss_feed
+    parser: rss_feed
+    fetcher: http
+    schedule: daily
+    enabled: true
+    verify_pattern: '<rss'
+    params:
+      mention_terms: [Fremont]
+      # Sponsored "Best of" roundups and opinion columns are not news.
+      exclude_category_prefixes: [best of, columns]
+
+  - id: alameda-ctc-news
+    name: Alameda County Transportation Commission (Alameda CTC) - news
+    url: https://www.alamedactc.org/feed/
+    kind: transportation
+    crawl_strategy: rss_feed
+    parser: rss_feed
+    fetcher: http
+    schedule: weekly
+    enabled: true
+    verify_pattern: '<rss'
+
   # ArcGIS layers (services2.arcgis.com returns 403 for robots.txt, which RFC 9309 treats as no
   # restrictions). Each query URL returns attributes only; the parser turns a layer into one document.
   - id: fremont-neighborhoods-gis
