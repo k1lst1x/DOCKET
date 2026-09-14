@@ -1,4 +1,4 @@
-import type { LiveAlert } from "../live/types";
+import type { AlertSeverity, LiveAlert, LiveKind } from "../live/types";
 
 // The Fremont news page: articles, community posts and live incidents, each tagged with the
 // neighborhoods it names, so the page can search, sort and filter one combined list.
@@ -38,6 +38,28 @@ export interface NewsItem {
   kind: NewsKind;
   /** Live incidents only. */
   severity: "minor" | "moderate" | "severe" | null;
+  /** Where and how long, for live incidents; shown in the story popup. */
+  incident?: NewsIncidentDetails | null;
+  /** Weather and disaster alerts only. */
+  alert?: NewsAlertDetails | null;
+}
+
+export interface NewsIncidentDetails {
+  kind: LiveKind;
+  lat: number;
+  lng: number;
+  updatedAt: string | null;
+  endsAt: string | null;
+  /** Magnitude for earthquakes, acres for fires, customers for outages. */
+  magnitude: number | null;
+}
+
+export interface NewsAlertDetails {
+  severity: AlertSeverity;
+  endsAt: string | null;
+  areaDesc: string | null;
+  description: string | null;
+  instruction: string | null;
 }
 
 export interface NewsSourceStatus {

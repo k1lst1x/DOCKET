@@ -3,7 +3,8 @@ import type { NewsCategory, NewsItem, NewsKind } from "./types";
 // Searching, filtering and sorting the news catalog. Pure, so it runs in the browser on every
 // keystroke and is easy to test.
 
-export type NewsSort = "newest" | "oldest" | "relevance";
+/** "news" (the default) lists articles, then community posts, then live incidents, each newest first. */
+export type NewsSort = "news" | "newest" | "oldest" | "relevance";
 export type NewsRange = "day" | "week" | "month" | "all";
 
 export interface NewsQuery {
@@ -20,10 +21,11 @@ export interface NewsQuery {
   sort: NewsSort;
 }
 
-export const DEFAULT_NEWS_QUERY: NewsQuery = { q: "", area: "all", categories: [], kinds: [], source: "all", range: "all", sort: "newest" };
+export const DEFAULT_NEWS_QUERY: NewsQuery = { q: "", area: "all", categories: [], kinds: [], source: "all", range: "all", sort: "news" };
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const RANGE_MS: Record<NewsRange, number> = { day: DAY_MS, week: 7 * DAY_MS, month: 31 * DAY_MS, all: Infinity };
+const KIND_RANK: Record<NewsKind, number> = { article: 0, community: 1, incident: 2 };
 
 export const areaSlug = (name: string) => name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
 const fold = (text: string) => text.normalize("NFKD").replace(/\p{M}/gu, "").toLowerCase();
@@ -70,6 +72,7 @@ export function filterNews(items: NewsItem[], query: NewsQuery, now: number): Ne
   scored.sort((a, b) => {
     if (query.sort === "oldest") return (publishedMs(a.item) || 0) - (publishedMs(b.item) || 0);
     if (query.sort === "relevance" && terms.length && b.score !== a.score) return b.score - a.score;
+    if (query.sort === "news" && a.item.kind !== b.item.kind) return KIND_RANK[a.item.kind] - KIND_RANK[b.item.kind];
     return byDate(a.item, b.item);
   });
   return scored.map((s) => s.item);
@@ -84,7 +87,7 @@ export function queryToParams(query: NewsQuery): URLSearchParams {
   if (query.kinds.length) params.set("type", query.kinds.join(","));
   if (query.source !== "all") params.set("source", query.source);
   if (query.range !== "all") params.set("range", query.range);
-  if (query.sort !== "newest") params.set("sort", query.sort);
+  if (query.sort !== DEFAULT_NEWS_QUERY.sort) params.set("sort", query.sort);
   return params;
 }
 
@@ -102,6 +105,6 @@ export function paramsToQuery(params: URLSearchParams, allowed: { categories: st
     kinds: list<NewsKind>("type", allowed.kinds),
     source: (params.get("source") ?? "all").slice(0, 80) || "all",
     range: range === "day" || range === "week" || range === "month" ? range : "all",
-    sort: sort === "oldest" || sort === "relevance" ? sort : "newest",
+    sort: sort === "newest" || sort === "oldest" || sort === "relevance" ? sort : DEFAULT_NEWS_QUERY.sort,
   };
 }

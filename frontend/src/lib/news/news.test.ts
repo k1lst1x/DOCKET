@@ -161,6 +161,7 @@ describe("incidentToNewsItem", () => {
       neighborhoods: ["Warm Springs"],
       kind: "incident",
       severity: "moderate",
+      incident: { kind: "traffic", lat: 37.4794, lng: -121.9189, updatedAt: null, endsAt: null, magnitude: null },
     });
     expect(incidentToNewsItem({ ...base, kind: "quake", lat: 37.87, lng: -121.8 })).toMatchObject({ category: "disaster", neighborhoods: [] });
   });

@@ -21,10 +21,10 @@ export function timeAgo(iso: string | null, now: number): string {
   return new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", timeZone: PACIFIC }).format(new Date(iso));
 }
 
-const clock = (iso: string) =>
+export const clock = (iso: string) =>
   new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZone: PACIFIC }).format(new Date(iso));
 
-function whereFromFremont(incident: LiveIncident): string {
+export function whereFromFremont(incident: { lat: number; lng: number }): string {
   const hood = neighborhoodAt(incident.lng, incident.lat);
   if (hood) return `In ${hood.name}`;
   const km = kmFromFremont(incident.lat, incident.lng);
@@ -93,9 +93,11 @@ interface LivePanelProps {
   onShowOnMap: (show: boolean) => void;
   selectedId: string | null;
   onSelect: (id: string | null) => void;
+  /** Opens the incident in its own popup. */
+  onOpen?: (incident: LiveIncident) => void;
 }
 
-export function LivePanel({ live, kinds, onToggleKind, showOnMap, onShowOnMap, selectedId, onSelect }: LivePanelProps) {
+export function LivePanel({ live, kinds, onToggleKind, showOnMap, onShowOnMap, selectedId, onSelect, onOpen }: LivePanelProps) {
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
     const timer = window.setInterval(() => setNow(Date.now()), 10_000);
@@ -209,14 +211,21 @@ export function LivePanel({ live, kinds, onToggleKind, showOnMap, onShowOnMap, s
                         {ENDS_LABEL[incident.kind]}: {clock(incident.endsAt)}
                       </p>
                     ) : null}
-                    {incident.sourceUrl ? (
-                      <a href={incident.sourceUrl} target="_blank" rel="noopener noreferrer" className="btn btn-secondary mt-3 h-10 rounded-full px-4 text-sm">
-                        View on {incident.sourceName}
-                        <span className="sr-only"> (opens in a new tab)</span>
-                      </a>
-                    ) : (
-                      <p className="mt-2">Source: {incident.sourceName}</p>
-                    )}
+                    <div className="mt-3 flex flex-wrap items-center gap-2">
+                      {onOpen ? (
+                        <button type="button" aria-haspopup="dialog" onClick={() => onOpen(incident)} className="btn btn-primary h-10 rounded-full px-4 text-sm">
+                          Read more
+                        </button>
+                      ) : null}
+                      {incident.sourceUrl ? (
+                        <a href={incident.sourceUrl} target="_blank" rel="noopener noreferrer" className="btn btn-secondary h-10 rounded-full px-4 text-sm">
+                          View on {incident.sourceName}
+                          <span className="sr-only"> (opens in a new tab)</span>
+                        </a>
+                      ) : (
+                        <p>Source: {incident.sourceName}</p>
+                      )}
+                    </div>
                   </div>
                 ) : null}
               </li>

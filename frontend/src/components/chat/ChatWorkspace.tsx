@@ -1,7 +1,13 @@
 "use client";
 
 import { useState } from "react";
-import { ChatPanel, SparkIcon } from "@/components/chat/ChatPanel";
+import { ChatPanel, SparkIcon, useChat } from "@/components/chat/ChatPanel";
+
+/** One conversation; "New chat" remounts it with a fresh one. */
+function PageChat({ autoFocus }: { autoFocus: boolean }) {
+  const chat = useChat();
+  return <ChatPanel variant="page" chat={chat} autoFocus={autoFocus} />;
+}
 
 /** Full-page chat: a slim sidebar and a large conversation. */
 export function ChatWorkspace() {
@@ -37,7 +43,7 @@ export function ChatWorkspace() {
         </div>
       </aside>
       <div className="min-h-[32rem] md:h-[calc(100svh-7.5rem)] md:min-h-0">
-        <ChatPanel key={session} variant="page" autoFocus={session > 0} />
+        <PageChat key={session} autoFocus={session > 0} />
       </div>
     </div>
   );

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useId, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
+import { contextSuggestions, type ChatContext } from "@/lib/chat-context";
 
 // Chat UI. Messages go to /api/chat, which streams answers from Docket's chat agent. Every
 // answer arrives with the sources it cites. When the agent is unreachable (including the static
@@ -27,6 +28,8 @@ interface Message {
   citations?: Citation[];
   /** False for general answers that don't come from Fremont city documents. */
   grounded?: boolean;
+  /** For questions: the title of what the person was looking at when they asked. */
+  about?: string;
 }
 
 type ChatEvent =
@@ -78,40 +81,43 @@ function parseEvents(block: string): ChatEvent[] {
   }
 }
 
-interface ChatPanelProps {
-  variant: "popup" | "page";
-  onClose?: () => void;
-  autoFocus?: boolean;
+export interface ChatState {
+  messages: Message[];
+  draft: string;
+  setDraft: (draft: string) => void;
+  /** Waiting for the first words of an answer. */
+  thinking: boolean;
+  /** An answer is still arriving. */
+  pending: boolean;
+  statusText: string | null;
+  send: (text: string, context?: ChatContext | null) => Promise<void>;
 }
 
-export function ChatPanel({ variant, onClose, autoFocus = false }: ChatPanelProps) {
+/**
+ * The conversation. It lives with whoever owns the panel (the popup or the chat page), so moving the
+ * popup above an open dialog keeps the messages, the draft and an answer that is still streaming.
+ */
+export function useChat(): ChatState {
   const [messages, setMessages] = useState<Message[]>([{ id: 0, role: "assistant", text: GREETING }]);
   const [draft, setDraft] = useState("");
   const [thinking, setThinking] = useState(false);
+  const [pending, setPending] = useState(false);
   const [statusText, setStatusText] = useState<string | null>(null);
-  const inputRef = useRef<HTMLTextAreaElement>(null);
-  const logRef = useRef<HTMLDivElement>(null);
   const nextId = useRef(1);
   const sessionRef = useRef<string | null>(null);
-  const titleId = useId();
-
-  useEffect(() => {
-    if (autoFocus) inputRef.current?.focus();
-  }, [autoFocus]);
-
-  useEffect(() => {
-    logRef.current?.scrollTo({ top: logRef.current.scrollHeight, behavior: "smooth" });
-  }, [messages, thinking]);
+  const busy = useRef(false);
 
   function upsertReply(reply: Message) {
     setMessages((m) => (m.some((msg) => msg.id === reply.id) ? m.map((msg) => (msg.id === reply.id ? reply : msg)) : [...m, reply]));
   }
 
-  async function send(text: string) {
+  async function send(text: string, context: ChatContext | null = null) {
     const clean = text.trim();
-    if (!clean || thinking) return;
+    if (!clean || busy.current) return;
+    busy.current = true;
+    setPending(true);
     const replyId = nextId.current + 1;
-    setMessages((m) => [...m, { id: nextId.current, role: "user", text: clean }]);
+    setMessages((m) => [...m, { id: nextId.current, role: "user", text: clean, about: context?.title }]);
     nextId.current += 2;
     setDraft("");
     setThinking(true);
@@ -122,7 +128,7 @@ export function ChatPanel({ variant, onClose, autoFocus = false }: ChatPanelProp
       const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text: clean, session_id: sessionRef.current }),
+        body: JSON.stringify({ text: clean, session_id: sessionRef.current, context }),
       });
       if (!res.ok || !res.body) {
         // 503: chat isn't configured; 404: no API routes (static preview). Anything else is an outage.
@@ -170,24 +176,57 @@ export function ChatPanel({ variant, onClose, autoFocus = false }: ChatPanelProp
     } catch {
       upsertReply({ id: replyId, role: "assistant", text: UNAVAILABLE });
     } finally {
+      busy.current = false;
+      setPending(false);
       setThinking(false);
       setStatusText(null);
     }
   }
 
+  return { messages, draft, setDraft, thinking, pending, statusText, send };
+}
+
+interface ChatPanelProps {
+  variant: "popup" | "page";
+  chat: ChatState;
+  /** What the person is looking at; questions are sent with it. */
+  context?: ChatContext | null;
+  onDismissContext?: () => void;
+  onClose?: () => void;
+  autoFocus?: boolean;
+}
+
+export function ChatPanel({ variant, chat, context = null, onDismissContext, onClose, autoFocus = false }: ChatPanelProps) {
+  const { messages, draft, setDraft, thinking, pending, statusText, send } = chat;
+  const inputRef = useRef<HTMLTextAreaElement>(null);
+  const logRef = useRef<HTMLDivElement>(null);
+  const titleId = useId();
+
+  useEffect(() => {
+    if (autoFocus) inputRef.current?.focus();
+  }, [autoFocus]);
+
+  useEffect(() => {
+    logRef.current?.scrollTo({ top: logRef.current.scrollHeight, behavior: "smooth" });
+  }, [messages, thinking]);
+
   function onSubmit(e: FormEvent) {
     e.preventDefault();
-    void send(draft);
+    void send(draft, context);
   }
 
   function onKeyDown(e: KeyboardEvent<HTMLTextAreaElement>) {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
-      void send(draft);
+      void send(draft, context);
     }
   }
 
   const onlyGreeting = messages.length === 1;
+  const lastAbout = [...messages].reverse().find((m) => m.role === "user")?.about;
+  // Starter questions at the start, and again whenever there's something new on screen to ask about.
+  const suggestions = context ? contextSuggestions(context) : SUGGESTIONS;
+  const showSuggestions = !pending && (onlyGreeting || (context !== null && lastAbout !== context.title));
 
   return (
     <section
@@ -218,9 +257,40 @@ export function ChatPanel({ variant, onClose, autoFocus = false }: ChatPanelProp
         ) : null}
       </header>
 
+      {context ? (
+        <div className="flex items-center gap-3 border-b border-rule bg-sky-mist px-4 py-2.5 sm:px-5">
+          <span aria-hidden="true" className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-white text-ink-soft">
+            <svg viewBox="0 0 20 20" className="h-4 w-4">
+              <path d="M1.5 10S4.5 4 10 4s8.5 6 8.5 6-3 6-8.5 6-8.5-6-8.5-6z" fill="none" stroke="currentColor" strokeWidth="1.6" />
+              <circle cx="10" cy="10" r="2.5" fill="currentColor" />
+            </svg>
+          </span>
+          <p className="min-w-0 flex-1">
+            <span className="block text-xs font-semibold text-ink-muted">Asking about this {context.label.toLowerCase()}</span>
+            <span className="line-clamp-2 text-sm font-semibold leading-snug text-ink">{context.title}</span>
+          </p>
+          {onDismissContext ? (
+            <button
+              type="button"
+              onClick={onDismissContext}
+              aria-label="Ask without this context"
+              title="Ask without this context"
+              className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-ink-soft hover:bg-ink/5"
+            >
+              <svg viewBox="0 0 20 20" aria-hidden="true" className="h-4 w-4">
+                <path d="M5 5l10 10M15 5L5 15" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+              </svg>
+            </button>
+          ) : null}
+        </div>
+      ) : null}
+
       <div ref={logRef} role="log" aria-live="polite" aria-label="Conversation" className="min-h-0 flex-1 space-y-3 overflow-y-auto px-4 py-5 sm:px-5">
         {messages.map((m) => (
           <div key={m.id} className={`flex flex-col ${m.role === "user" ? "items-end" : "items-start"}`}>
+            {m.role === "user" && m.about ? (
+              <span className="mb-1 mr-1 max-w-[85%] truncate text-xs text-ink-muted">About: {m.about}</span>
+            ) : null}
             {m.role === "assistant" && m.grounded === false ? (
               <span className="mb-1 ml-1 rounded-full bg-ochre-wash px-2.5 py-0.5 text-sm font-semibold text-ochre">
                 General answer · not from city documents
@@ -282,13 +352,13 @@ export function ChatPanel({ variant, onClose, autoFocus = false }: ChatPanelProp
             </p>
           </div>
         ) : null}
-        {onlyGreeting ? (
+        {showSuggestions ? (
           <div className="flex flex-wrap gap-2 pt-2">
-            {SUGGESTIONS.map((s) => (
+            {suggestions.map((s) => (
               <button
                 key={s}
                 type="button"
-                onClick={() => void send(s)}
+                onClick={() => void send(s, context)}
                 className="rounded-full border border-rule bg-white px-3.5 py-2 text-left text-sm text-ink hover:border-ink/40 hover:bg-sky-mist"
               >
                 {s}
@@ -314,12 +384,12 @@ export function ChatPanel({ variant, onClose, autoFocus = false }: ChatPanelProp
               e.target.style.height = `${Math.min(e.target.scrollHeight, 160)}px`;
             }}
             onKeyDown={onKeyDown}
-            placeholder="Ask about Fremont…"
+            placeholder={context ? `Ask about this ${context.label.toLowerCase()}…` : "Ask about Fremont…"}
             className="max-h-40 min-h-[2.5rem] flex-1 resize-none bg-transparent py-2 text-base text-ink placeholder:text-ink-muted focus:outline-none"
           />
           <button
             type="submit"
-            disabled={!draft.trim() || thinking}
+            disabled={!draft.trim() || pending}
             aria-label="Send message"
             className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-ink text-white transition-opacity hover:bg-black disabled:opacity-40"
           >

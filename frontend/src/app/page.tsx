@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { AddressField } from "@/components/AddressField";
 import { HomeFeed } from "@/components/feed/HomeFeed";
 import { SiteFooter, SiteHeader } from "@/components/SiteHeader";
 import { getWeeklyStats } from "@/lib/data";
@@ -28,16 +29,7 @@ export default function Home() {
                 <p id="address-hint" className="mt-1 text-sm text-ink-soft">
                   Find your neighborhood group with a Fremont street address or the nearest cross street.
                 </p>
-                <input
-                  id="address"
-                  name="address"
-                  type="text"
-                  required
-                  autoComplete="street-address"
-                  placeholder="37600 Niles Blvd, Fremont"
-                  aria-describedby="address-hint"
-                  className="field mt-3 h-12 rounded-full"
-                />
+                <AddressField apiKey={process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY ?? ""} />
                 <button type="submit" className="btn btn-primary mt-2 h-11 w-full rounded-full">
                   Find my group
                 </button>

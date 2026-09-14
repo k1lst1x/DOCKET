@@ -2,6 +2,7 @@ import { BedrockAgentCoreClient, InvokeAgentRuntimeCommand } from "@aws-sdk/clie
 import { NextResponse } from "next/server";
 import { getSession, isSameOrigin } from "@/lib/auth";
 import { noStore } from "@/lib/auth-http";
+import { sanitizeChatContext, withContext } from "@/lib/chat-context";
 import { allowChatRequest } from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
@@ -55,7 +56,7 @@ export async function POST(request: Request) {
   } catch {
     return NextResponse.json({ error: "Send the message as JSON." }, { status: 400, headers: noStore });
   }
-  const { text, session_id: requestedSession } = (body ?? {}) as { text?: unknown; session_id?: unknown };
+  const { text, session_id: requestedSession, context } = (body ?? {}) as { text?: unknown; session_id?: unknown; context?: unknown };
   if (typeof text !== "string" || !text.trim() || text.length > MAX_TEXT_CHARS) {
     return NextResponse.json({ error: "Messages must be 1 to 2000 characters." }, { status: 400, headers: noStore });
   }
@@ -63,7 +64,9 @@ export async function POST(request: Request) {
   const sessionId = typeof requestedSession === "string" && UUID.test(requestedSession) ? requestedSession : crypto.randomUUID();
   // Identity comes only from the signed session cookie, never from the request body.
   const session = await getSession();
-  const prompt = text.trim();
+  // What the person was looking at (an issue, story, incident, group or place), validated and appended
+  // after the question as background so "this" means the right thing.
+  const prompt = withContext(text, sanitizeChatContext(context));
 
   const arn = runtimeArn();
   const localUrl = arn ? null : localChatUrl();

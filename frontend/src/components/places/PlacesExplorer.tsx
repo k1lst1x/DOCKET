@@ -1,7 +1,11 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useChatContext } from "@/components/chat/chat-context-store";
 import { IssueDialog } from "@/components/issues/IssueDialog";
+import { NewsDialog, newsChatContext } from "@/components/news/NewsDialog";
+import { incidentToNewsItem } from "@/lib/news/incidents";
+import type { NewsItem } from "@/lib/news/types";
 import type { IssueMarker } from "@/lib/issue-types";
 import { loadGoogleMaps } from "@/lib/google-maps";
 import { pointInPolygon } from "@/lib/geo";
@@ -218,6 +222,7 @@ export function PlacesExplorer({ apiKey, mapId }: { apiKey: string; mapId: strin
   const [liveKinds, setLiveKinds] = useState<Set<LiveKind>>(() => new Set(LIVE_KINDS.map((k) => k.kind)));
   const [showLive, setShowLive] = useState(true);
   const [selectedIncidentId, setSelectedIncidentId] = useState<string | null>(null);
+  const [openIncident, setOpenIncident] = useState<NewsItem | null>(null);
   const live = useLiveIncidents();
   const issueData = useIssueMarkers();
   const [issueFilter, setIssueFilter] = useState<IssueFilter>("all");
@@ -255,6 +260,30 @@ export function PlacesExplorer({ apiKey, mapId }: { apiKey: string; mapId: strin
   const liveCount = live.snapshot?.incidents.length ?? 0;
   const topAlert = live.snapshot?.alerts[0] ?? null;
   const moreAlerts = Math.max(0, (live.snapshot?.alerts.length ?? 0) - 1);
+
+  // The assistant knows what's selected: an incident, then a place, otherwise the area being browsed.
+  const selectedPlace = visible.find((r) => r.id === selectedId) ?? null;
+  const selectedIncident = tab === "live" ? (liveIncidents.find((i) => i.id === selectedIncidentId) ?? null) : null;
+  useChatContext(
+    selectedIncident
+      ? newsChatContext(incidentToNewsItem(selectedIncident))
+      : selectedPlace
+        ? {
+            kind: "place",
+            label: "Place on the map",
+            title: selectedPlace.name,
+            details: [selectedPlace.address, selectedPlace.typeLabel, selectedPlace.neighborhood ? `Fremont neighborhood: ${selectedPlace.neighborhood}` : null].filter(
+              (d): d is string => Boolean(d),
+            ),
+          }
+        : {
+            kind: "neighborhood",
+            label: "Places map",
+            title: isCity ? "All of Fremont" : `${area.name}, Fremont`,
+            details: [`Browsing ${category.label.toLowerCase()} on the map`],
+          },
+    selectedIncident || selectedPlace ? 2 : 1,
+  );
 
   const shownIssues = useMemo(() => issueData.issues.filter((i) => issueMatchesFilter(i, issueFilter, now)), [issueData.issues, issueFilter, now]);
   issuesRef.current = issueData.issues;
@@ -343,7 +372,8 @@ export function PlacesExplorer({ apiKey, mapId }: { apiKey: string; mapId: strin
           mapTypeControl: false,
           streetViewControl: false,
           fullscreenControl: true,
-          gestureHandling: "cooperative",
+          // Mouse wheel zooms without Ctrl; touch screens keep two-finger panning so the page still scrolls.
+          gestureHandling: window.matchMedia("(pointer: fine)").matches ? "greedy" : "cooperative",
         });
         mapRef.current = map;
         for (const n of NEIGHBORHOODS) {
@@ -930,6 +960,7 @@ export function PlacesExplorer({ apiKey, mapId }: { apiKey: string; mapId: strin
             onShowOnMap={setShowLive}
             selectedId={selectedIncidentId}
             onSelect={setSelectedIncidentId}
+            onOpen={(incident) => setOpenIncident(incidentToNewsItem(incident))}
           />
         )}
       </section>
@@ -964,6 +995,7 @@ export function PlacesExplorer({ apiKey, mapId }: { apiKey: string; mapId: strin
       </div>
     </div>
     <IssueDialog issueId={openIssueId} onClose={() => setOpenIssueId(null)} fallbackTitle={issueData.issues.find((i) => i.id === openIssueId)?.title} />
+    <NewsDialog item={openIncident} onClose={() => setOpenIncident(null)} />
     </>
   );
 }

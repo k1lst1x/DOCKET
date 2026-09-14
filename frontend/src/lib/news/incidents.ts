@@ -1,4 +1,4 @@
-import type { LiveIncident } from "../live/types";
+import type { LiveAlert, LiveIncident } from "../live/types";
 import { neighborhoodAt } from "../places";
 import { DISTRICT_ALIASES } from "./parse";
 import type { NewsCategory, NewsItem } from "./types";
@@ -32,5 +32,23 @@ export function incidentToNewsItem(incident: LiveIncident): NewsItem {
     neighborhoods: neighborhood && DISTRICTS.has(neighborhood) ? [neighborhood] : [],
     kind: "incident",
     severity: incident.severity,
+    incident: { kind: incident.kind, lat: incident.lat, lng: incident.lng, updatedAt: incident.updatedAt, endsAt: incident.endsAt, magnitude: incident.magnitude },
+  };
+}
+
+/** A National Weather Service alert in the same shape, so it opens in the same popup. */
+export function alertToNewsItem(alert: LiveAlert): NewsItem {
+  return {
+    id: `alert:${alert.id}`,
+    title: alert.event,
+    url: alert.sourceUrl,
+    source: "National Weather Service",
+    publishedAt: alert.effective,
+    snippet: alert.headline,
+    category: "disaster",
+    neighborhoods: [],
+    kind: "incident",
+    severity: alert.severity === "Extreme" || alert.severity === "Severe" ? "severe" : alert.severity === "Moderate" ? "moderate" : "minor",
+    alert: { severity: alert.severity, endsAt: alert.endsAt, areaDesc: alert.areaDesc, description: alert.description, instruction: alert.instruction },
   };
 }

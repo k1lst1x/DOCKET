@@ -70,7 +70,8 @@ const isoDate = (value: string | null) => {
   return Number.isFinite(t) ? new Date(t).toISOString() : null;
 };
 
-const SNIPPET_MAX = 280;
+// Cards clamp to three lines; the story popup shows the whole summary.
+const SNIPPET_MAX = 700;
 
 export function parseFeed(xml: string): RawEntry[] {
   const entries: RawEntry[] = [];

@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { BoundaryMap } from "@/components/BoundaryMap";
+import { ShareChatContext } from "@/components/chat/chat-context-store";
+import { GroupNews } from "@/components/news/GroupNews";
 import { EmptyState, Hills } from "@/components/EmptyState";
 import { IssueBoard } from "@/components/issues/IssueBoard";
 import { ItemRef } from "@/components/ItemRef";
@@ -48,6 +50,19 @@ export default async function GroupPage({ params }: { params: Params }) {
 
   return (
     <>
+      <ShareChatContext
+        context={{
+          kind: "group",
+          label: "Neighborhood group",
+          title: group.name,
+          details: [
+            `Fremont neighborhood: ${group.district}`,
+            group.description,
+            ...group.items.slice(0, 5).map((item) => `Watching: ${item.title} (${item.deadlineKind} ${item.deadline.slice(0, 10)})`),
+            ...group.outcomes.slice(0, 2).map((outcome) => `Recently decided: ${outcome.title} (${outcome.result})`),
+          ],
+        }}
+      />
       <div className="bg-[linear-gradient(180deg,#8DC2F5_0%,#B3D6F6_45%,#DDEBF6_100%)]">
         <SiteHeader tone="sky" />
         <section aria-labelledby="group-name" className="relative">
@@ -129,14 +144,29 @@ export default async function GroupPage({ params }: { params: Params }) {
           </div>
         </section>
 
-        <section aria-labelledby="outcomes" className="border-t border-rule bg-sky-mist">
+        <section aria-labelledby="group-news" className="border-t border-rule bg-sky-mist">
+          <div className="page py-14 sm:py-20">
+            <div className="flex flex-wrap items-end justify-between gap-4">
+              <div>
+                <p className="eyebrow">Around {group.district}</p>
+                <h2 id="group-news" className="display mt-2 text-[2.25rem] leading-tight sm:text-[2.75rem]">
+                  News and live incidents
+                </h2>
+              </div>
+              <p className="text-base text-ink-soft">Open a story or incident to read it here, with a link to its source</p>
+            </div>
+            <GroupNews district={group.district} />
+          </div>
+        </section>
+
+        <section aria-labelledby="outcomes" className="border-t border-rule bg-white">
           <div className="page py-14 sm:py-20">
             <p className="eyebrow">Decided</p>
             <h2 id="outcomes" className="display mt-2 text-[2.25rem] leading-tight sm:text-[2.75rem]">
               Recent outcomes
             </h2>
             {group.outcomes.length ? (
-              <ul className="mt-8 divide-y divide-rule rounded-2xl border border-rule bg-white">
+              <ul className="mt-8 divide-y divide-rule rounded-2xl border border-rule bg-sky-mist/40">
                 {group.outcomes.map((outcome) => (
                   <OutcomeRow key={outcome.id} outcome={outcome} />
                 ))}
@@ -148,7 +178,7 @@ export default async function GroupPage({ params }: { params: Params }) {
         </section>
 
         {isMember ? null : (
-          <section className="bg-white">
+          <section className="border-t border-rule bg-sky-mist">
             <div className="page py-14 sm:py-20">
               <EmptyState
                 headline={`Join ${group.name}`}

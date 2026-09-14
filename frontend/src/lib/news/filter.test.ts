@@ -30,8 +30,12 @@ const ITEMS: NewsItem[] = [
 const run = (overrides: Partial<NewsQuery>) => filterNews(ITEMS, { ...DEFAULT_NEWS_QUERY, ...overrides }, NOW).map((i) => i.id);
 
 describe("filterNews", () => {
-  it("lists everything newest first by default, undated items last", () => {
-    expect(run({})).toEqual(["chp", "irvington-arrest", "fremont-fire", "niles-faire", "reddit"]);
+  it("lists articles first by default, then community posts, then live incidents, each newest first", () => {
+    expect(run({})).toEqual(["irvington-arrest", "fremont-fire", "niles-faire", "reddit", "chp"]);
+  });
+
+  it("can mix every kind newest first, undated items last", () => {
+    expect(run({ sort: "newest" })).toEqual(["chp", "irvington-arrest", "fremont-fire", "niles-faire", "reddit"]);
   });
 
   it("filters by neighborhood, Fremont-wide, category, kind and source", () => {
@@ -39,13 +43,14 @@ describe("filterNews", () => {
     expect(run({ area: "warm-springs" })).toEqual(["chp"]);
     expect(run({ area: "fremont-wide" })).toEqual(["fremont-fire"]);
     expect(run({ categories: ["safety", "disaster"] })).toEqual(["irvington-arrest", "fremont-fire"]);
-    expect(run({ kinds: ["incident", "community"] })).toEqual(["chp", "reddit"]);
+    expect(run({ kinds: ["incident", "community"] })).toEqual(["reddit", "chp"]);
+    expect(run({ kinds: ["incident"] })).toEqual(["chp"]);
     expect(run({ source: "East Bay Times" })).toEqual(["irvington-arrest"]);
   });
 
   it("limits to a time range and drops undated items from it", () => {
-    expect(run({ range: "day" })).toEqual(["chp", "irvington-arrest", "fremont-fire"]);
-    expect(run({ range: "week" })).toEqual(["chp", "irvington-arrest", "fremont-fire", "niles-faire"]);
+    expect(run({ range: "day" })).toEqual(["irvington-arrest", "fremont-fire", "chp"]);
+    expect(run({ range: "week" })).toEqual(["irvington-arrest", "fremont-fire", "niles-faire", "chp"]);
   });
 
   it("searches headlines, summaries, sources and neighborhoods, and sorts by relevance or date", () => {
@@ -75,5 +80,7 @@ describe("URL parameters", () => {
     expect(paramsToQuery(params, allowed)).toEqual(query);
     expect(paramsToQuery(new URLSearchParams("area=<script>&cat=bogus&range=year&sort=random"), allowed)).toEqual(DEFAULT_NEWS_QUERY);
     expect(queryToParams(DEFAULT_NEWS_QUERY).toString()).toBe("");
+    expect(queryToParams({ ...DEFAULT_NEWS_QUERY, sort: "newest" }).toString()).toBe("sort=newest");
+    expect(paramsToQuery(new URLSearchParams("sort=newest"), allowed).sort).toBe("newest");
   });
 });

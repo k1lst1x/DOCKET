@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useId, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { BoundaryMap } from "@/components/BoundaryMap";
+import { useChatContext } from "@/components/chat/chat-context-store";
 import { SparkIcon } from "@/components/chat/ChatPanel";
 import { BarList } from "@/components/charts/BarList";
 import { DeadlineMeter } from "@/components/charts/DeadlineMeter";
@@ -14,6 +15,7 @@ import { TrendLine } from "@/components/charts/TrendLine";
 import { ItemRef } from "@/components/ItemRef";
 import { StatusPill } from "@/components/StatusPill";
 import { formatDate, formatDateTime } from "@/lib/format";
+import type { ChatContext } from "@/lib/chat-context";
 import type { ClaimView, IssueActionErrorCode, IssueDetail, PollView } from "@/lib/issue-types";
 import { moderateText } from "@/lib/moderation";
 
@@ -148,6 +150,7 @@ export function IssueDialog({ issueId, onClose, fallbackTitle }: IssueDialogProp
   }
 
   const ready = state === "ready" && detail !== null && detail.id === issueId;
+  useChatContext(ready ? issueChatContext(detail) : issueId && fallbackTitle ? { kind: "issue", label: "City issue", title: fallbackTitle, details: [] } : null, 3);
 
   return (
     <dialog
@@ -199,6 +202,26 @@ export function IssueDialog({ issueId, onClose, fallbackTitle }: IssueDialogProp
       </div>
     </dialog>
   );
+}
+
+/** What the assistant is told about the open issue. */
+function issueChatContext(detail: IssueDetail): ChatContext {
+  return {
+    kind: "issue",
+    label: "City issue",
+    title: `${detail.title} (${detail.ref})`,
+    details: [
+      detail.analysis?.summary ? `Summary: ${detail.analysis.summary}` : `Description: ${detail.body}`,
+      `Status: ${detail.status}`,
+      detail.group ? `Neighborhood group: ${detail.group.name}` : "Citywide item",
+      detail.neighborhoods.length ? `Affects: ${detail.neighborhoods.map((n) => n.name).join(", ")}` : "",
+      detail.location?.label ? `Location: ${detail.location.label}` : "",
+      detail.meetingAt ? `Meeting: ${formatDateTime(detail.meetingAt)}` : "",
+      detail.deadline ? `${detail.deadlineKind ?? "Deadline"}: ${formatDateTime(detail.deadline)}` : "",
+      detail.citation ? `Source document: ${detail.citation}` : "",
+    ].filter(Boolean),
+    url: detail.sourceUrl,
+  };
 }
 
 function DialogStatus({ state, title, onRetry }: { state: LoadState; title?: string; onRetry: () => void }) {
