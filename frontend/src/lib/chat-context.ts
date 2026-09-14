@@ -71,21 +71,21 @@ export function withContext(question: string, context: ChatContext | null, max =
 export function contextSuggestions(context: ChatContext): string[] {
   switch (context.kind) {
     case "issue":
-      return ["Explain this item in plain language", "What are the main arguments for and against it?", "How and by when can I weigh in on this?"];
+      return ["Explain this item in plain language", "How do neighbors feel about this so far?", "How and by when can I weigh in on this?"];
     case "article":
-      return ["What do Fremont city documents say about this?", "How could this affect my neighborhood?", "Has the City Council discussed this recently?"];
+      return ["What else is happening in Fremont this week?", "What do Fremont city documents say about this?", "How could this affect my neighborhood?"];
     case "community":
-      return ["Has the city addressed this?", "Who at the city should I contact about this?"];
+      return ["Has the city addressed this?", "What are other neighbors posting about this?"];
     case "incident":
     case "alert":
-      return ["What should I do to stay safe?", "Who do I contact at the city about this?", "Does Fremont have plans to address this?"];
+      return ["Are there other incidents near here right now?", "What should I do to stay safe?", "Is there any news coverage of this?"];
     case "group":
-      return ["What's coming up at city hall for this neighborhood?", "Summarize what this group is watching", "How can neighbors weigh in on these items?"];
+      return ["What's coming up at city hall for this neighborhood?", "What have neighbors posted here lately?", "Any traffic incidents or closures nearby right now?"];
     case "place":
     case "neighborhood":
-      return ["What's planned at city hall for this area?", "Any recent City Council decisions about this area?"];
+      return ["What's open near here right now?", "What's planned at city hall for this area?", "Any recent news about this area?"];
     case "news":
-      return ["What is the City Council working on this month?", "What's happening with housing in Fremont?"];
+      return ["What's happening in Fremont today?", "Any traffic incidents or power outages right now?", "What's happening with housing in Fremont?"];
   }
 }
 
