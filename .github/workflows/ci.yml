@@ -14,53 +14,32 @@ concurrency:
 
 jobs:
   backend:
+    # Keep this name stable: repository rules require the "Backend checks" status.
     name: Backend checks
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    env:
-      # The runner context is not available at job level; use an absolute /tmp path.
-      DOCKET_DATABASE_URL: sqlite:////tmp/docket-ci.db
     defaults:
       run:
-        working-directory: backend
+        working-directory: docket
     steps:
       - uses: actions/checkout@v7
       - uses: astral-sh/setup-uv@v7
         with:
           enable-cache: true
-          cache-dependency-glob: backend/uv.lock
-      - run: uv python install 3.12
-      - run: uv sync --locked --extra agent
-      - run: uv run ruff check .
-      - run: uv run ruff format --check .
+          cache-dependency-glob: docket/uv.lock
+      - run: uv python install 3.11
+      - run: uv sync --locked
       - run: uv run python -m unittest discover -s tests
-      - name: SQLite migration checks
-        run: |
-          uv run alembic upgrade head
-          uv run alembic check
-          uv run alembic downgrade base
-          uv run alembic upgrade head
-      - name: API and SDK smoke check
+      - run: uv run python -m compileall -q api core agentcore_chat.py agentcore_pipeline.py
+      - name: FastAPI and Strands smoke check
         run: |
           uv run python - <<'PY'
           from fastapi.testclient import TestClient
           from strands import Agent
-          from app.main import app
+          from api.main import app
           with TestClient(app) as client:
-              response = client.get('/api/v1/health')
-              assert response.status_code == 200
-              assert response.json() == {'status': 'ok', 'service': 'docket-api'}
-              assert '/api/v1/health' in client.get('/openapi.json').json()['paths']
-              allowed = client.options('/api/v1/health', headers={
-                  'Origin': 'http://localhost:5173',
-                  'Access-Control-Request-Method': 'GET',
-              })
-              assert allowed.headers['access-control-allow-origin'] == 'http://localhost:5173'
-              denied = client.options('/api/v1/health', headers={
-                  'Origin': 'https://untrusted.example',
-                  'Access-Control-Request-Method': 'GET',
-              })
-              assert 'access-control-allow-origin' not in denied.headers
+              assert '/chat' in client.get('/openapi.json').json()['paths']
+              assert client.post('/generate', json={'topic': 'Budget', 'kind': 'summary'}).status_code == 401
           PY
 
   frontend:

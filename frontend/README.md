@@ -65,8 +65,8 @@ Nobody has to confirm the code before reading a group's items.
   layer (General Plan 2030 neighborhood areas), simplified to ≤60 vertices.
 - `src/data/fixtures.ts`: **sample** groups, agenda items, outcomes and reading runs.
   The landing stat is computed from these records and labelled "Sample data".
-- `src/lib/data.ts` is the only module pages and routes read from; replace its
-  functions with database queries when the backend is ready.
+- `src/lib/data.ts` provides fixture-backed groups and address lookup. DSQL-backed
+  routes live alongside it in `src/lib/members.ts` and `src/lib/issues.ts`.
 - Members and memberships are saved in Aurora DSQL (`db/migrations/0001_core.sql`,
   `src/lib/members.ts`) once a sign-in code is confirmed. Groups and agenda items
   shown on pages still come from the sample fixtures.

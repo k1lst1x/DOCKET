@@ -1,61 +1,38 @@
 # Architecture and integration
 
-## Implemented scaffold
+## Implemented architecture
 
 ```mermaid
 flowchart LR
-  Developer --> UI[Next.js + TypeScript / localhost:3000]
-  Developer --> API[FastAPI / localhost:8000]
-  API --> Health[GET /api/v1/health]
-  API --> Schema[Swagger and OpenAPI]
+  Resident --> UI[Next.js on Amplify]
+  UI --> WebAPI[Next.js server routes]
+  WebAPI --> Cognito[Cognito]
+  WebAPI --> DSQL[Aurora DSQL]
+  WebAPI --> Chat[AgentCore chat runtime]
+  Pipeline[AgentCore pipeline runtime] --> DSQL
+  Pipeline --> S3[S3 and S3 Vectors]
+  Pipeline --> Sources[Public civic sources via Firecrawl/HTTP]
+  Chat --> DSQL
+  Chat --> S3
 ```
 
-The frontend and API run independently. There is no product-data connection yet.
-Frontend owns presentation and interaction; backend will own persisted data,
-authentication, voting rules, and agent execution. API credentials stay server-side.
+The frontend owns browser presentation. Its server routes own Cognito sessions,
+membership, votes and reviews. `docket/` is the only Python backend and owns ingestion,
+retrieval, cited generation and AgentCore runtimes. Credentials stay server-side.
 
-## Planned product architecture — not implemented
+## Runtime boundaries
 
-```mermaid
-flowchart LR
-  Records[Public city records] --> Agent[Scheduled Strands agent]
-  Agent --> Store[(SQLite / SQLAlchemy)]
-  Store --> API[FastAPI]
-  API --> UI[Neighborhood React app]
-  UI --> Votes[Community opinions]
-  Votes --> API
-```
-
-The agent should detect new records, avoid duplicate processing, extract meetings
-and legislation, connect them to neighborhoods and places, and prepare concise
-source-linked analyses. Pros and cons should distinguish claims in sources from
-model inference. Adopted law, proposals, official votes, and community opinions
-must remain distinct. Uncertain items should surface for review.
-
-SQLite is selected for initial storage, with SQLAlchemy sessions and Alembic
-migrations configured. PostgreSQL is a future option; changing the connection URL
-does not transfer existing data. Product tables are not implemented yet.
-
-Background execution, authentication, and deployment (including
-possible AgentCore Runtime) are later decisions. This diagram describes intent,
-not a working autonomous pipeline.
-
-## Integration agreement
-
-- API prefix: `/api/v1`.
-- Current contract: `GET /health` under that prefix returns HTTP 200 with
-  `{"status":"ok","service":"docket-api"}`.
-- Source of truth for implemented endpoints: FastAPI's `/openapi.json`.
-- Frontend development origin: `http://localhost:3000` (Next.js). Calls from Next.js
-  server code to the API are server-to-server and do not depend on CORS.
-- Reserved server-only web environment variable: `API_BASE_URL`.
-- Before implementing resource endpoints, agree on identifiers, pagination,
-  error responses, timestamps, and source attribution. No product schemas are
-  frozen in this scaffold.
+- The web client never receives AWS credentials.
+- The Next.js server invokes AgentCore chat with its SSR role.
+- AgentCore pipeline work runs through a separate runtime and IAM policy.
+- `docket/api/main.py` is a local fallback and protects generation/ingestion routes
+  with `DOCKET_PIPELINE_API_TOKEN`; production pipeline calls use AgentCore.
+- Aurora DSQL is the shared source of truth. The agent owns source documents,
+  evidence and generated outputs; the web app owns members and civic participation.
 
 ## Hackathon work still required
 
-Implement and demonstrate an end-to-end Strands workflow alongside the civic UI.
+Demonstrate the existing end-to-end Strands workflow alongside the civic UI.
 Prepare an architecture diagram matching the final system, setup instructions,
 a public repository with its MIT license visible, submission text, and a demo
 video of at most five minutes. Confirm final requirements against the hackathon
