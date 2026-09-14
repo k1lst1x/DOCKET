@@ -13,11 +13,12 @@ class IngestFailed(RuntimeError):
     pass
 
 
-def run_ingest(sources: list[str], max_docs: int, lookback_days: int) -> dict:
+def run_ingest(sources: list[str], max_docs: int, lookback_days: int, schedule: str | None = None) -> dict:
     command = [
         sys.executable,
         str(ROOT / "scripts" / "ingest.py"),
         *sources,
+        *(["--schedule", schedule] if schedule else []),
         "--max-docs",
         str(max_docs),
         "--lookback-days",

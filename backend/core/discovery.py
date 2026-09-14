@@ -6,7 +6,9 @@ document itself). Parsers only read what the page contains; nothing is inferred.
 """
 
 import html as html_lib
+import json
 import re
+import string
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
@@ -239,8 +241,49 @@ def _simbli_meetings(source: Source, artifact: Artifact) -> list[DocumentRef]:
     return _dedupe(refs)
 
 
-def _not_built(source: Source, artifact: Artifact) -> list[DocumentRef]:
-    raise NotImplementedError(f"discovery for parser {source.parser!r} is not built yet")
+def _arcgis_value(value: object) -> str:
+    if value is None or isinstance(value, bool):
+        return ""
+    if isinstance(value, float):
+        return f"{value:,.1f}"
+    return " ".join(str(value).split())
+
+
+def _arcgis_title(params: dict, attributes: dict[str, str]) -> str:
+    template = params.get("title", "")
+    names = [name for _, name, _, _ in string.Formatter().parse(template) if name]
+    if names and all(attributes.get(name) for name in names):
+        return template.format_map(attributes)
+    return params.get("title_fallback", "").format_map(attributes) or "Untitled record"
+
+
+def _arcgis_featureserver(source: Source, artifact: Artifact) -> list[DocumentRef]:
+    """A FeatureServer layer query as one document: a heading per feature, with labeled attributes.
+
+    The source URL holds the query itself (outFields and returnGeometry=false, or
+    groupByFieldsForStatistics for layers larger than one page). params: title, a format string
+    over attributes; title_fallback, used when any field in title is blank; fields, an ordered
+    {attribute: label} map. One document per layer keeps every record inside a crawl's max_docs,
+    and each heading becomes the chunk locator.
+    """
+    data = json.loads(artifact.raw.decode("utf-8"))
+    if "error" in data:
+        raise ValueError(f"ArcGIS query for {source.id} failed: {data['error']}")
+    if data.get("exceededTransferLimit"):
+        raise ValueError(f"ArcGIS query for {source.id} returned only the first page; use statistics")
+    labels: dict[str, str] = source.params.get("fields", {})
+    sections = []
+    for feature in data.get("features", []):
+        attributes = {name: _arcgis_value(value) for name, value in (feature.get("attributes") or {}).items()}
+        lines = [f"- {label}: {attributes[name]}" for name, label in labels.items() if attributes.get(name)]
+        sections.append((_arcgis_title(source.params, attributes), lines))
+    if not sections:
+        return []
+    sections.sort(key=lambda section: (section[0].lower(), section[1]))
+    body = "\n\n".join("\n".join([f"## {title}", *lines]) for title, lines in sections)
+    # Under a heading, so the first chunk's locator names a section rather than "document start".
+    summary = f"## Layer summary\n{len(sections)} records in the City of Fremont ArcGIS layer {source.name}."
+    return [DocumentRef(source.url, source.name, "gis_layer", inline_text=f"{summary}\n\n{body}\n", locator="layer")]
 
 
 PARSERS: dict[str, Callable[[Source, Artifact], list[DocumentRef]]] = {
@@ -253,7 +296,7 @@ PARSERS: dict[str, Callable[[Source, Artifact], list[DocumentRef]]] = {
     "senate_members": _senate_members,
     "simbli_meetings": _simbli_meetings,
     "leginfo_pubinfo": _leginfo_pubinfo,
-    "arcgis_featureserver": _not_built,
+    "arcgis_featureserver": _arcgis_featureserver,
 }
 
 

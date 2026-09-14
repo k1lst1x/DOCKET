@@ -170,13 +170,34 @@ sources:
     parser: manual_upload
     enabled: false
 
+  # ArcGIS layers (services2.arcgis.com returns 403 for robots.txt, which RFC 9309 treats as no
+  # restrictions). Each query URL returns attributes only; the parser turns a layer into one document.
   - id: fremont-neighborhoods-gis
     name: City of Fremont Neighborhoods GIS layer (32 official areas)
-    url: https://services2.arcgis.com/AVso4yDITKsybTJg/arcgis/rest/services/Neighborhoods/FeatureServer/0/query?where=1%3D1&returnCountOnly=true&f=json
+    url: https://services2.arcgis.com/AVso4yDITKsybTJg/arcgis/rest/services/Neighborhoods/FeatureServer/0/query?where=1%3D1&outFields=NAME,REGION,HISTORIC,Acres&returnGeometry=false&orderByFields=NAME&f=json
     kind: reference
     crawl_strategy: api_query
     parser: arcgis_featureserver
     fetcher: http
     schedule: monthly
     enabled: true
-    verify_pattern: '"count":\s*\d+'
+    verify_pattern: '"NAME":\s*"[^"]+"'
+    params:
+      title: '{NAME}'
+      fields: {REGION: Region, HISTORIC: Historic, Acres: Area (acres)}
+
+  - id: fremont-zoning-gis
+    name: City of Fremont Zoning Class GIS layer - zoning districts by mapped area and acreage
+    # 1,788 polygons is more than one 1,000-record page, so the query groups them by district and class.
+    url: https://services2.arcgis.com/AVso4yDITKsybTJg/arcgis/rest/services/Zoning_Class/FeatureServer/0/query?where=1%3D1&groupByFieldsForStatistics=ZONE_DIST,ZN_CLASS&outStatistics=%5B%7B%22statisticType%22%3A%22count%22%2C%22onStatisticField%22%3A%22OBJECTID%22%2C%22outStatisticFieldName%22%3A%22areas%22%7D%2C%7B%22statisticType%22%3A%22sum%22%2C%22onStatisticField%22%3A%22Acreage%22%2C%22outStatisticFieldName%22%3A%22acres%22%7D%5D&orderByFields=ZONE_DIST,ZN_CLASS&returnGeometry=false&f=json
+    kind: zoning
+    crawl_strategy: api_query
+    parser: arcgis_featureserver
+    fetcher: http
+    schedule: monthly
+    enabled: true
+    verify_pattern: '"ZONE_DIST":\s*"[A-Z]'
+    params:
+      title: '{ZONE_DIST} (zoning class {ZN_CLASS})'
+      title_fallback: 'Zoning class {ZN_CLASS} areas with no district code'
+      fields: {ZN_CLASS: Zoning class, areas: Mapped areas, acres: Total acres}
