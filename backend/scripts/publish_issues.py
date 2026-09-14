@@ -286,7 +286,7 @@ def run() -> dict:
         groups = {
             neighborhood: slug
             for slug, neighborhood in run_with_retry(
-                conn, lambda c: c.execute("SELECT slug, neighborhood_slug FROM groups").fetchall()
+                conn, lambda c: c.execute("SELECT slug, neighborhood_slug FROM groups WHERE is_sample = false").fetchall()
             )
         }
     documents: dict[str, dict] = {}
