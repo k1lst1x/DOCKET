@@ -86,6 +86,20 @@ def _run_manifest_job(job_id: str, task_id: int, manifest_key: str) -> None:
         app.complete_async_task(task_id)
 
 
+def _run_sentiment_job(job_id: str, task_id: int) -> None:
+    from scripts.public_sentiment import run as run_sentiment
+
+    state: dict = {"status": "failed"}
+    try:
+        state = {"status": "succeeded", "counts": run_sentiment()}
+    except Exception:
+        log.exception("sentiment job %s crashed", job_id)
+    finally:
+        with _jobs_lock:
+            JOBS[job_id] = {**JOBS.get(job_id, {}), **state}
+        app.complete_async_task(task_id)
+
+
 @app.entrypoint
 def invoke(payload, context):
     if not isinstance(payload, dict):
@@ -117,6 +131,13 @@ def invoke(payload, context):
             with _jobs_lock:
                 JOBS[job_id] = {"status": "running", "manifest_key": manifest_key}
             threading.Thread(target=_run_manifest_job, args=(job_id, task_id, manifest_key), daemon=True).start()
+            return {"job_id": job_id, "status": "running"}
+        if action == "public_sentiment":
+            job_id = str(uuid.uuid4())
+            task_id = app.add_async_task("public_sentiment", {"job_id": job_id})
+            with _jobs_lock:
+                JOBS[job_id] = {"status": "running"}
+            threading.Thread(target=_run_sentiment_job, args=(job_id, task_id), daemon=True).start()
             return {"job_id": job_id, "status": "running"}
         if action == "status":
             with _jobs_lock:
