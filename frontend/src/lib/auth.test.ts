@@ -31,3 +31,15 @@ it("requires the full origin for cookie-backed mutations", () => {
   expect(isSameOrigin(new Request("https://docket.example/api/posts", { headers: { origin: "https://docket.example:444" } }))).toBe(false);
   expect(isSameOrigin(new Request("https://docket.example/api/posts"))).toBe(false);
 });
+
+it("uses the configured public origin behind a reverse proxy", () => {
+  const previous = process.env.APP_URL;
+  process.env.APP_URL = "https://docket.example";
+  try {
+    expect(isSameOrigin(new Request("http://internal-host/api/posts", { headers: { origin: "https://docket.example" } }))).toBe(true);
+    expect(isSameOrigin(new Request("http://internal-host/api/posts", { headers: { origin: "https://attacker.example" } }))).toBe(false);
+  } finally {
+    if (previous === undefined) delete process.env.APP_URL;
+    else process.env.APP_URL = previous;
+  }
+});

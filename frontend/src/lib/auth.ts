@@ -123,8 +123,10 @@ export function isSameOrigin(request: Request): boolean {
   try {
     // `host` alone would accept an HTTP origin for an HTTPS request on the
     // same host. Compare complete origins so the scheme is part of the CSRF
-    // boundary too.
-    return new URL(origin).origin === new URL(request.url).origin;
+    // boundary too. On managed hosts, request.url can be the internal origin
+    // behind a reverse proxy; APP_URL is the configured public origin.
+    const publicUrl = process.env.APP_URL?.trim() || request.url;
+    return new URL(origin).origin === new URL(publicUrl).origin;
   } catch {
     return false;
   }
