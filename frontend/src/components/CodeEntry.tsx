@@ -9,6 +9,7 @@ const MESSAGES: Record<AuthErrorCode, string> = {
   signin_required: "Your email is confirmed. We just sent a sign-in code, so enter that one.",
   busy: "Too many tries just now. Wait a minute, then try again.",
   undeliverable: "We couldn't email that address.",
+  not_invited: "Docket is still in testing, so sign-in codes only go to emails on the tester list. Ask the Docket team to add yours.",
   not_configured: "Sign-in isn't set up on this server yet.",
   unavailable: "Your code was right, but Docket couldn't finish signing you in. Send yourself a new code and try again in a few minutes.",
   failed: "We couldn't check that code. Try again.",

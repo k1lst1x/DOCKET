@@ -5,6 +5,8 @@ export type AuthErrorCode =
   | "wrong_code"
   | "expired"
   | "undeliverable"
+  // SES is still in the sandbox and this address isn't a verified tester, so a code could never arrive.
+  | "not_invited"
   | "busy"
   | "signin_required"
   // The code was right, but the server couldn't finish signing in (for example, no database access).

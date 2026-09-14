@@ -35,6 +35,8 @@ function codeProblem(code: CodeStatus, email: string) {
   switch (code) {
     case "undeliverable":
       return `We couldn't send a code to ${email} yet, so voting from this device will have to wait. Everything below is still yours to read.`;
+    case "not_invited":
+      return `Docket is still in testing, so sign-in codes only go to emails on the tester list. Ask the Docket team to add ${email}. Everything below is still yours to read.`;
     case "busy":
       return "Too many codes were requested just now. You can sign in again in a minute from the Sign in button.";
     case "not_configured":

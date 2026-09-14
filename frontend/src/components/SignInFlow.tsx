@@ -7,6 +7,7 @@ import { CodeEntry } from "@/components/CodeEntry";
 
 const START_ERRORS: Record<number, string> = {
   400: "Enter your full email address.",
+  403: "Docket is still in testing, so sign-in codes only go to emails on the tester list. Ask the Docket team to add yours.",
   422: "We couldn't send a code to that address.",
   429: "Too many codes requested just now. Wait a minute, then try again.",
   503: "Sign-in isn't set up on this server yet.",

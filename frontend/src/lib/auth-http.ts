@@ -6,6 +6,7 @@ const STATUS: Record<AuthErrorCode, number> = {
   expired: 410,
   signin_required: 409,
   undeliverable: 422,
+  not_invited: 403,
   busy: 429,
   not_configured: 503,
   unavailable: 503,

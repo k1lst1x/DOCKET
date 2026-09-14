@@ -1,6 +1,9 @@
 import { CognitoIdentityProviderClient, type SignUpCommand } from "@aws-sdk/client-cognito-identity-provider";
 import { expect, it, vi } from "vitest";
-import { mapCognitoError, sendCode } from "./cognito";
+import { AuthError, mapCognitoError, sendCode } from "./cognito";
+
+// SES sandbox check: every address is a verified tester except this one.
+vi.mock("./ses-recipients", () => ({ canReceiveCode: vi.fn(async (email: string) => email !== "stranger@example.com") }));
 
 it("maps Cognito errors to sign-in outcome codes", () => {
   expect(mapCognitoError({ name: "CodeMismatchException" })).toBe("wrong_code");
@@ -26,6 +29,20 @@ it("creates the account for a new email on the sign-in form, and signs in an exi
     .mockRejectedValueOnce(Object.assign(new Error("exists"), { name: "UsernameExistsException" }))
     .mockResolvedValueOnce({ ChallengeName: "EMAIL_OTP", Session: "signin-session" } as never);
   await expect(sendCode("member@example.com", null)).resolves.toEqual({ kind: "signin", cognitoSession: "signin-session" });
+
+  send.mockRestore();
+  vi.unstubAllEnvs();
+});
+
+it("refuses to send a code SES could never deliver, without creating an account", async () => {
+  vi.stubEnv("COGNITO_USER_POOL_ID", "us-west-2_test");
+  vi.stubEnv("COGNITO_CLIENT_ID", "client");
+  const send = vi.spyOn(CognitoIdentityProviderClient.prototype, "send");
+
+  const refusal = sendCode("stranger@example.com", "Stranger").catch((error: unknown) => error);
+  await expect(refusal).resolves.toBeInstanceOf(AuthError);
+  expect(((await refusal) as AuthError).code).toBe("not_invited");
+  expect(send).not.toHaveBeenCalled();
 
   send.mockRestore();
   vi.unstubAllEnvs();

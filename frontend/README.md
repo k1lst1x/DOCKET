@@ -78,6 +78,11 @@ Nobody has to confirm the code before reading a group's items.
   Neighborhoods layer, seeded into the `neighborhoods` table.
 - Geocoding uses the free US Census geocoder. Sign-in codes are sent through Amazon
   SES; while the SES account is in the sandbox, codes only reach verified addresses.
+  The server checks first (`src/lib/ses-recipients.ts`) and tells anyone else to ask
+  for access. Add testers with
+  `bash scripts/ses-testers.sh add "person@example.com=Full Name"` (they click the AWS
+  verification email once); `list` and `remove` manage the list. The list lives in SES,
+  never in the repo.
 
 ## GitHub Pages preview
 

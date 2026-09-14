@@ -7,6 +7,7 @@
 #   - invoke the docket_chat AgentCore runtime
 #   - read, write and tag files under uploads/ in the post media bucket (scripts/aws-media-bucket.sh)
 #   - call Rekognition content moderation (scripts/aws-media-moderation.sh; it can't be scoped to resources)
+#   - read the SES account and identity status, so sign-in only sends codes that can arrive (scripts/ses-testers.sh)
 # Cognito sign-in uses public APIs and needs no IAM permissions.
 #
 # With an app id, it also attaches the role to the app and sets the server's environment variables
@@ -61,7 +62,8 @@ POLICY=$(cat <<JSON
 {"Sid":"DocketDsqlConnect","Effect":"Allow","Action":["dsql:DbConnectAdmin","dsql:DbConnect"],"Resource":"$CLUSTER_ARN"},
 {"Sid":"DocketChatInvoke","Effect":"Allow","Action":"bedrock-agentcore:InvokeAgentRuntime","Resource":["$RUNTIME_ARN","$RUNTIME_ARN/runtime-endpoint/*"]},
 {"Sid":"DocketPostMedia","Effect":"Allow","Action":["s3:PutObject","s3:GetObject","s3:PutObjectTagging"],"Resource":"arn:aws:s3:::$BUCKET/uploads/*"},
-{"Sid":"DocketMediaModeration","Effect":"Allow","Action":["rekognition:DetectModerationLabels","rekognition:DetectText","rekognition:StartContentModeration","rekognition:GetContentModeration"],"Resource":"*"}
+{"Sid":"DocketMediaModeration","Effect":"Allow","Action":["rekognition:DetectModerationLabels","rekognition:DetectText","rekognition:StartContentModeration","rekognition:GetContentModeration"],"Resource":"*"},
+{"Sid":"DocketEmailRecipientCheck","Effect":"Allow","Action":["ses:GetAccount","ses:GetEmailIdentity"],"Resource":"*"}
 ]}
 JSON
 )

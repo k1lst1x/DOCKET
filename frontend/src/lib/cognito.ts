@@ -8,6 +8,7 @@ import {
 } from "@aws-sdk/client-cognito-identity-provider";
 import { CognitoJwtVerifier } from "aws-jwt-verify";
 import type { AuthErrorCode } from "./auth-codes";
+import { canReceiveCode } from "./ses-recipients";
 
 // Passwordless sign-in with Amazon Cognito (Essentials tier) email one-time codes.
 //   New person:     SignUp (no password) -> code emailed -> ConfirmSignUp -> USER_AUTH with its Session
@@ -75,6 +76,11 @@ export function mapCognitoError(error: unknown): AuthErrorCode {
 const asAuthError = (error: unknown) => (error instanceof AuthError ? error : new AuthError(mapCognitoError(error)));
 const errorName = (error: unknown) => (error as { name?: string } | null)?.name;
 
+/** Cognito reports no error when SES can't deliver, so check first instead of leaving someone waiting for a code. */
+async function requireDeliverable(s: Settings, email: string): Promise<void> {
+  if (!(await canReceiveCode(email, s.region))) throw new AuthError("not_invited");
+}
+
 async function startSignIn(s: Settings, email: string): Promise<CodeChallenge> {
   try {
     const out = await cognito(s.region).send(
@@ -105,6 +111,7 @@ async function startSignIn(s: Settings, email: string): Promise<CodeChallenge> {
 export async function sendCode(email: string, name: string | null): Promise<CodeChallenge> {
   const s = settings();
   try {
+    await requireDeliverable(s, email);
     try {
       const out = await cognito(s.region).send(
         new SignUpCommand({
@@ -126,6 +133,7 @@ export async function sendCode(email: string, name: string | null): Promise<Code
 export async function resendCode(pending: { kind: "signup" | "signin"; email: string }): Promise<CodeChallenge> {
   const s = settings();
   try {
+    await requireDeliverable(s, pending.email);
     if (pending.kind === "signup") {
       await cognito(s.region).send(new ResendConfirmationCodeCommand({ ClientId: s.clientId, Username: pending.email }));
       return { kind: "signup", cognitoSession: null };
