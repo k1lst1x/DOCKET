@@ -17,7 +17,7 @@ flowchart LR
 ```
 
 The frontend owns browser presentation. Its server routes own Cognito sessions,
-membership, votes and reviews. `docket/` is the only Python backend and owns ingestion,
+membership, votes and reviews. `backend/` is the only Python backend and owns ingestion,
 retrieval, cited generation and AgentCore runtimes. Credentials stay server-side.
 
 ## Runtime boundaries
@@ -25,7 +25,7 @@ retrieval, cited generation and AgentCore runtimes. Credentials stay server-side
 - The web client never receives AWS credentials.
 - The Next.js server invokes AgentCore chat with its SSR role.
 - AgentCore pipeline work runs through a separate runtime and IAM policy.
-- `docket/api/main.py` is a local fallback and protects generation/ingestion routes
+- `backend/api/main.py` is a local fallback and protects generation/ingestion routes
   with `DOCKET_PIPELINE_API_TOKEN`; production pipeline calls use AgentCore.
 - Aurora DSQL is the shared source of truth. The agent owns source documents,
   evidence and generated outputs; the web app owns members and civic participation.

@@ -1,7 +1,7 @@
 -- Docket core schema for Amazon Aurora DSQL.
 -- Shared by two writers:
 --   web app (Next.js server): members, memberships, votes, reviews
---   reading agent (docket/):  neighborhoods, groups, issues, issue_analyses, polls
+--   reading agent (backend/): neighborhoods, groups, issues, issue_analyses, polls
 --
 -- DSQL rules this file follows:
 --   * one DDL statement per transaction (scripts/dsql-migrate.mjs runs each statement alone)

@@ -20,17 +20,29 @@ jobs:
     timeout-minutes: 10
     defaults:
       run:
-        working-directory: docket
+        working-directory: backend
     steps:
       - uses: actions/checkout@v7
       - uses: astral-sh/setup-uv@v7
         with:
           enable-cache: true
-          cache-dependency-glob: docket/uv.lock
+          cache-dependency-glob: backend/uv.lock
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: backend/agentcore/cdk/package-lock.json
       - run: uv python install 3.11
       - run: uv sync --locked
       - run: uv run python -m unittest discover -s tests
       - run: uv run python -m compileall -q api core agentcore_chat.py agentcore_pipeline.py
+      - name: AgentCore CDK checks
+        working-directory: backend/agentcore/cdk
+        run: |
+          npm ci
+          npm run build
+          npm test
+          npm run format:check
       - name: FastAPI and Strands smoke check
         run: |
           uv run python - <<'PY'

@@ -35,7 +35,7 @@ type ChatEvent =
   | { type: "final"; answer: string; citations?: Citation[]; session_id?: string; refused?: boolean; grounded?: boolean }
   | { type: "error"; message: string };
 
-// Keep these in step with what the chat agent has actually read (see docket/ ingest).
+// Keep these in step with what the chat agent has actually read (see backend/ ingest).
 const GREETING =
   "Hi, I'm Docket's assistant. Ask me about Fremont City Council and Planning Commission agendas and minutes (June to September 2026), Fremont Unified school board agendas, recent city news, or the city's transportation plans. I link the documents behind every answer.";
 const NOT_CONNECTED =

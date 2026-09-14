@@ -1,6 +1,6 @@
 """DOCKET API (FastAPI).
 
-Run locally from docket/:  uv run uvicorn api.main:app --port 8000
+Run locally from backend/: uv run uvicorn api.main:app --port 8000
 """
 
 import asyncio

@@ -38,7 +38,7 @@ ingestion is enabled.
 | License | [MIT](LICENSE) |
 
 FastAPI and React do not have Django-style LTS release lines. We use stable
-releases with committed lockfiles (`docket/uv.lock`, `frontend/package-lock.json`).
+releases with committed lockfiles (`backend/uv.lock`, `frontend/package-lock.json`).
 Node.js 24 is the LTS runtime. Upgrade dependencies deliberately and run checks.
 See the official [FastAPI version policy](https://fastapi.tiangolo.com/deployment/versions/),
 [React versions](https://react.dev/versions), and
@@ -47,7 +47,7 @@ See the official [FastAPI version policy](https://fastapi.tiangolo.com/deploymen
 ## Repository
 
 ```text
-docket/                  Python agent backend and AgentCore deployment
+backend/                 Python agent backend and AgentCore deployment
   api/                   Local FastAPI fallback for chat and operator endpoints
   core/                  Ingestion, retrieval, citations and generation graph
   agentcore/             AgentCore runtime configuration and IAM policies
@@ -81,7 +81,7 @@ Install [uv](https://docs.astral.sh/uv/getting-started/installation/) first.
 `uv sync` can install Python 3.11 if it is not available locally.
 
 ```bash
-cd docket
+cd backend
 uv sync --locked
 cp .env.example .env
 uv run uvicorn api.main:app --reload --port 8000
@@ -91,13 +91,13 @@ uv run uvicorn api.main:app --reload --port 8000
 - Interactive API docs: http://localhost:8000/docs
 - OpenAPI schema: http://localhost:8000/openapi.json
 
-See [AgentCore deployment instructions](docket/docs/agentcore-hosting.md). Local API
-calls need AWS credentials and the DSQL/S3 environment values from `docket/.env`.
+See [AgentCore deployment instructions](backend/docs/agentcore-hosting.md). Local API
+calls need AWS credentials and the DSQL/S3 environment values from `backend/.env`.
 
 ## Checks
 
 ```bash
-# From docket/
+# From backend/
 uv run python -m unittest discover -s tests
 uv run python -m compileall -q api core agentcore_chat.py agentcore_pipeline.py
 
@@ -134,7 +134,7 @@ Hosting builds and deploys it from [`amplify.yml`](amplify.yml) on every push to
 
 ## Working together
 
-Work independently inside `frontend/` and `docket/`. Commit lockfile changes
+Work independently inside `frontend/` and `backend/`. Commit lockfile changes
 alongside dependency changes. Use `.env.example` for shared configuration and
 keep secrets in ignored local `.env` files.
 

@@ -1,5 +1,5 @@
 -- DOCKET agent schema for Amazon Aurora DSQL: agent_* tables only.
--- Applied by docket/scripts/migrate.py and tracked in agent_schema_migrations.
+-- Applied by backend/scripts/migrate.py and tracked in agent_schema_migrations.
 -- The web app's tables (frontend/db/migrations) are never touched here.
 --
 -- DSQL rules this file follows:

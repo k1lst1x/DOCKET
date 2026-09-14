@@ -1,4 +1,4 @@
-"""Apply docket/migrations/*.sql to Aurora DSQL, one statement per transaction.
+"""Apply backend/migrations/*.sql to Aurora DSQL, one statement per transaction.
 
 Applied files are recorded in agent_schema_migrations (separate from the web app's
 schema_migrations). Statements use IF NOT EXISTS, so re-running a partly applied file is safe.

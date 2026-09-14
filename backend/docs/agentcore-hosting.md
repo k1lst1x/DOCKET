@@ -35,10 +35,10 @@ To rotate the key later: `aws secretsmanager put-secret-value --region us-west-2
 
 ## 2. Check the project, then preview
 
-From `docket/` (the project root; the CLI refuses to run from `agentcore/`):
+From `backend/` (the project root; the CLI refuses to run from `agentcore/`):
 
 ```powershell
-cd docket
+cd backend
 agentcore validate          # expect: Valid
 agentcore deploy --diff     # CloudFormation changes, nothing deployed
 ```
@@ -115,7 +115,7 @@ The route's protections:
 ### Local testing without deploying
 
 ```powershell
-cd docket; uv run uvicorn api.main:app --port 8000
+cd backend; uv run uvicorn api.main:app --port 8000
 # frontend/.env.local:  DOCKET_CHAT_URL=http://127.0.0.1:8000/chat
 cd frontend; npm run dev
 ```

@@ -1,4 +1,4 @@
-"""Runtime settings, read from the environment (and docket/.env when present)."""
+"""Runtime settings, read from the environment (and backend/.env when present)."""
 
 import os
 from pathlib import Path
