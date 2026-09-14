@@ -77,7 +77,7 @@ jobs:
         run: npm run build:pages
       - name: Upload Pages artifact
         if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
-        uses: actions/upload-pages-artifact@v3
+        uses: actions/upload-pages-artifact@v5
         with:
           path: frontend/out-pages
 
@@ -101,7 +101,7 @@ jobs:
     steps:
       - name: Deploy static landing
         id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5
 
   pages-smoke-test:
     name: Verify deployed Pages site
