@@ -7,6 +7,7 @@ import type { LiveSnapshot } from "@/lib/live/types";
 
 // Polls /api/live every minute while the page is visible, and right away when you come back to it.
 // The static preview has no API routes, so there it loads the feeds that allow browser requests.
+// The last snapshot is kept for the whole visit, so reopening the map shows incidents at once.
 
 export const LIVE_POLL_MS = 60_000;
 const MIN_GAP_MS = 15_000;
@@ -19,11 +20,17 @@ export interface LiveState {
   refreshing: boolean;
 }
 
+let last: { snapshot: LiveSnapshot; mode: "server" | "browser"; at: number } | null = null;
+
 export function useLiveIncidents(): LiveState & { refresh: () => void } {
-  const [state, setState] = useState<LiveState>({ snapshot: null, status: "loading", mode: "server", lastUpdated: null, refreshing: false });
-  const mode = useRef<"server" | "browser">("server");
+  const [state, setState] = useState<LiveState>(() =>
+    last
+      ? { snapshot: last.snapshot, status: "live", mode: last.mode, lastUpdated: last.at, refreshing: false }
+      : { snapshot: null, status: "loading", mode: "server", lastUpdated: null, refreshing: false },
+  );
+  const mode = useRef<"server" | "browser">(last?.mode ?? "server");
   const busy = useRef(false);
-  const lastLoad = useRef(0);
+  const lastLoad = useRef(last?.at ?? 0);
 
   const load = useCallback(async (force = false) => {
     if (busy.current || (!force && Date.now() - lastLoad.current < MIN_GAP_MS)) return;
@@ -42,7 +49,8 @@ export function useLiveIncidents(): LiveState & { refresh: () => void } {
         snapshot = await getLiveSnapshot({ feeds: FEEDS.filter((f) => f.browser), server: false });
       }
       if (!snapshot) throw new Error("No live data");
-      setState({ snapshot, status: "live", mode: mode.current, lastUpdated: Date.now(), refreshing: false });
+      last = { snapshot, mode: mode.current, at: Date.now() };
+      setState({ snapshot, status: "live", mode: mode.current, lastUpdated: last.at, refreshing: false });
     } catch {
       setState((s) => ({ ...s, status: s.snapshot ? "live" : "error", refreshing: false }));
     } finally {
@@ -51,7 +59,8 @@ export function useLiveIncidents(): LiveState & { refresh: () => void } {
   }, []);
 
   useEffect(() => {
-    void load(true);
+    // With a snapshot from the last visit, fetch again only once it's past the minimum gap.
+    void load(!last);
     const timer = window.setInterval(() => {
       if (!document.hidden) void load(true);
     }, LIVE_POLL_MS);

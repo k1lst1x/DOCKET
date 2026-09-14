@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import { getSession, isSameOrigin } from "@/lib/auth";
 import { noStore } from "@/lib/auth-http";
 import { sanitizeChatContext, withContext } from "@/lib/chat-context";
-import { allowChatRequest } from "@/lib/rate-limit";
+import { allowChatRequest, allowChatWarmRequest } from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
 
@@ -42,12 +42,35 @@ function agentCoreClient(region: string): BedrockAgentCoreClient {
   return client;
 }
 
+/**
+ * Starts the runtime session a new conversation will use, so its first answer doesn't also wait for the
+ * runtime to boot (several seconds). No model runs; the runtime replies with a single "ready" event.
+ */
+async function warmUp(sessionId: string): Promise<Response> {
+  const arn = runtimeArn();
+  if (arn) {
+    try {
+      const result = await agentCoreClient(arn.split(":")[3]).send(
+        new InvokeAgentRuntimeCommand({
+          agentRuntimeArn: arn,
+          runtimeSessionId: sessionId,
+          contentType: "application/json",
+          accept: "text/event-stream",
+          payload: new TextEncoder().encode(JSON.stringify({ warm: true, session_id: sessionId })),
+        }),
+      );
+      await result.response?.transformToString();
+    } catch (error) {
+      // Only the first answer gets slower; the message itself still goes through.
+      console.warn(`[docket] chat: warm-up failed: ${(error as { name?: string } | null)?.name ?? "Error"}`);
+    }
+  }
+  return new Response(null, { status: 204, headers: noStore });
+}
+
 export async function POST(request: Request) {
   if (!isSameOrigin(request)) {
     return NextResponse.json({ error: "Cross-site requests are not accepted." }, { status: 403 });
-  }
-  if (!allowChatRequest(request)) {
-    return NextResponse.json({ error: "Too many messages. Try again shortly." }, { status: 429, headers: noStore });
   }
 
   let body: unknown;
@@ -56,7 +79,25 @@ export async function POST(request: Request) {
   } catch {
     return NextResponse.json({ error: "Send the message as JSON." }, { status: 400, headers: noStore });
   }
-  const { text, session_id: requestedSession, context } = (body ?? {}) as { text?: unknown; session_id?: unknown; context?: unknown };
+  const { text, session_id: requestedSession, context, warm } = (body ?? {}) as {
+    text?: unknown;
+    session_id?: unknown;
+    context?: unknown;
+    warm?: unknown;
+  };
+
+  if (warm === true) {
+    if (typeof requestedSession !== "string" || !UUID.test(requestedSession)) {
+      return NextResponse.json({ error: "A warm-up needs the conversation's session id." }, { status: 400, headers: noStore });
+    }
+    if (!allowChatWarmRequest(request)) {
+      return NextResponse.json({ error: "Too many requests. Try again shortly." }, { status: 429, headers: noStore });
+    }
+    return warmUp(requestedSession);
+  }
+  if (!allowChatRequest(request)) {
+    return NextResponse.json({ error: "Too many messages. Try again shortly." }, { status: 429, headers: noStore });
+  }
   if (typeof text !== "string" || !text.trim() || text.length > MAX_TEXT_CHARS) {
     return NextResponse.json({ error: "Messages must be 1 to 2000 characters." }, { status: 400, headers: noStore });
   }

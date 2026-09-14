@@ -188,15 +188,30 @@ class Fetcher:
                 fetched_at=fetched_at,
                 pages=pages or None,
             )
-        response = self._http.get(url)
-        return Artifact(
-            url=url,
-            final_url=str(response.url),
-            status=response.status_code,
-            content_type=response.headers.get("content-type"),
-            raw=response.content,
-            text=None,
-            fetcher="http",
-            content_hash=_sha256(response.content),
-            fetched_at=fetched_at,
-        )
+        return _http_artifact(url, self._http.get(url), fetched_at)
+
+    def post_form(self, url: str, data: dict[str, str], headers: dict[str, str] | None = None) -> Artifact:
+        """POST a form over plain HTTP, with the same robots.txt check and per-host wait as fetch.
+
+        Uses the same client as fetch, so cookies set by an earlier GET (session, CSRF) are sent.
+        """
+        allowed, delay = self.check_robots(url, "http", True)
+        if not allowed:
+            raise RobotsDisallowed(url)
+        self._wait(url, delay)
+        fetched_at = datetime.now(UTC)
+        return _http_artifact(url, self._http.post(url, data=data, headers=headers), fetched_at)
+
+
+def _http_artifact(url: str, response: httpx.Response, fetched_at: datetime) -> Artifact:
+    return Artifact(
+        url=url,
+        final_url=str(response.url),
+        status=response.status_code,
+        content_type=response.headers.get("content-type"),
+        raw=response.content,
+        text=None,
+        fetcher="http",
+        content_hash=_sha256(response.content),
+        fetched_at=fetched_at,
+    )

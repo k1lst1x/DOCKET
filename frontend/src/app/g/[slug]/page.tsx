@@ -45,11 +45,13 @@ async function membershipFor(slug: string): Promise<boolean> {
 }
 
 export default async function GroupPage({ params }: { params: Params }) {
-  // Real open items, decisions and member counts from the database; the static preview keeps the saved samples.
-  const group = await getLiveGroup((await params).slug);
+  const { slug } = await params;
+  const known = getGroup(slug);
+  if (!known) notFound();
+  // Real open items, decisions and member counts from the database, read alongside your membership rather
+  // than one after the other; the static preview keeps the saved samples.
+  const [group, isMember] = await Promise.all([getLiveGroup(slug), membershipFor(known.slug)]);
   if (!group) notFound();
-
-  const isMember = await membershipFor(group.slug);
   const joinHref = `/g/${group.slug}/join`;
 
   return (

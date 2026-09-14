@@ -43,6 +43,12 @@ export function ChatWidget() {
   const modal = useTopModal();
   const current = useCurrentChatContext();
   const context = current && contextKey(current) !== dismissed ? current : null;
+  const { warm } = chat;
+
+  // Start the assistant as the popup opens, so it's ready by the time the question is typed.
+  useEffect(() => {
+    if (open) warm();
+  }, [open, warm]);
 
   useEffect(() => {
     if (!open) return;

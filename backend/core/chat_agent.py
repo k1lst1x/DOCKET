@@ -15,10 +15,14 @@ import asyncio
 import json
 import logging
 import re
+import threading
+import time
 import uuid
 from collections.abc import AsyncIterator, Callable
+from concurrent.futures import Future, ThreadPoolExecutor
 from dataclasses import asdict, dataclass, field
 from datetime import datetime
+from functools import cache
 from zoneinfo import ZoneInfo
 
 from strands import Agent, tool
@@ -53,7 +57,8 @@ RETRIEVAL_TOOLS = {
 FREMONT_TZ = ZoneInfo("America/Los_Angeles")
 REFUSAL = "I don't have anything in my sources about that."
 REFUSAL_SENTENCE = re.compile(r"I don['’]t have anything in my sources about that\.?", re.IGNORECASE)
-REASONING_SPAN = re.compile(r"<reasoning>.*?</reasoning>", re.DOTALL | re.IGNORECASE)
+# A reasoning span, or one the model opened and never closed (then everything after it is reasoning).
+REASONING_SPAN = re.compile(r"<reasoning>.*?(?:</reasoning>|\Z)", re.DOTALL | re.IGNORECASE)
 DISCLAIMER = "This is the text of the source documents, not legal advice."
 LEGAL_QUESTION = re.compile(
     r"\b(allowed|permitted|legal|illegal|required|requirements?|must i|can i|may i|zoning|permits?|"
@@ -469,8 +474,18 @@ def final_text(result) -> str:
     return REASONING_SPAN.sub("", text).strip()
 
 
+SOURCES_TTL_S = 300
+_sources_cache: tuple[float, list[dict]] | None = None
+
+
 def _searched_sources() -> list[dict]:
-    return [source for source in retrieval.list_sources() if source["document_count"]]
+    """Sources with stored documents. They change only when ingest runs, so a few minutes' cache saves a
+    database query on every answer."""
+    global _sources_cache
+    now = time.monotonic()
+    if _sources_cache is None or now - _sources_cache[0] > SOURCES_TTL_S:
+        _sources_cache = (now, [source for source in retrieval.list_sources() if source["document_count"]])
+    return _sources_cache[1]
 
 
 # How a refusal names the sources searched: one short phrase per kind of source, in this order.
@@ -622,27 +637,35 @@ def resolve_session(session_id: str | None, user_id: str | None) -> str:
     if not session_id:
         return str(uuid.uuid4())
     candidate = _session_uuid(session_id)
-    with connect() as conn:
-        row = conn.execute(
-            "SELECT user_id FROM agent_chat_sessions WHERE id = %s::uuid", (candidate,)
-        ).fetchone()
-    if row is None or row[0] == user_id:
+    # The shared, already-open connection: a new DSQL connection (IAM token and TLS) on every turn adds latency.
+    rows = retrieval._query("SELECT user_id FROM agent_chat_sessions WHERE id = %s::uuid", (candidate,))
+    if not rows or rows[0][0] == user_id:
         return candidate
     log.warning("chat session requested by a different user; starting a new session instead")
     return str(uuid.uuid4())
 
 
 def load_history(session_id: str) -> list[dict]:
-    with connect() as conn:
-        rows = conn.execute(
-            "SELECT role, text FROM agent_chat_messages WHERE session_id = %s::uuid "
-            "ORDER BY created_at DESC LIMIT %s",
-            (session_id, HISTORY_MESSAGES),
-        ).fetchall()
+    # A turn's question and answer are saved in one transaction, so they share created_at. Without the role
+    # tie-break they could come back swapped, and the model would see an earlier question as unanswered
+    # and answer it again instead of the new message.
+    rows = retrieval._query(
+        "SELECT role, text FROM agent_chat_messages WHERE session_id = %s::uuid "
+        "ORDER BY created_at DESC, CASE role WHEN 'assistant' THEN 0 ELSE 1 END LIMIT %s",
+        (session_id, HISTORY_MESSAGES),
+    )
     messages = [{"role": role, "content": [{"text": text}]} for role, text in reversed(rows)]
     while messages and messages[0]["role"] != "user":
         messages.pop(0)
     return messages
+
+
+def open_session(session_id: str | None, user_id: str | None) -> tuple[str, list[dict]]:
+    """The session to continue and its recent messages, once the previous turn's save has finished."""
+    if session_id:
+        _wait_for_save(_session_uuid(session_id))
+    session = resolve_session(session_id, user_id)
+    return session, load_history(session) if session_id else []
 
 
 def persist_turn(
@@ -684,6 +707,43 @@ def persist_turn(
             session_id=session_id,
             messages=[(question, "USER"), (response.answer, "ASSISTANT")],
         )
+
+
+SAVE_WAIT_S = 15
+_saver = ThreadPoolExecutor(max_workers=2, thread_name_prefix="chat-save")
+_pending_saves: dict[str, Future] = {}
+_pending_lock = threading.Lock()
+
+
+def save_turn_in_background(
+    session_id: str, user_id: str | None, group_id: str | None, question: str, response: ChatResponse
+) -> Future:
+    """Save a turn without holding up its answer. The session's next turn waits for it (open_session)."""
+
+    def save() -> None:
+        try:
+            persist_turn(session_id, user_id, group_id, question, response)
+        except Exception:
+            log.exception("chat turn could not be saved")
+        finally:
+            with _pending_lock:
+                if _pending_saves.get(session_id) is future:
+                    del _pending_saves[session_id]
+
+    with _pending_lock:
+        future = _saver.submit(save)
+        _pending_saves[session_id] = future
+    return future
+
+
+def _wait_for_save(session_id: str) -> None:
+    with _pending_lock:
+        pending = _pending_saves.get(session_id)
+    if pending is not None:
+        try:
+            pending.result(timeout=SAVE_WAIT_S)
+        except Exception:
+            log.warning("previous chat turn still not saved; continuing without waiting")
 
 
 def recite_request(removed: list[dict]) -> str:

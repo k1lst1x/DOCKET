@@ -1,11 +1,16 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ChatPanel, SparkIcon, useChat } from "@/components/chat/ChatPanel";
 
 /** One conversation; "New chat" remounts it with a fresh one. */
 function PageChat({ autoFocus }: { autoFocus: boolean }) {
   const chat = useChat();
+  const { warm } = chat;
+  // Start the assistant as soon as the page opens, so it's ready by the time the question is typed.
+  useEffect(() => {
+    warm();
+  }, [warm]);
   return <ChatPanel variant="page" chat={chat} autoFocus={autoFocus} />;
 }
 

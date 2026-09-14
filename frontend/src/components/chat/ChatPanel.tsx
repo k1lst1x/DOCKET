@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
+import { useCallback, useEffect, useId, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
 import { contextSuggestions, type ChatContext } from "@/lib/chat-context";
 
 // Chat UI. Messages go to /api/chat, which streams answers from Docket's chat agent. Every
@@ -91,6 +91,21 @@ export interface ChatState {
   pending: boolean;
   statusText: string | null;
   send: (text: string, context?: ChatContext | null) => Promise<void>;
+  /** Starts the assistant for this conversation before the first message. Safe to call often. */
+  warm: () => void;
+}
+
+// The assistant's runtime session stops after a while idle, so opening the chat after this long warms it again.
+const WARM_AGAIN_MS = 10 * 60_000;
+// Hosting may deliver the whole reply at the end, without the agent's live progress. Until real progress
+// arrives, the indicator moves on by itself so a longer lookup doesn't look stuck.
+const WAITING_HINTS: [number, string][] = [
+  [4_000, "Looking this up"],
+  [12_000, "Still working on it"],
+];
+
+function newSessionId(): string | null {
+  return typeof crypto !== "undefined" && typeof crypto.randomUUID === "function" ? crypto.randomUUID() : null;
 }
 
 /**
@@ -104,8 +119,23 @@ export function useChat(): ChatState {
   const [pending, setPending] = useState(false);
   const [statusText, setStatusText] = useState<string | null>(null);
   const nextId = useRef(1);
+  // Made here rather than by the server, so the warm-up and the first message use the same runtime session.
   const sessionRef = useRef<string | null>(null);
+  const lastActive = useRef(0);
   const busy = useRef(false);
+
+  const warm = useCallback(() => {
+    if (Date.now() - lastActive.current < WARM_AGAIN_MS) return;
+    sessionRef.current ??= newSessionId();
+    if (!sessionRef.current) return;
+    lastActive.current = Date.now();
+    // Best effort: the static preview has no API, and a failed warm-up only makes the first answer slower.
+    fetch("/api/chat", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ warm: true, session_id: sessionRef.current }),
+    }).catch(() => {});
+  }, []);
 
   function upsertReply(reply: Message) {
     setMessages((m) => (m.some((msg) => msg.id === reply.id) ? m.map((msg) => (msg.id === reply.id ? reply : msg)) : [...m, reply]));
@@ -121,6 +151,11 @@ export function useChat(): ChatState {
     nextId.current += 2;
     setDraft("");
     setThinking(true);
+    lastActive.current = Date.now();
+    sessionRef.current ??= newSessionId();
+    setStatusText("Reading your question");
+    const hints = WAITING_HINTS.map(([ms, hint]) => setTimeout(() => setStatusText(hint), ms));
+    const stopHints = () => hints.forEach(clearTimeout);
 
     let streamed = "";
     let finished = false;
@@ -149,8 +184,10 @@ export function useChat(): ChatState {
           buffer = buffer.slice(boundary + 2);
           for (const event of parseEvents(block)) {
             if (event.type === "status") {
+              stopHints();
               setStatusText(event.message);
             } else if (event.type === "text") {
+              stopHints();
               streamed += event.text;
               setThinking(false);
               setStatusText(null);
@@ -176,6 +213,8 @@ export function useChat(): ChatState {
     } catch {
       upsertReply({ id: replyId, role: "assistant", text: UNAVAILABLE });
     } finally {
+      stopHints();
+      lastActive.current = Date.now();
       busy.current = false;
       setPending(false);
       setThinking(false);
@@ -183,7 +222,7 @@ export function useChat(): ChatState {
     }
   }
 
-  return { messages, draft, setDraft, thinking, pending, statusText, send };
+  return { messages, draft, setDraft, thinking, pending, statusText, send, warm };
 }
 
 interface ChatPanelProps {

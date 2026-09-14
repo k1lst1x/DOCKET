@@ -8,16 +8,29 @@ Local run (no AgentCore): uv run python agentcore_chat.py, then POST to http://l
 """
 
 import sys
+import threading
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from bedrock_agentcore.runtime import BedrockAgentCoreApp  # noqa: E402
 
-from core.chat_agent import MAX_QUESTION_CHARS, stream_answer  # noqa: E402
+from core.chat_agent import MAX_QUESTION_CHARS, stream_answer, warm  # noqa: E402
 
 app = BedrockAgentCoreApp()
 log = app.logger
+_warm_lock = threading.Lock()
+_warm_started = False
+
+
+def start_warm_up() -> None:
+    """Load the database connection, keyword index and clients in the background, once per process."""
+    global _warm_started
+    with _warm_lock:
+        if _warm_started:
+            return
+        _warm_started = True
+    threading.Thread(target=warm, name="chat-warm-up", daemon=True).start()
 
 
 def _optional_string(payload: dict, key: str) -> str | None:
@@ -29,6 +42,12 @@ def _optional_string(payload: dict, key: str) -> str | None:
 async def invoke(payload, context):
     if not isinstance(payload, dict):
         yield {"type": "error", "message": "payload must be a JSON object"}
+        return
+    if payload.get("warm") is True:
+        # The website pings a new session when the chat opens, so the runtime has started by the time the
+        # first question arrives. No model runs and nothing is saved.
+        start_warm_up()
+        yield {"type": "ready"}
         return
     prompt = payload.get("prompt", payload.get("text", ""))
     if not isinstance(prompt, str) or not prompt.strip():
@@ -50,4 +69,5 @@ async def invoke(payload, context):
 
 
 if __name__ == "__main__":
+    start_warm_up()  # a new runtime session usually gets its first question within seconds
     app.run()

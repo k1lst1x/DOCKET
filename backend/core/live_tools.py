@@ -1328,12 +1328,20 @@ PLACES_FIELDS = ",".join(
 )  # fmt: skip
 
 
+SECRET_TTL_S = 600  # keys come from Secrets Manager when deployed; don't fetch one on every lookup
+
+
 def _places_key() -> str:
-    try:
-        key = settings.google_places_api_key()
-    except Exception as error:
-        log.warning("Google Places key could not be read", exc_info=True)
-        raise LiveUnavailable("Place lookups aren't set up right now.") from error
+    def load() -> str | None:
+        try:
+            return settings.google_places_api_key()
+        except Exception:
+            log.warning("Google Places key could not be read", exc_info=True)
+            return None
+
+    key = _cached("secret:google-places", SECRET_TTL_S, load)
+    if key is None:
+        raise LiveUnavailable("Place lookups aren't set up right now.")
     if not key:
         raise LiveUnavailable("Place lookups aren't set up yet, so say you can't look up places right now.")
     return key
@@ -1470,7 +1478,7 @@ def _firecrawl():
     from firecrawl import Firecrawl
 
     try:
-        key = settings.firecrawl_api_key()
+        key = _cached("secret:firecrawl", SECRET_TTL_S, settings.firecrawl_api_key)
     except Exception as error:
         log.warning("Firecrawl key could not be read", exc_info=True)
         raise LiveUnavailable("Web search isn't available right now.") from error

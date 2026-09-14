@@ -8,6 +8,7 @@ import { incidentToNewsItem } from "@/lib/news/incidents";
 import type { NewsItem } from "@/lib/news/types";
 import type { IssueMarker } from "@/lib/issue-types";
 import { loadGoogleMaps } from "@/lib/google-maps";
+import { loadMe } from "@/lib/me-client";
 import { pointInPolygon } from "@/lib/geo";
 import {
   areaBySlug,
@@ -309,18 +310,14 @@ export function PlacesExplorer({ apiKey, mapId }: { apiKey: string; mapId: strin
     setHydrated(true);
 
     let active = true;
-    fetch("/api/auth/me", { cache: "no-store" })
-      .then((res) => (res.ok ? res.json() : null))
-      .then((me: { signedIn?: boolean; groups?: { slug: string }[] } | null) => {
-        if (!active || !me?.signedIn) return;
-        const home = neighborhoodForGroups((me.groups ?? []).map((g) => g.slug));
-        if (!home) return;
-        setHomeSlug(home.slug);
-        if (!params.get("n")) setAreaSlug(home.slug);
-      })
-      .catch(() => {
-        // The static preview has no API: browse without a home neighborhood.
-      });
+    // Signed out, or the static preview with no API: browse without a home neighborhood.
+    void loadMe().then((me) => {
+      if (!active || !me.signedIn) return;
+      const home = neighborhoodForGroups(me.groups.map((g) => g.slug));
+      if (!home) return;
+      setHomeSlug(home.slug);
+      if (!params.get("n")) setAreaSlug(home.slug);
+    });
     return () => {
       active = false;
     };

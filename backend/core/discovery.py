@@ -289,6 +289,39 @@ def _arcgis_featureserver(source: Source, artifact: Artifact) -> list[DocumentRe
     return [DocumentRef(source.url, source.name, "gis_layer", inline_text=f"{summary}\n\n{body}\n", locator="layer")]
 
 
+def _citysourced_api(source: Source, artifact: Artifact) -> list[DocumentRef]:
+    """The Fremont App nearby page; core/citysourced.py expands it into one document per request."""
+    page = artifact.raw.decode("utf-8", "replace")
+    if not re.search(r'\bid="hdnCsrfToken"', page):
+        return []
+    return [DocumentRef(source.url, source.name, "bulk_citysourced")]
+
+
+def _nixle_agency(source: Source, artifact: Artifact) -> list[DocumentRef]:
+    """A Nixle agency listing; core/nixle.py expands it into one document per alert."""
+    page = artifact.raw.decode("utf-8", "replace")
+    if not re.search(r'<li id="pub_\d+"', page):
+        return []
+    return [DocumentRef(source.url, source.name, "bulk_nixle")]
+
+
+def _arcgis_features(source: Source, artifact: Artifact) -> list[DocumentRef]:
+    """Layer metadata ({layer}?f=json); core/arcgis_features.py expands the layer into feature documents.
+
+    Raises when a configured attribute no longer exists, so a renamed field fails loudly instead of
+    quietly dropping out of every document.
+    """
+    data = json.loads(artifact.raw.decode("utf-8"))
+    if "error" in data:
+        raise ValueError(f"ArcGIS metadata for {source.id} failed: {data['error']}")
+    available = {field.get("name") for field in data.get("fields") or []}
+    wanted = [*source.params.get("fields", {}), *source.params.get("group_by", [])]
+    missing = [name for name in wanted if name not in available]
+    if missing:
+        raise ValueError(f"ArcGIS layer for {source.id} has no fields {missing}")
+    return [DocumentRef(source.params["layer"].rstrip("/"), source.name, "bulk_arcgis")]
+
+
 RSS_CONTENT = "{http://purl.org/rss/1.0/modules/content/}encoded"
 FREMONT_TZ = ZoneInfo("America/Los_Angeles")
 
@@ -343,6 +376,9 @@ PARSERS: dict[str, Callable[[Source, Artifact], list[DocumentRef]]] = {
     "simbli_meetings": _simbli_meetings,
     "leginfo_pubinfo": _leginfo_pubinfo,
     "arcgis_featureserver": _arcgis_featureserver,
+    "citysourced_api": _citysourced_api,
+    "nixle_agency": _nixle_agency,
+    "arcgis_features": _arcgis_features,
 }
 
 

@@ -30,11 +30,12 @@ from strands.multiagent import GraphBuilder
 from strands.multiagent.base import MultiAgentBase, MultiAgentResult, Status
 from strands.multiagent.graph import GraphState
 
-from core import legislature, retrieval, settings
+from core import retrieval, settings
 from core.chat_agent import TurnEvidence
 from core.chunking import Chunk, chunk_markdown, chunk_pages
 from core.db import connect
 from core.discovery import DocumentRef, discover
+from core.expanders import EXPANDERS
 from core.embed import embed_text
 from core.extract import content_hash, document_text
 from core.fetcher import Artifact, Fetcher
@@ -220,7 +221,8 @@ def crawler_agent(run: PipelineRun, fetcher: Fetcher) -> Agent:
             return json.dumps({"error": str(error)})
         expanded: list[DocumentRef] = []
         for ref in refs:
-            expanded += legislature.expand(fetcher, source, ref) if ref.doc_type == "bulk_pubinfo" else [ref]
+            expander = EXPANDERS.get(ref.doc_type)
+            expanded += expander(fetcher, source, ref) if expander else [ref]
         listed = []
         for ref in expanded[: run.max_docs]:
             ref_id = f"r{len(run.refs) + 1}"

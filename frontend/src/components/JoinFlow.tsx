@@ -9,6 +9,7 @@ import { WatchItemCard } from "@/components/WatchItemCard";
 import type { CodeStatus } from "@/lib/auth-codes";
 import { formatNumber } from "@/lib/format";
 import { parseJoin, parsePreferences, type JoinFieldErrors } from "@/lib/join";
+import { forgetMe } from "@/lib/me-client";
 import type { WatchItem } from "@/lib/types";
 
 interface JoinGroup {
@@ -114,6 +115,8 @@ export function JoinFlow({ group, member }: { group: JoinGroup; member: SignedIn
         // Optional chaining: the Pages preview makes this unreachable, which drops the narrowing.
         setSignedInAs(member?.name ?? "");
         setJoined({ email: member?.email ?? "", code: "member", items: data.group.items });
+        // The member's group list changed.
+        forgetMe();
         router.refresh();
       } else {
         setJoined({ email: data.email, code: data.code, items: data.group.items });

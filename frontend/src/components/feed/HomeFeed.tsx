@@ -11,15 +11,16 @@ import type { FeedPage, FeedPost, PostErrorCode } from "@/lib/posts-types";
 import { DocketMark } from "@/components/SiteHeader";
 import { AttachButton, AttachmentPreviews, EmojiButton, insertAtCursor, useAttachments } from "./ComposerMedia";
 import { LinkCard, MediaGallery, PostText } from "./PostContent";
+import { loadMe, peekMe, type Me } from "@/lib/me-client";
 
 // The home feed: neighbors posting about Fremont. Read the whole city, your own neighborhoods or any
 // one neighborhood; post to your neighborhood or another; reply and like. Posts can carry up to four
 // photos or one video (up to 5 minutes), links and emoji. New posts arrive every 15 seconds behind a
 // "Show new posts" button so the list doesn't jump while you read.
 
-type Me = { signedIn: false } | { signedIn: true; name: string; groups: { slug: string }[] };
-
 const POLL_MS = 15_000;
+/** The last feed shown for each scope, so coming back to the feed shows it at once while it refreshes. */
+const feedCache = new Map<string, { posts: FeedPost[]; nextBefore: string | null; live: boolean }>();
 const FEED_PARAM = /^(all|mine|[a-z0-9]+(-[a-z0-9]+)*)$/;
 
 const ERRORS: Record<PostErrorCode, string> = {
@@ -81,8 +82,10 @@ function scopeLabel(scope: string): string {
 }
 
 export function HomeFeed() {
-  const [me, setMe] = useState<Me | null>(null);
+  const [me, setMe] = useState<Me | null>(peekMe);
   const [scope, setScope] = useState("all");
+  /** Which scope the posts on screen belong to, so they're remembered under the right one. */
+  const [loadedScope, setLoadedScope] = useState<string | null>(null);
   const [hydrated, setHydrated] = useState(false);
   const [posts, setPosts] = useState<FeedPost[]>([]);
   const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
@@ -113,10 +116,7 @@ export function HomeFeed() {
     if (feed && FEED_PARAM.test(feed) && (feed === "all" || feed === "mine" || areaBySlug(feed))) setScope(feed);
     setHydrated(true);
     let active = true;
-    fetch("/api/auth/me", { cache: "no-store" })
-      .then((res) => (res.ok ? res.json() : { signedIn: false }))
-      .then((data: Me) => active && setMe(data.signedIn ? data : { signedIn: false }))
-      .catch(() => active && setMe({ signedIn: false }));
+    void loadMe().then((data) => active && setMe(data));
     const tick = window.setInterval(() => setNow(Date.now()), 30_000);
     return () => {
       active = false;
@@ -151,12 +151,22 @@ export function HomeFeed() {
     return { posts: before ? [] : sampleFeed(Date.now(), slugs), nextBefore: null, live: false, scope: forScope, neighborhoods: slugs ?? [] };
   }, []);
 
-  // Load the feed whenever the scope changes.
+  // Load the feed whenever the scope changes. A feed seen earlier in this visit shows at once and is
+  // swapped for the fresh page when it arrives, instead of blanking to a loading state.
   useEffect(() => {
     if (!hydrated) return;
     let active = true;
-    setStatus("loading");
-    setPosts([]);
+    const cached = feedCache.get(scope);
+    if (cached) {
+      setPosts(cached.posts);
+      setNextBefore(cached.nextBefore);
+      setLive(cached.live);
+      setStatus("ready");
+    } else {
+      setStatus("loading");
+      setPosts([]);
+    }
+    setLoadedScope(cached ? scope : null);
     setIncoming([]);
     fetchPage(scope, null)
       .then((page) => {
@@ -165,12 +175,19 @@ export function HomeFeed() {
         setNextBefore(page.nextBefore);
         setLive(page.live);
         setStatus("ready");
+        setLoadedScope(scope);
       })
-      .catch(() => active && setStatus("error"));
+      // With a remembered feed on screen, keep showing it; the next poll tries again.
+      .catch(() => active && !cached && setStatus("error"));
     return () => {
       active = false;
     };
   }, [hydrated, scope, fetchPage, reloadKey]);
+
+  // Remember the feed as it changes (likes, replies, deletes, older pages) for the next visit.
+  useEffect(() => {
+    if (status === "ready" && loadedScope === scope) feedCache.set(scope, { posts, nextBefore, live });
+  }, [status, loadedScope, scope, posts, nextBefore, live]);
 
   // Real time: new posts wait behind a button; like and reply counts update in place.
   useEffect(() => {

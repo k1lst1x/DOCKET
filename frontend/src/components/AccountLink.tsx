@@ -3,28 +3,25 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-
-interface Me {
-  signedIn: boolean;
-  name?: string;
-}
+import { forgetMe, loadMe, peekMe, subscribeMe } from "@/lib/me-client";
 
 /** Header account control: "Sign in", or the member's initial with a sign-out menu. */
 export function AccountLink() {
   const pathname = usePathname();
   const router = useRouter();
-  const [me, setMe] = useState<Me | null>(null);
+  // Every page has its own header, so start from the answer the last page already fetched.
+  const [me, setMe] = useState(peekMe);
   const [open, setOpen] = useState(false);
   const buttonRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     let active = true;
-    fetch("/api/auth/me", { cache: "no-store" })
-      .then((res) => (res.ok ? res.json() : { signedIn: false }))
-      .then((data: Me) => active && setMe(data))
-      .catch(() => active && setMe({ signedIn: false }));
+    const refresh = () => void loadMe().then((data) => active && setMe(data));
+    refresh();
+    const unsubscribe = subscribeMe(refresh);
     return () => {
       active = false;
+      unsubscribe();
     };
   }, [pathname]);
 
@@ -43,7 +40,7 @@ export function AccountLink() {
   async function signOut() {
     await fetch("/api/auth/signout", { method: "POST" }).catch(() => null);
     setOpen(false);
-    setMe({ signedIn: false });
+    forgetMe({ signedIn: false });
     router.refresh();
   }
 

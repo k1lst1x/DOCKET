@@ -9,24 +9,29 @@ import type { NewsCatalog } from "@/lib/news/types";
 
 // The Fremont news catalog, refreshed every minute while the tab is visible. Stories that arrive
 // after the first load are collected in newIds. The static preview has no API, so it falls back to
-// the live incidents browsers can load directly.
+// the live incidents browsers can load directly. The last catalog is kept for the whole visit, so the
+// News page and group pages show it at once when opened again and refresh it in the background.
 
 const POLL_MS = 60_000;
+/** A catalog this fresh isn't fetched again when another page opens. */
+const REUSE_MS = 20_000;
 const NEIGHBORHOODS = Object.keys(DISTRICT_ALIASES);
 
+let last: { catalog: NewsCatalog; preview: boolean; staticSite: boolean; at: number } | null = null;
+
 export function useNewsCatalog() {
-  const [catalog, setCatalog] = useState<NewsCatalog | null>(null);
-  const [status, setStatus] = useState<"loading" | "live" | "error">("loading");
-  const [preview, setPreview] = useState(false);
-  const [lastUpdated, setLastUpdated] = useState<number | null>(null);
+  const [catalog, setCatalog] = useState<NewsCatalog | null>(() => last?.catalog ?? null);
+  const [status, setStatus] = useState<"loading" | "live" | "error">(() => (last ? "live" : "loading"));
+  const [preview, setPreview] = useState(() => last?.preview ?? false);
+  const [lastUpdated, setLastUpdated] = useState<number | null>(() => last?.at ?? null);
   const [refreshing, setRefreshing] = useState(false);
   const [newIds, setNewIds] = useState<Set<string>>(new Set());
   const known = useRef<Set<string> | null>(null);
   const busy = useRef(false);
-  const staticSite = useRef(false);
+  const staticSite = useRef(last?.staticSite ?? false);
 
-  const load = useCallback(async () => {
-    if (busy.current) return;
+  const load = useCallback(async (force = true) => {
+    if (busy.current || (!force && last && Date.now() - last.at < REUSE_MS)) return;
     busy.current = true;
     setRefreshing(true);
     try {
@@ -57,9 +62,11 @@ export function useNewsCatalog() {
       } else {
         known.current = new Set(ids);
       }
+      const at = Date.now();
+      last = { catalog: next, preview: staticSite.current, staticSite: staticSite.current, at };
       setCatalog(next);
       setStatus("live");
-      setLastUpdated(Date.now());
+      setLastUpdated(at);
     } catch {
       setStatus((s) => (s === "live" ? "live" : "error"));
     } finally {
@@ -69,7 +76,8 @@ export function useNewsCatalog() {
   }, []);
 
   useEffect(() => {
-    void load();
+    // Opened again within a few seconds: the catalog on screen is current, the next poll refreshes it.
+    void load(false);
     const poll = window.setInterval(() => {
       if (!document.hidden) void load();
     }, POLL_MS);

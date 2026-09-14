@@ -86,6 +86,15 @@ export function allowChatRequest(request: Request): boolean {
   return chatByClient.allow(clientKey(request)) && chatGlobal.allow("all");
 }
 
+// Warm-up pings start the assistant before the first message. They run no model, but each can start a
+// runtime session, so they get their own small budget instead of using up the chat limit.
+const chatWarmByClient = new FixedWindowLimiter(6);
+const chatWarmGlobal = new FixedWindowLimiter(120, 1);
+
+export function allowChatWarmRequest(request: Request): boolean {
+  return chatWarmByClient.allow(clientKey(request)) && chatWarmGlobal.allow("all");
+}
+
 export function allowCodeRequest(request: Request): boolean {
   return codeByClient.allow(clientKey(request)) && codeGlobal.allow("all");
 }

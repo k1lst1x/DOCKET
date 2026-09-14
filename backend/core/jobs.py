@@ -7,6 +7,9 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
+# Per-source document cap for one ingest request. Per-record sources (Fremont App requests, Nixle
+# alerts, GIS features) expand into hundreds of documents, so the cap is well above the default of 10.
+MAX_INGEST_DOCS = 2000
 
 
 class IngestFailed(RuntimeError):

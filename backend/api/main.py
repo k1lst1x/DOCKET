@@ -24,7 +24,7 @@ from core import retrieval, settings  # noqa: E402
 from core.chat_agent import MAX_QUESTION_CHARS, stream_answer  # noqa: E402
 from core.embed import embed_text  # noqa: E402
 from core.generation_graph import generate as run_generation  # noqa: E402
-from core.jobs import IngestFailed, run_ingest  # noqa: E402
+from core.jobs import MAX_INGEST_DOCS, IngestFailed, run_ingest  # noqa: E402
 
 log = logging.getLogger("docket.api")
 app = FastAPI(title="DOCKET API", version="0.1.0")
@@ -63,7 +63,7 @@ class GenerateRequest(BaseModel):
 
 class IngestRequest(BaseModel):
     sources: list[str] = []
-    max_docs: int = Field(default=10, ge=1, le=200)
+    max_docs: int = Field(default=10, ge=1, le=MAX_INGEST_DOCS)
     lookback_days: int = Field(default=120, ge=1, le=3650)
 
     @field_validator("sources")

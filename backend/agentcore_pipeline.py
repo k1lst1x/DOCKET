@@ -3,6 +3,7 @@
 Payloads:
   {"action": "ingest", "sources": [...], "schedule": "daily|weekly|monthly", "max_docs": 10, "lookback_days": 120}
       Starts a crawl-and-ingest cycle in the background and returns {"job_id", "status": "running"}.
+      max_docs (per source) is clamped to 1-2000.
       schedule (optional) keeps only sources on that registry schedule; EventBridge Scheduler sends one per cadence.
   {"action": "status", "job_id": "..."}
       Job state in this runtime session (reuse the same runtimeSessionId), plus the latest runs from DSQL.
@@ -23,7 +24,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from bedrock_agentcore.runtime import BedrockAgentCoreApp  # noqa: E402
 from core.db import connect  # noqa: E402
 from core.generation_graph import generate as run_generation  # noqa: E402
-from core.jobs import IngestFailed, run_ingest  # noqa: E402
+from core.jobs import MAX_INGEST_DOCS, IngestFailed, run_ingest  # noqa: E402
 
 app = BedrockAgentCoreApp()
 log = app.logger
@@ -133,7 +134,7 @@ def invoke(payload, context):
             schedule = payload.get("schedule")
             if schedule is not None and schedule not in ("daily", "weekly", "monthly"):
                 return {"error": "schedule must be daily, weekly or monthly"}
-            max_docs = _bounded_int(payload, "max_docs", 10, 1, 200)
+            max_docs = _bounded_int(payload, "max_docs", 10, 1, MAX_INGEST_DOCS)
             lookback_days = _bounded_int(payload, "lookback_days", 120, 1, 3650)
             job_id = str(uuid.uuid4())
             task_id = app.add_async_task("ingest", {"job_id": job_id})

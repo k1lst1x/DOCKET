@@ -2,6 +2,7 @@
 
 import { useId, useRef, useState, type FormEvent, type ReactNode } from "react";
 import type { AuthErrorCode } from "@/lib/auth-codes";
+import { forgetMe } from "@/lib/me-client";
 
 const MESSAGES: Record<AuthErrorCode, string> = {
   wrong_code: "That code isn't right. Check the most recent email from Docket.",
@@ -44,6 +45,8 @@ export function CodeEntry({ email, intro, onVerified }: CodeEntryProps) {
       });
       const data = await res.json().catch(() => null);
       if (res.ok && data?.ok) {
+        // Signed in now: the header and feed read the account again instead of the remembered "signed out".
+        forgetMe();
         onVerified({ name: data.name, next: data.next });
         return;
       }

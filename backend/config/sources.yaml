@@ -80,7 +80,8 @@ sources:
     parser: citysourced_requests
     fetcher: firecrawl
     schedule: daily
-    enabled: true
+    # Replaced by fremont-app-requests-api (the portal's own JSON API over plain HTTP, no Firecrawl credits).
+    enabled: false
     verify_pattern: 'CAS-\d+-[A-Z0-9]+'
     params:
       wait_for_ms: 8000
@@ -229,3 +230,156 @@ sources:
       title: '{ZONE_DIST} (zoning class {ZN_CLASS})'
       title_fallback: 'Zoning class {ZN_CLASS} areas with no district code'
       fields: {ZN_CLASS: Zoning class, areas: Mapped areas, acres: Total acres}
+
+  # Fremont App (CitySourced) portal API over plain HTTP (robots.txt on fremontca.citysourced.com is
+  # 404, which means no restrictions). The page sets session cookies and a CSRF token; one NEARBYREQUEST
+  # query then returns every request in the city, and core/citysourced.py makes one neighborhood-tagged
+  # document per request. Reporter ids are never stored. Contract verified 2026-09-14.
+  - id: fremont-app-requests-api
+    name: Fremont App (CitySourced) - resident service requests
+    url: https://fremontca.citysourced.com/servicerequests/nearby
+    kind: resident_issues
+    crawl_strategy: api_query
+    parser: citysourced_api
+    fetcher: http
+    schedule: daily
+    enabled: true
+    verify_pattern: 'hdnCsrfToken'
+
+  # Nixle alerts (robots.txt disallows only /region_search/ and /agency_search/, checked 2026-09-14).
+  # core/nixle.py reads up to max_pages listing pages and each alert page, one document per alert.
+  - id: fremont-police-nixle
+    name: Fremont Police Department - Nixle alerts and press releases
+    url: https://local.nixle.com/fremont-police-department-ca/
+    kind: public_safety
+    crawl_strategy: listing_one_level
+    parser: nixle_agency
+    fetcher: http
+    schedule: daily
+    enabled: true
+    verify_pattern: 'id="pub_\d+"'
+    params:
+      max_pages: 10
+
+  - id: city-of-fremont-nixle
+    name: City of Fremont - Nixle notifications
+    url: https://local.nixle.com/city-of-fremont/
+    kind: public_safety
+    crawl_strategy: listing_one_level
+    parser: nixle_agency
+    fetcher: http
+    schedule: daily
+    enabled: true
+    verify_pattern: 'id="pub_\d+"'
+    params:
+      max_pages: 10
+
+  # City GIS features, one document per feature (or per group_by group), tagged with the official
+  # neighborhood. url is the layer metadata: discovery fails if a configured field disappears.
+  # params.fields is an allowlist; only those attributes are requested or stored (never owner,
+  # applicant or planner contact fields). Field names checked against the live layers 2026-09-14.
+  - id: fremont-capital-projects-gis
+    name: City of Fremont Capital Improvement Program projects (GIS)
+    url: https://services2.arcgis.com/AVso4yDITKsybTJg/arcgis/rest/services/CIP_AllCategories_Pts/FeatureServer/0?f=json
+    kind: capital_projects
+    crawl_strategy: api_query
+    parser: arcgis_features
+    fetcher: http
+    schedule: monthly
+    enabled: true
+    verify_pattern: '"objectIdField"'
+    params:
+      layer: https://services2.arcgis.com/AVso4yDITKsybTJg/arcgis/rest/services/CIP_AllCategories_Pts/FeatureServer/0
+      title: '{Prj_Name}'
+      title_fallback: '{CIP_Prj_Name}'
+      fields:
+        Prj_Name: Project
+        Prj_Num: Project number
+        CIP_Prj_Category: CIP category
+        CIP_Prj_Name: CIP project
+        CIP_Prj_Description: Description
+        CIP_Notes: Notes
+        Road_Name: Road
+        Begin_Location: From
+        End_Location: To
+        CIP_URL: Project page
+
+  - id: fremont-annual-street-programs-gis
+    name: City of Fremont annual street programs - project locations (GIS)
+    url: https://services2.arcgis.com/AVso4yDITKsybTJg/arcgis/rest/services/CIP6_AnnualPrograms/FeatureServer/0?f=json
+    kind: capital_projects
+    crawl_strategy: api_query
+    parser: arcgis_features
+    fetcher: http
+    schedule: monthly
+    enabled: true
+    verify_pattern: '"objectIdField"'
+    params:
+      layer: https://services2.arcgis.com/AVso4yDITKsybTJg/arcgis/rest/services/CIP6_AnnualPrograms/FeatureServer/0
+      title: '{CIP_Prj_Name}'
+      title_fallback: 'Annual street program locations'
+      group_by: [CIP_Prj_Name]
+      fields:
+        CIP_Prj_Name: Program
+        Road_Name: Road
+        Begin_Location: From
+        End_Location: To
+        Type: Work type
+        CIP_Prj_Description: Description
+        CIP_URL: Program page
+
+  - id: fremont-development-activity-gis
+    name: City of Fremont development activity - project sites (GIS)
+    url: https://services2.arcgis.com/AVso4yDITKsybTJg/arcgis/rest/services/Development_Activity/FeatureServer/119?f=json
+    kind: development
+    crawl_strategy: api_query
+    parser: arcgis_features
+    fetcher: http
+    schedule: monthly
+    enabled: true
+    verify_pattern: '"objectIdField"'
+    params:
+      layer: https://services2.arcgis.com/AVso4yDITKsybTJg/arcgis/rest/services/Development_Activity/FeatureServer/119
+      title: '{Prj_Name}'
+      title_fallback: 'Development project {Prj_Num}'
+      fields:
+        Prj_Name: Project
+        Prj_Num: Project number
+        SitusStreetNumber: Street number
+        SitusStreetName: Street
+        SitusZip: ZIP code
+        Prj_Desc: Description
+        Status: Status
+        SFU_New: New single-family units
+        SFU_Net: Net single-family units
+        MF_TWN_New: New townhouse units
+        MF_CND_New: New condominium units
+        MF_Net: Net multifamily units
+        Res_Net: Net residential units
+        COM_New: New commercial (as recorded by the city)
+        Com_Net: Net commercial (as recorded by the city)
+        IND_New: New industrial (as recorded by the city)
+
+  - id: fremont-transportation-projects-gis
+    name: City of Fremont traffic corridor, bikeway and trail improvements (GIS)
+    url: https://services2.arcgis.com/AVso4yDITKsybTJg/arcgis/rest/services/Traffic_Corridor_Bikeway_Trail_Improvements_2024/FeatureServer/2?f=json
+    kind: transportation
+    crawl_strategy: api_query
+    parser: arcgis_features
+    fetcher: http
+    schedule: monthly
+    enabled: true
+    verify_pattern: '"objectIdField"'
+    params:
+      layer: https://services2.arcgis.com/AVso4yDITKsybTJg/arcgis/rest/services/Traffic_Corridor_Bikeway_Trail_Improvements_2024/FeatureServer/2
+      title: '{Prj_Name}'
+      title_fallback: '{Road_Name} corridor improvements'
+      fields:
+        Prj_Name: Project
+        Prj_Desc: Description
+        Road_Name: Road
+        Begin_Location: From
+        End_Location: To
+        CIP_Prj_Category: CIP category
+        CIP_Prj_Description: CIP description
+        CIP_URL: Project page

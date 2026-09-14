@@ -9,6 +9,7 @@ import threading
 import time
 from dataclasses import asdict, dataclass, field
 from datetime import datetime
+from functools import cache
 from zoneinfo import ZoneInfo
 
 import psycopg
@@ -125,37 +126,51 @@ class _KeywordIndex:
         self.bm25: BM25Okapi | None = None
         self.count = -1
         self.loaded = 0.0
+        self._build_lock = threading.Lock()  # a warm-up and a first search must not both build it
 
     def _ensure(self) -> None:
-        count = _query("SELECT count(*) FROM agent_chunks")[0][0]
-        if count == self.count and time.monotonic() - self.loaded < KEYWORD_INDEX_TTL_S:
-            return
-        rows = _query(
-            "SELECT c.id, d.title, c.locator, c.text FROM agent_chunks c "
-            "JOIN agent_documents d ON d.id = c.document_id"
-        )
-        self.ids = [str(row[0]) for row in rows]
-        # Same context as the embeddings: document title and locator, then the verbatim chunk text.
-        corpus = [tokenize(f"{row[1] or ''} {row[2]} {row[3]}") or ["_"] for row in rows]
-        self.bm25 = BM25Okapi(corpus) if corpus else None
-        self.count, self.loaded = count, time.monotonic()
+        with self._build_lock:
+            count = _query("SELECT count(*) FROM agent_chunks")[0][0]
+            if count == self.count and time.monotonic() - self.loaded < KEYWORD_INDEX_TTL_S:
+                return
+            rows = _query(
+                "SELECT c.id, d.title, c.locator, c.text FROM agent_chunks c "
+                "JOIN agent_documents d ON d.id = c.document_id"
+            )
+            ids = [str(row[0]) for row in rows]
+            # Same context as the embeddings: document title and locator, then the verbatim chunk text.
+            corpus = [tokenize(f"{row[1] or ''} {row[2]} {row[3]}") or ["_"] for row in rows]
+            self.ids, self.bm25 = ids, BM25Okapi(corpus) if corpus else None
+            self.count, self.loaded = count, time.monotonic()
 
     def search(self, query: str, k: int) -> list[tuple[str, float]]:
         self._ensure()
         tokens = tokenize(query)
-        if self.bm25 is None or not tokens:
+        ids, bm25 = self.ids, self.bm25
+        if bm25 is None or not tokens:
             return []
-        scores = self.bm25.get_scores(tokens)
+        scores = bm25.get_scores(tokens)
         ranked = sorted(range(len(scores)), key=lambda i: scores[i], reverse=True)[:k]
-        return [(self.ids[i], float(scores[i])) for i in ranked if scores[i] > 0]
+        return [(ids[i], float(scores[i])) for i in ranked if scores[i] > 0]
 
 
 _keyword_index = _KeywordIndex()
 
 
+def warm_keyword_index() -> None:
+    """Build the BM25 index now, so the first keyword search in a new runtime session doesn't wait for it."""
+    _keyword_index._ensure()
+
+
+@cache
+def vector_store() -> S3VectorStore:
+    """One S3 Vectors client per process; creating a boto3 client on every search costs time."""
+    return S3VectorStore()
+
+
 def vector_search(query: str, k: int = TOP_K) -> list[Evidence]:
     vector, _ = embed_text(query)
-    hits = S3VectorStore().query(vector, top_k=k)
+    hits = vector_store().query(vector, top_k=k)
     evidence = {item.chunk_id: item for item in fetch_chunks([hit.key for hit in hits])}
     results = []
     for hit in hits:
