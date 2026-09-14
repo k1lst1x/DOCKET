@@ -112,7 +112,9 @@ export function NewsCenter() {
 
   return (
     <>
-      <div className="grid gap-6 lg:grid-cols-[17rem_minmax(0,1fr)] lg:gap-8">
+      {/* grid-rows auto/1fr: the filter sidebar spans both rows; without it, a short result list lets the sidebar's
+          extra height stretch the search row too, leaving a big gap above the results. */}
+      <div className="grid gap-6 lg:grid-cols-[17rem_minmax(0,1fr)] lg:grid-rows-[auto_1fr] lg:gap-8">
         {/* min-w-0: grid items otherwise grow to fit the scrolling chip row, widening the page on phones. */}
         <div className="min-w-0 lg:col-start-2">
           <form role="search" onSubmit={(e) => e.preventDefault()} className="flex flex-wrap items-center gap-2">

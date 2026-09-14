@@ -99,6 +99,14 @@ export function NewsDialog({ item, onClose, pool, onOpenItem, onArea }: NewsDial
     }
   }, [item]);
 
+  // Leaving the page while the popup is open unmounts it without a close event; undo the scroll lock.
+  useEffect(() => {
+    const dialog = dialogRef.current;
+    return () => {
+      if (dialog?.open) document.documentElement.style.overflow = "";
+    };
+  }, []);
+
   const itemId = item?.id;
   useEffect(() => {
     if (!itemId) return;

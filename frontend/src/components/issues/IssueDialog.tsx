@@ -68,6 +68,15 @@ export function IssueDialog({ issueId, onClose, fallbackTitle }: IssueDialogProp
     }
   }, [issueId]);
 
+  // Following a link out of the open dialog (like "Join to vote") unmounts it without a close event, which
+  // would leave the next page unable to scroll. Undo the scroll lock whenever the dialog goes away.
+  useEffect(() => {
+    const dialog = dialogRef.current;
+    return () => {
+      if (dialog?.open) document.documentElement.style.overflow = "";
+    };
+  }, []);
+
   useEffect(() => {
     if (!issueId) return;
     let alive = true;
