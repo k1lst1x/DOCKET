@@ -67,6 +67,7 @@
 | 🏆 [Evals](#evals) | 🧰 [Tech stack](#tech-stack) | 🚀 [Quick start](#quick-start) |
 | 🧪 [Checks and CI](#checks-and-ci) | 📦 [Deployment](#deployment) | 🗂️ [Project layout](#project-layout) |
 | 🧱 [Routes and API](#routes-and-api) | 🗺️ [Roadmap](#roadmap) | 📚 [Docs](#docs) |
+| 👥 [Contributors](#contributors) | | |
 
 </details>
 
@@ -716,9 +717,42 @@ DOCKET/
 
 Work inside `frontend/` or `backend/` independently. Commit lockfile changes alongside dependency changes. Shared configuration goes in `.env.example`; secrets stay in ignored local `.env` files. To change a README image, edit [`docs/readme/build.mjs`](docs/readme/build.mjs) and run `node docs/readme/build.mjs`.
 
+<img src="docs/readme/divider.svg" width="100%" alt="">
+
+<a id="contributors"></a>
+
+## 👥 Contributors
+
 <div align="center">
 
-<a href="https://github.com/k1lst1x/DOCKET/graphs/contributors"><img src="https://contrib.rocks/image?repo=k1lst1x/DOCKET" alt="Contributors"></a>
+<table>
+<tr>
+<td align="center" width="25%">
+<a href="https://github.com/kursanovbael"><img src="https://github.com/kursanovbael.png?size=200" width="100" alt="Bael"></a><br>
+<b>Bael</b><br>
+<a href="https://github.com/kursanovbael"><code>@kursanovbael</code></a><br>
+<sub>Collaborator</sub>
+</td>
+<td align="center" width="25%">
+<a href="https://github.com/LearnHowToCode217"><img src="https://github.com/LearnHowToCode217.png?size=200" width="100" alt="Phat Le"></a><br>
+<b>Phat Le</b><br>
+<a href="https://github.com/LearnHowToCode217"><code>@LearnHowToCode217</code></a><br>
+<sub>Collaborator</sub>
+</td>
+<td align="center" width="25%">
+<a href="https://github.com/Rohit-ATS"><img src="https://github.com/Rohit-ATS.png?size=200" width="100" alt="Rohit Maruri"></a><br>
+<b>Rohit Maruri</b><br>
+<a href="https://github.com/Rohit-ATS"><code>@Rohit-ATS</code></a><br>
+<sub>Collaborator</sub>
+</td>
+<td align="center" width="25%">
+<a href="https://github.com/k1lst1x"><img src="https://github.com/k1lst1x.png?size=200" width="100" alt="Damir Mertl"></a><br>
+<b>Damir Mertl</b><br>
+<a href="https://github.com/k1lst1x"><code>@k1lst1x</code></a><br>
+<sub>Owner</sub>
+</td>
+</tr>
+</table>
 
 Built for the **Agents for Humans Hackathon** · **Good Neighbor Agents** track · Released under the [MIT License](LICENSE)
 
