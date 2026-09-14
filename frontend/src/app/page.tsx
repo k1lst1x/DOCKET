@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { HeroIllustration } from "@/components/HeroIllustration";
+import { HomeFeed } from "@/components/feed/HomeFeed";
 import { SiteFooter, SiteHeader } from "@/components/SiteHeader";
 import { getWeeklyStats } from "@/lib/data";
 import { formatMonthDay, plural } from "@/lib/format";
@@ -7,25 +7,27 @@ import type { WeeklyStats } from "@/lib/types";
 
 export const revalidate = 300;
 
+// Home: the neighborhood feed, with finding your group and the rest of Docket alongside.
 export default function Home() {
   const stats = getWeeklyStats();
 
   return (
     <>
-      <div className="relative flex min-h-[100svh] flex-col overflow-hidden bg-[linear-gradient(180deg,#8DC2F5_0%,#A9D1F6_32%,#CFE4F7_62%,#DDEBF6_100%)]">
-        <SiteHeader tone="sky" />
-        <main id="main" className="relative z-10 flex flex-1 flex-col">
-          <div className="page flex flex-col items-center pb-6 pt-8 text-center sm:pt-14">
-            <p className="max-w-[40rem] text-lg leading-relaxed text-ink-soft sm:text-xl">
-              Docket reads every Fremont city-hall agenda and tells your neighborhood group what touches your streets,
-              while there is still time to speak up.
-            </p>
+      <SiteHeader />
+      <main id="main" className="bg-sky-mist">
+        <h1 className="sr-only">Docket: talk with your Fremont neighbors</h1>
+        <div className="page grid gap-6 py-5 sm:py-8 lg:grid-cols-[minmax(0,1fr)_20rem] lg:gap-8">
+          <HomeFeed />
 
-            <form action="/find" method="get" role="search" className="mt-6 w-full sm:mt-8">
-              <h1 className="display text-[2.75rem] leading-[1.02] sm:text-[4.5rem] lg:text-[5.25rem]">
-                <label htmlFor="address">Where do you live?</label>
-              </h1>
-              <div className="mx-auto mt-8 flex max-w-[40rem] flex-col gap-3 sm:flex-row">
+          <aside aria-label="Find your group and more" className="grid content-start gap-4 lg:sticky lg:top-4">
+            <section className="rounded-2xl border border-rule bg-white p-5">
+              <form action="/find" method="get" role="search">
+                <h2 className="text-lg font-semibold leading-snug text-ink">
+                  <label htmlFor="address">Where do you live?</label>
+                </h2>
+                <p id="address-hint" className="mt-1 text-sm text-ink-soft">
+                  Find your neighborhood group with a Fremont street address or the nearest cross street.
+                </p>
                 <input
                   id="address"
                   name="address"
@@ -34,47 +36,52 @@ export default function Home() {
                   autoComplete="street-address"
                   placeholder="37600 Niles Blvd, Fremont"
                   aria-describedby="address-hint"
-                  className="field h-14 w-full border-ink/60 text-lg sm:h-16 sm:flex-1 sm:text-xl"
+                  className="field mt-3 h-12 rounded-full"
                 />
-                <button type="submit" className="btn btn-primary h-14 px-8 text-lg sm:h-16">
+                <button type="submit" className="btn btn-primary mt-2 h-11 w-full rounded-full">
                   Find my group
                 </button>
-              </div>
-              <p id="address-hint" className="mt-3 text-base text-ink-soft">
-                A Fremont street address or the nearest cross street.
-              </p>
-            </form>
+              </form>
+            </section>
 
-            {stats ? <StatLine stats={stats} /> : null}
-          </div>
+            {stats ? <StatCard stats={stats} /> : null}
 
-          <div className="relative mt-auto aspect-[5/2] w-full shrink-0">
-            <HeroIllustration className="absolute inset-0 h-full w-full" />
-          </div>
-        </main>
-      </div>
+            <nav aria-label="Explore Docket" className="rounded-2xl border border-rule bg-white p-2">
+              {[
+                { href: "/news", icon: "🗞️", title: "Fremont news", body: "Police, fire, traffic and city hall, live" },
+                { href: "/places", icon: "🗺️", title: "Places map", body: "Schools, food, issues and live incidents" },
+                { href: "/groups", icon: "🏘️", title: "Neighborhood groups", body: "What each group is watching" },
+                { href: "/chat", icon: "💬", title: "Ask Docket", body: "Questions about city documents" },
+              ].map((link) => (
+                <Link key={link.href} href={link.href} className="flex items-center gap-3 rounded-xl p-3 hover:bg-sky-mist">
+                  <span aria-hidden="true" className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-sky-mist text-lg">
+                    {link.icon}
+                  </span>
+                  <span className="min-w-0">
+                    <span className="block font-semibold text-ink">{link.title}</span>
+                    <span className="block text-sm text-ink-soft">{link.body}</span>
+                  </span>
+                </Link>
+              ))}
+            </nav>
+          </aside>
+        </div>
+      </main>
       <SiteFooter />
     </>
   );
 }
 
-function StatLine({ stats }: { stats: WeeklyStats }) {
+function StatCard({ stats }: { stats: WeeklyStats }) {
   const when = stats.isCurrentWeek ? "this week" : `in the week ending ${formatMonthDay(stats.windowEnd)}`;
   return (
-    <div className="mt-10 sm:mt-12">
-      <p className="mx-auto max-w-[46rem] font-serif text-[1.5rem] leading-[1.35] text-ink sm:text-[2rem]">
-        Docket read <strong className="font-semibold">{plural(stats.pagesRead, "page")}</strong> of city documents {when}{" "}
-        and surfaced <strong className="font-semibold">{plural(stats.itemsSurfaced, "thing")}</strong> across{" "}
+    <section className="rounded-2xl border border-rule bg-white p-5">
+      <p className="font-serif text-lg leading-snug text-ink">
+        Docket read <strong className="font-semibold">{plural(stats.pagesRead, "page")}</strong> of city documents {when} and surfaced{" "}
+        <strong className="font-semibold">{plural(stats.itemsSurfaced, "thing")}</strong> across{" "}
         <strong className="font-semibold">{plural(stats.neighborhoods, "neighborhood")}</strong>.
       </p>
-      <p className="mt-3 flex flex-wrap items-center justify-center gap-x-4 gap-y-2 text-base text-ink-soft">
-        {stats.source === "sample" ? (
-          <span className="rounded-full bg-white/80 px-2.5 py-0.5 text-sm font-semibold text-ink">Sample data</span>
-        ) : null}
-        <Link href="/groups" className="link">
-          See the groups
-        </Link>
-      </p>
-    </div>
+      {stats.source === "sample" ? <p className="mt-2 text-sm text-ink-muted">Sample data</p> : null}
+    </section>
   );
 }

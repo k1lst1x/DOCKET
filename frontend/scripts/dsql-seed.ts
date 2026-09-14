@@ -12,6 +12,7 @@ import { GROUP_SEEDS, ITEMS } from "../src/data/fixtures.ts";
 import neighborhoods from "../src/data/fremont-neighborhoods.json" with { type: "json" };
 import { ISSUE_CONTENT } from "../src/data/issue-content.ts";
 import { SAMPLE_ACTIVITY, SAMPLE_FIRST_NAMES, SAMPLE_LAST_INITIALS } from "../src/data/sample-activity.ts";
+import { SAMPLE_POSTS, samplePostId, sampleReplyId } from "../src/data/sample-posts.ts";
 import { sampleIssueId } from "../src/lib/issue-ids.ts";
 
 const endpoint = process.env.DSQL_ENDPOINT;
@@ -265,11 +266,64 @@ try {
        body = EXCLUDED.body, created_at = EXCLUDED.created_at, updated_at = EXCLUDED.updated_at`,
   );
 
+  // ---------------------------------------------------------------- home feed
+  // Timestamps are relative to when the seed runs, so the sample feed looks current.
+  const seededAt = Date.now();
+  const postTime = (hoursAgo: number, minutesAfter = 0) => new Date(seededAt - hoursAgo * 3_600_000 + minutesAfter * 60_000).toISOString();
+  const postColumns = "id uuid, member_id uuid, neighborhood_slug text, parent_id uuid, body text, is_sample boolean, created_at timestamptz";
+  const postConflict = "ON CONFLICT (id) DO UPDATE SET body = EXCLUDED.body, neighborhood_slug = EXCLUDED.neighborhood_slug, created_at = EXCLUDED.created_at";
+
+  await upsertRows(
+    "posts (id, member_id, neighborhood_slug, parent_id, body, is_sample, created_at)",
+    postColumns,
+    SAMPLE_POSTS.map((p, i) => ({
+      id: samplePostId(i),
+      member_id: members[p.author].id,
+      neighborhood_slug: p.neighborhood,
+      parent_id: null,
+      body: p.body,
+      is_sample: true,
+      created_at: postTime(p.hoursAgo),
+    })),
+    postConflict,
+  );
+  await upsertRows(
+    "posts (id, member_id, neighborhood_slug, parent_id, body, is_sample, created_at)",
+    postColumns,
+    SAMPLE_POSTS.flatMap((p, i) =>
+      p.replies.map((r, j) => ({
+        id: sampleReplyId(i, j),
+        member_id: members[r.author].id,
+        neighborhood_slug: p.neighborhood,
+        parent_id: samplePostId(i),
+        body: r.body,
+        is_sample: true,
+        created_at: postTime(p.hoursAgo, r.minutesAfter),
+      })),
+    ),
+    postConflict,
+  );
+  await upsertRows(
+    "post_likes (post_id, member_id, created_at)",
+    "post_id uuid, member_id uuid, created_at timestamptz",
+    SAMPLE_POSTS.flatMap((p, i) => {
+      const rand = rng(`likes-${i}`);
+      const likers = members
+        .filter((_, m) => m !== p.author)
+        .map((m) => ({ m, key: rand() }))
+        .sort((a, b) => a.key - b.key)
+        .slice(0, p.likes);
+      return likers.map(({ m }) => ({ post_id: samplePostId(i), member_id: m.id, created_at: postTime(p.hoursAgo, 5) }));
+    }),
+    "ON CONFLICT (post_id, member_id) DO NOTHING",
+  );
+
   const { rows } = await client.query(
     `SELECT (SELECT count(*) FROM neighborhoods)::int AS neighborhoods, (SELECT count(*) FROM groups)::int AS groups,
             (SELECT count(*) FROM issues)::int AS issues, (SELECT count(*) FROM polls)::int AS polls,
             (SELECT count(*) FROM members WHERE is_sample)::int AS sample_members,
-            (SELECT count(*) FROM votes)::int AS votes, (SELECT count(*) FROM reviews)::int AS reviews`,
+            (SELECT count(*) FROM votes)::int AS votes, (SELECT count(*) FROM reviews)::int AS reviews,
+            (SELECT count(*) FROM posts)::int AS posts, (SELECT count(*) FROM post_likes)::int AS post_likes`,
   );
   console.log("seeded:", rows[0]);
 } finally {

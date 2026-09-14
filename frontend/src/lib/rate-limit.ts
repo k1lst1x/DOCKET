@@ -61,6 +61,20 @@ export function allowReviewRequest(request: Request): boolean {
 const chatByClient = new FixedWindowLimiter(20);
 const chatGlobal = new FixedWindowLimiter(300, 1);
 
+// Home feed: posting and deleting is capped tightly per client; likes can be tapped more often.
+const postByClient = new FixedWindowLimiter(8);
+const postGlobal = new FixedWindowLimiter(240, 1);
+const likeByClient = new FixedWindowLimiter(60);
+const likeGlobal = new FixedWindowLimiter(1200, 1);
+
+export function allowPostRequest(request: Request): boolean {
+  return postByClient.allow(clientKey(request)) && postGlobal.allow("all");
+}
+
+export function allowLikeRequest(request: Request): boolean {
+  return likeByClient.allow(clientKey(request)) && likeGlobal.allow("all");
+}
+
 export function allowChatRequest(request: Request): boolean {
   return chatByClient.allow(clientKey(request)) && chatGlobal.allow("all");
 }
