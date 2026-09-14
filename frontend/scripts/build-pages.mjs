@@ -37,7 +37,7 @@ for (const name of ['g/[slug]/page.tsx', 'g/[slug]/join/page.tsx', 'groups/page.
 }
 await replace('src/app/g/[slug]/page.tsx', 'import { getGroup } from "@/lib/data";', 'import { getGroup, listGroups } from "@/lib/data";');
 await replace('src/app/g/[slug]/page.tsx', 'type Params =', 'export function generateStaticParams() { return listGroups().map(({ slug }) => ({ slug })); }\n\ntype Params =');
-// Sign-in needs Cognito and the API routes; the preview explains that instead.
+// Log in and register need the database and the API routes; the preview explains that instead.
 await writeFile(path.join(stage, 'src/app/signin/page.tsx'), `import { SiteFooter, SiteHeader } from "@/components/SiteHeader";
 
 export const dynamic = "force-static";
@@ -68,7 +68,7 @@ for (const name of ['sitemap.ts', 'robots.ts']) {
 await replace('src/app/app/page.tsx', 'action="/find"', `action="${basePath}/find/"`);
 await replace('src/app/g/[slug]/join/page.tsx', 'import { getGroup }', 'import { listGroups, getGroup }');
 await replace('src/app/g/[slug]/join/page.tsx', 'type Params =', 'export function generateStaticParams() { return listGroups().map(({ slug }) => ({ slug })); }\n\ntype Params =');
-// Preserve the form, but never claim that a static host sent a sign-in email.
+// Preserve the form, but never claim that a static host created an account.
 await replace('src/components/JoinFlow.tsx', '    setSubmitting(true);', '    setFormError("Sign-ups are not available on this preview. You can browse every group without joining.");\n    return;');
 // Search keeps the original result views. In Pages the request runs in the browser;
 // geocoder network/CORS failures use the existing unavailable state.

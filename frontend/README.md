@@ -29,7 +29,7 @@ unless it is prefixed `NEXT_PUBLIC_`, and no secret may ever use that prefix.
 The app is server-rendered: route handlers, httpOnly session cookies and live
 address lookups need a Node runtime, so it is not a static export. Amplify Hosting
 builds it on every push to `main`. Set `SESSION_SECRET` (32+ characters), `APP_URL`,
-`DEMO`, `DSQL_ENDPOINT`, `DSQL_USER`, `COGNITO_USER_POOL_ID` and `COGNITO_CLIENT_ID`
+`DEMO`, `DSQL_ENDPOINT` and `DSQL_USER`
 in the Amplify console; `amplify.yml` passes them to the server runtime. The server
 reaches Aurora DSQL with the Amplify SSR compute role (no stored AWS keys).
 
@@ -51,14 +51,15 @@ neighborhoods and sample groups with `node scripts/dsql-seed.ts` (both need
 | `/start` | Placeholder until the Clerk exists |
 
 API: `GET /api/find?address=`, `GET /api/groups`, `GET /api/groups/[slug]`,
-`POST /api/groups/[slug]/join`, `GET /api/stats`, `POST /api/auth/start`,
-`POST /api/auth/verify`, `POST /api/auth/resend`, `POST /api/auth/signout`,
-`GET /api/auth/me`. Group and role always come from the URL or the session,
-never from a request body.
+`POST /api/groups/[slug]/join`, `GET /api/stats`, `POST /api/auth/register`,
+`POST /api/auth/login`, `POST /api/auth/signout`, `GET /api/auth/me`. Group and
+role always come from the URL or the session, never from a request body.
 
-Sign-in is passwordless through Amazon Cognito (Essentials): joining a group creates
-the account and emails a 6-digit code; `/signin` emails a code to existing members.
-Nobody has to confirm the code before reading a group's items.
+Accounts are email and password, stored in DSQL (`members.password_hash`, scrypt via
+`src/lib/passwords.ts`). `/signin` has Log in and Register; joining a group while
+signed out creates the account in the same step. No email is sent and nothing needs
+confirming, so there is no SES or tester list. A member from the old emailed-code
+sign-in has no password yet; registering with that email sets one.
 
 ## Data
 
@@ -69,20 +70,14 @@ Nobody has to confirm the code before reading a group's items.
 - `src/lib/data.ts` provides fixture-backed groups and address lookup. DSQL-backed
   routes live alongside it in `src/lib/members.ts` and `src/lib/issues.ts`.
 - Members and memberships are saved in Aurora DSQL (`db/migrations/0001_core.sql`,
-  `src/lib/members.ts`) once a sign-in code is confirmed. Groups and agenda items
+  `src/lib/members.ts`) when someone registers or joins. Groups and agenda items
   shown on pages still come from the sample fixtures.
 - Issues, AI analyses, polls, votes and reviews live in DSQL (`src/lib/issues.ts`).
   `scripts/dsql-seed.ts` loads sample issues and sample neighbors' votes and reviews,
   all marked `is_sample` and labelled "Sample" in the issue dialog.
 - `src/data/fremont-neighborhoods.json`: all 32 areas of the City of Fremont
   Neighborhoods layer, seeded into the `neighborhoods` table.
-- Geocoding uses the free US Census geocoder. Sign-in codes are sent through Amazon
-  SES; while the SES account is in the sandbox, codes only reach verified addresses.
-  The server checks first (`src/lib/ses-recipients.ts`) and tells anyone else to ask
-  for access. Add testers with
-  `bash scripts/ses-testers.sh add "person@example.com=Full Name"` (they click the AWS
-  verification email once, within 24 hours); `list`, `resend` and `remove` manage the list. The list lives in SES,
-  never in the repo.
+- Geocoding uses the free US Census geocoder.
 
 ## GitHub Pages preview
 

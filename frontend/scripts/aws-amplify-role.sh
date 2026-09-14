@@ -7,8 +7,7 @@
 #   - invoke the docket_chat AgentCore runtime
 #   - read, write and tag files under uploads/ in the post media bucket (scripts/aws-media-bucket.sh)
 #   - call Rekognition content moderation (scripts/aws-media-moderation.sh; it can't be scoped to resources)
-#   - read the SES account and identity status, so sign-in only sends codes that can arrive (scripts/ses-testers.sh)
-# Cognito sign-in uses public APIs and needs no IAM permissions.
+# Accounts are email and password in DSQL, so sign-in needs no other AWS service.
 #
 # With an app id, it also attaches the role to the app and sets the server's environment variables
 # (amplify.yml copies them into .env.production at build time). SESSION_SECRET is generated once and
@@ -62,8 +61,7 @@ POLICY=$(cat <<JSON
 {"Sid":"DocketDsqlConnect","Effect":"Allow","Action":["dsql:DbConnectAdmin","dsql:DbConnect"],"Resource":"$CLUSTER_ARN"},
 {"Sid":"DocketChatInvoke","Effect":"Allow","Action":"bedrock-agentcore:InvokeAgentRuntime","Resource":["$RUNTIME_ARN","$RUNTIME_ARN/runtime-endpoint/*"]},
 {"Sid":"DocketPostMedia","Effect":"Allow","Action":["s3:PutObject","s3:GetObject","s3:PutObjectTagging"],"Resource":"arn:aws:s3:::$BUCKET/uploads/*"},
-{"Sid":"DocketMediaModeration","Effect":"Allow","Action":["rekognition:DetectModerationLabels","rekognition:DetectText","rekognition:StartContentModeration","rekognition:GetContentModeration"],"Resource":"*"},
-{"Sid":"DocketEmailRecipientCheck","Effect":"Allow","Action":["ses:GetAccount","ses:GetEmailIdentity"],"Resource":"*"}
+{"Sid":"DocketMediaModeration","Effect":"Allow","Action":["rekognition:DetectModerationLabels","rekognition:DetectText","rekognition:StartContentModeration","rekognition:GetContentModeration"],"Resource":"*"}
 ]}
 JSON
 )
@@ -86,10 +84,8 @@ EXISTING=$(aws_ amplify get-branch --app-id "$APP_ID" --branch-name "$BRANCH" --
 SESSION_SECRET=$(printf '%s' "$EXISTING" | sed -n 's/.*"SESSION_SECRET": *"\([^"]*\)".*/\1/p')
 [ -n "$SESSION_SECRET" ] || SESSION_SECRET=$(openssl rand -base64 48 | tr -d '\n=+/')
 
-required() { local value; value="$(env_local "$1")"; [ -n "$value" ] || { echo "$1 is missing from .env.local"; exit 1; }; printf '%s' "$value"; }
 VARS="APP_URL=$APP_URL,SESSION_SECRET=$SESSION_SECRET"
 VARS="$VARS,DSQL_ENDPOINT=$CLUSTER_ID.dsql.$REGION.on.aws,DSQL_USER=admin"
-VARS="$VARS,COGNITO_USER_POOL_ID=$(required COGNITO_USER_POOL_ID),COGNITO_CLIENT_ID=$(required COGNITO_CLIENT_ID)"
 VARS="$VARS,DOCKET_CHAT_RUNTIME_ARN=$RUNTIME_ARN,DOCKET_MEDIA_BUCKET=$BUCKET,DOCKET_MEDIA_REGION=$REGION"
 for NAME in NEXT_PUBLIC_GOOGLE_MAPS_API_KEY NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID; do
   VALUE="$(env_local "$NAME")"

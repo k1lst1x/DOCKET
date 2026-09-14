@@ -1,19 +1,22 @@
 import { NextResponse } from "next/server";
-import { isSameOrigin, setPendingCookie } from "@/lib/auth";
-import type { CodeStatus } from "@/lib/auth-codes";
+import { isSameOrigin, setSessionCookie } from "@/lib/auth";
 import { noStore } from "@/lib/auth-http";
-import { AuthError, sendCode, type CodeChallenge } from "@/lib/cognito";
 import { getGroup } from "@/lib/data";
 import { parseJoin } from "@/lib/join";
-import { allowJoinRequest } from "@/lib/rate-limit";
+import { loginMember, registerMember, type AccountResult } from "@/lib/members";
+import { allowJoinRequest, allowLoginRequest } from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
 
+/**
+ * Join form for someone who isn't signed in: creates the account (or logs in to an existing one with its password),
+ * saves the membership and signs them in, all in one step.
+ */
 export async function POST(request: Request, { params }: { params: Promise<{ slug: string }> }) {
   if (!isSameOrigin(request)) {
     return NextResponse.json({ error: "Cross-site requests are not accepted." }, { status: 403 });
   }
-  if (!allowJoinRequest(request)) {
+  if (!allowJoinRequest(request) || !allowLoginRequest(request)) {
     return NextResponse.json({ error: "Too many join requests. Try again shortly." }, { status: 429, headers: noStore });
   }
 
@@ -30,41 +33,38 @@ export async function POST(request: Request, { params }: { params: Promise<{ slu
 
   const parsed = parseJoin(body, group.watchlist);
   if (!parsed.ok) {
-    return NextResponse.json({ error: "Check the highlighted fields.", fields: parsed.errors }, { status: 400 });
+    return NextResponse.json({ error: "Check the highlighted fields.", fields: parsed.errors }, { status: 400, headers: noStore });
   }
-  const email = parsed.value.email.toLowerCase();
+  const { name, email, password, topics, otherTopic, canSpeakEvenings } = parsed.value;
+  const join = { slug: group.slug, topics, otherTopic, canSpeakEvenings };
 
-  // Creates the Cognito account (or starts a sign-in for an existing one) and
-  // emails a code. The membership is saved once the code is confirmed.
-  let challenge: CodeChallenge | null = null;
-  let code: CodeStatus = "sent";
+  let result: AccountResult;
   try {
-    challenge = await sendCode(email, parsed.value.name);
+    result = await registerMember(name, email, password, join);
+    // Someone who already has an account can join with its password instead of logging in first.
+    if (!result.ok) result = await loginMember(email, password, join);
   } catch (error) {
-    code = error instanceof AuthError ? error.code : "failed";
-    if (code === "failed") console.error("[docket] join: could not send code", error);
+    console.error("[docket] join: could not save the account", error);
+    return NextResponse.json({ error: "unavailable" }, { status: 503, headers: noStore });
+  }
+  if (!result.ok) {
+    return NextResponse.json(
+      {
+        error: "email_taken",
+        fields: { password: "An account already uses this email, and that isn't its password. Enter the right password, or log in first." },
+      },
+      { status: 409, headers: noStore },
+    );
   }
 
-  // The group's items are returned either way: nobody has to verify an email
-  // before they can see what the group is watching.
   const response = NextResponse.json(
-    { email, code, group: { slug: group.slug, name: group.name, district: group.district, items: group.items } },
+    {
+      name: result.session.name,
+      created: result.created,
+      group: { slug: group.slug, name: group.name, district: group.district, items: group.items },
+    },
     { status: 201, headers: noStore },
   );
-  if (challenge) {
-    setPendingCookie(response, {
-      kind: challenge.kind,
-      email,
-      name: parsed.value.name,
-      cognitoSession: challenge.cognitoSession,
-      join: {
-        slug: group.slug,
-        topics: parsed.value.topics,
-        otherTopic: parsed.value.otherTopic,
-        canSpeakEvenings: parsed.value.canSpeakEvenings,
-      },
-      next: `/g/${group.slug}`,
-    });
-  }
+  setSessionCookie(response, result.session);
   return response;
 }

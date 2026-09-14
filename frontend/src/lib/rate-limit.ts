@@ -38,11 +38,11 @@ const joinByClient = new FixedWindowLimiter(10);
 const joinGlobal = new FixedWindowLimiter(100, 1);
 const lookupByClient = new FixedWindowLimiter(30);
 const lookupGlobal = new FixedWindowLimiter(240, 1);
-// Each code request sends an email through SES, so keep these tighter.
-const codeByClient = new FixedWindowLimiter(5);
-const codeGlobal = new FixedWindowLimiter(60, 1);
-const verifyByClient = new FixedWindowLimiter(10);
-const verifyGlobal = new FixedWindowLimiter(120, 1);
+// Each login or registration runs a deliberately slow password hash, so cap password guesses per connection.
+const loginByClient = new FixedWindowLimiter(10);
+const loginGlobal = new FixedWindowLimiter(300, 1);
+const registerByClient = new FixedWindowLimiter(6);
+const registerGlobal = new FixedWindowLimiter(120, 1);
 
 const voteByClient = new FixedWindowLimiter(40);
 const voteGlobal = new FixedWindowLimiter(600, 1);
@@ -95,12 +95,12 @@ export function allowChatWarmRequest(request: Request): boolean {
   return chatWarmByClient.allow(clientKey(request)) && chatWarmGlobal.allow("all");
 }
 
-export function allowCodeRequest(request: Request): boolean {
-  return codeByClient.allow(clientKey(request)) && codeGlobal.allow("all");
+export function allowLoginRequest(request: Request): boolean {
+  return loginByClient.allow(clientKey(request)) && loginGlobal.allow("all");
 }
 
-export function allowVerifyRequest(request: Request): boolean {
-  return verifyByClient.allow(clientKey(request)) && verifyGlobal.allow("all");
+export function allowRegisterRequest(request: Request): boolean {
+  return registerByClient.allow(clientKey(request)) && registerGlobal.allow("all");
 }
 
 export function allowJoinRequest(request: Request): boolean {

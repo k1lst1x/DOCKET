@@ -3,37 +3,26 @@ import { cookies } from "next/headers";
 import type { NextResponse } from "next/server";
 import type { Role } from "./types";
 
-// Identity comes from Amazon Cognito (email one-time codes). After Cognito
-// verifies a code, the app keeps its own signed, httpOnly session cookie so
-// server components can read who is signed in without calling AWS.
+// Members register and log in with an email and password, checked against our own database (members.ts,
+// passwords.ts). After that the app keeps its own signed, httpOnly session cookie so server components can read
+// who is signed in without a database call.
 
 export const SESSION_COOKIE = "docket_session";
-export const PENDING_COOKIE = "docket_pending";
 const SESSION_TTL_S = 60 * 60 * 24 * 30;
-const PENDING_TTL_S = 60 * 15;
 
 export interface Session {
-  memberId: string; // Cognito user "sub"
+  memberId: string; // members.id
   name: string;
   email: string;
   groups: { slug: string; role: Role }[];
 }
 
+/** A group someone is joining, with the preferences from the join form. */
 export interface PendingJoin {
   slug: string;
   topics: string[];
   otherTopic: string | null;
   canSpeakEvenings: boolean;
-}
-
-/** A code has been emailed; this remembers what to finish once it comes back. */
-export interface PendingSignIn {
-  kind: "signup" | "signin";
-  email: string;
-  name: string | null;
-  cognitoSession: string | null;
-  join: PendingJoin | null;
-  next: string;
 }
 
 function secret(): string {
@@ -89,23 +78,6 @@ export function setSessionCookie(response: NextResponse, session: Session): void
 
 export function clearSessionCookie(response: NextResponse): void {
   response.cookies.set(SESSION_COOKIE, "", cookieOptions(0));
-}
-
-export function setPendingCookie(response: NextResponse, pending: PendingSignIn): void {
-  response.cookies.set(PENDING_COOKIE, signToken({ ...pending, typ: "pending" }, PENDING_TTL_S), cookieOptions(PENDING_TTL_S));
-}
-
-export function clearPendingCookie(response: NextResponse): void {
-  response.cookies.set(PENDING_COOKIE, "", cookieOptions(0));
-}
-
-export async function readPending(): Promise<PendingSignIn | null> {
-  const token = (await cookies()).get(PENDING_COOKIE)?.value;
-  if (!token) return null;
-  const p = verifyToken<PendingSignIn>(token, "pending");
-  return p
-    ? { kind: p.kind, email: p.email, name: p.name, cognitoSession: p.cognitoSession, join: p.join, next: safeNextPath(p.next) }
-    : null;
 }
 
 /** Server components and route handlers read identity only from here. */

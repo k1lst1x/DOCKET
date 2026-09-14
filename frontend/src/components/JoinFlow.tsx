@@ -3,10 +3,9 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, type FormEvent } from "react";
-import { CodeEntry } from "@/components/CodeEntry";
 import { EmptyState } from "@/components/EmptyState";
 import { WatchItemCard } from "@/components/WatchItemCard";
-import type { CodeStatus } from "@/lib/auth-codes";
+import { PASSWORD_MAX, PASSWORD_MIN } from "@/lib/account-fields";
 import { formatNumber } from "@/lib/format";
 import { parseJoin, parsePreferences, type JoinFieldErrors } from "@/lib/join";
 import { forgetMe } from "@/lib/me-client";
@@ -26,31 +25,16 @@ interface SignedInMember {
 }
 
 interface Joined {
-  email: string;
-  /** "member": a signed-in member joined in one step, no code needed. */
-  code: CodeStatus | "member";
+  /** Which account the membership was saved to. */
+  note: string;
   items: WatchItem[];
-}
-
-function codeProblem(code: CodeStatus, email: string) {
-  switch (code) {
-    case "undeliverable":
-      return `We couldn't send a code to ${email} yet, so voting from this device will have to wait. Everything below is still yours to read.`;
-    case "not_invited":
-      return `Docket is still in testing, so sign-in codes only go to emails on the tester list. Ask the Docket team to add ${email}. Everything below is still yours to read.`;
-    case "busy":
-      return "Too many codes were requested just now. You can sign in again in a minute from the Sign in button.";
-    case "not_configured":
-      return "Sign-in isn't set up on this server yet, so we couldn't send a code.";
-    default:
-      return "We couldn't send your code just now. You can sign in later from the Sign in button.";
-  }
 }
 
 export function JoinFlow({ group, member }: { group: JoinGroup; member: SignedInMember | null }) {
   const router = useRouter();
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [topics, setTopics] = useState<string[]>([]);
   const [somethingElse, setSomethingElse] = useState(false);
   const [otherTopic, setOtherTopic] = useState("");
@@ -59,10 +43,10 @@ export function JoinFlow({ group, member }: { group: JoinGroup; member: SignedIn
   const [formError, setFormError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [joined, setJoined] = useState<Joined | null>(null);
-  const [signedInAs, setSignedInAs] = useState<string | null>(null);
 
   const nameRef = useRef<HTMLInputElement>(null);
   const emailRef = useRef<HTMLInputElement>(null);
+  const passwordRef = useRef<HTMLInputElement>(null);
   const otherRef = useRef<HTMLInputElement>(null);
   const joinedHeading = useRef<HTMLHeadingElement>(null);
 
@@ -73,16 +57,19 @@ export function JoinFlow({ group, member }: { group: JoinGroup; member: SignedIn
   const toggleTopic = (topic: string) =>
     setTopics((current) => (current.includes(topic) ? current.filter((t) => t !== topic) : [...current, topic]));
 
+  const focusFirst = (found: JoinFieldErrors) =>
+    (found.name ? nameRef : found.email ? emailRef : found.password ? passwordRef : otherRef).current?.focus();
+
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setFormError(null);
 
     const preferences = { topics, otherTopic: somethingElse ? otherTopic : "", canSpeakEvenings };
-    const payload = member ? preferences : { name, email, ...preferences };
+    const payload = member ? preferences : { name, email, password, ...preferences };
     const check = member ? parsePreferences(payload, group.watchlist) : parseJoin(payload, group.watchlist);
     if (!check.ok) {
       setErrors(check.errors);
-      (check.errors.name ? nameRef : check.errors.email ? emailRef : otherRef).current?.focus();
+      focusFirst(check.errors);
       return;
     }
     setErrors({});
@@ -95,12 +82,13 @@ export function JoinFlow({ group, member }: { group: JoinGroup; member: SignedIn
         body: JSON.stringify(payload),
       });
       const data = await res.json().catch(() => null);
-      if (res.status === 400 && data?.fields) {
+      if ((res.status === 400 || res.status === 409) && data?.fields) {
         setErrors(data.fields);
+        focusFirst(data.fields);
         return;
       }
       if (member && res.status === 401) {
-        setFormError("Your sign-in has expired. Reload the page to join with your name and email.");
+        setFormError("Your sign-in has expired. Reload the page to join with your email and password.");
         return;
       }
       if (!res.ok || !data) {
@@ -111,16 +99,18 @@ export function JoinFlow({ group, member }: { group: JoinGroup; member: SignedIn
         );
         return;
       }
-      if (member) {
+      setJoined({
         // Optional chaining: the Pages preview makes this unreachable, which drops the narrowing.
-        setSignedInAs(member?.name ?? "");
-        setJoined({ email: member?.email ?? "", code: "member", items: data.group.items });
-        // The member's group list changed.
-        forgetMe();
-        router.refresh();
-      } else {
-        setJoined({ email: data.email, code: data.code, items: data.group.items });
-      }
+        note: member
+          ? `Saved to your account, ${member?.name ?? ""}. You won't need to join again.`
+          : data.created
+            ? `Account created. You're signed in as ${data.name}.`
+            : `You're signed in as ${data.name}, and ${group.name} is saved to your account.`,
+        items: data.group.items,
+      });
+      // The member's sign-in and group list changed.
+      forgetMe();
+      router.refresh();
     } catch {
       setFormError("We couldn't reach Docket. Check your connection and try again.");
     } finally {
@@ -136,31 +126,9 @@ export function JoinFlow({ group, member }: { group: JoinGroup; member: SignedIn
           Here&apos;s what {group.name} is watching.
         </h1>
 
-        {signedInAs ? (
-          <p role="status" className="mt-5 inline-flex rounded-2xl bg-park-wash px-4 py-3 text-base font-semibold text-park">
-            {joined.code === "member"
-              ? `Saved to your account, ${signedInAs}. You won't need to join again.`
-              : `Email confirmed. You're signed in as ${signedInAs}.`}
-          </p>
-        ) : joined.code === "sent" ? (
-          <div className="mt-6 max-w-read rounded-2xl border border-rule bg-white p-5 sm:p-6">
-            <CodeEntry
-              email={joined.email}
-              intro={
-                <>
-                  We emailed a code to<span className="font-semibold text-ink">{joined.email}</span>. Enter it to confirm your
-                  email so you can vote and volunteer. You can read everything below either way.
-                </>
-              }
-              onVerified={({ name: verifiedName }) => {
-                setSignedInAs(verifiedName);
-                router.refresh();
-              }}
-            />
-          </div>
-        ) : joined.code !== "member" ? (
-          <p className="mt-5 max-w-read rounded-2xl bg-white px-4 py-3 text-base text-ink-soft">{codeProblem(joined.code, joined.email)}</p>
-        ) : null}
+        <p role="status" className="mt-5 inline-flex rounded-2xl bg-park-wash px-4 py-3 text-base font-semibold text-park">
+          {joined.note}
+        </p>
 
         {joined.items.length ? (
           <ol className="mt-8 grid gap-5">
@@ -185,6 +153,8 @@ export function JoinFlow({ group, member }: { group: JoinGroup; member: SignedIn
     );
   }
 
+  const signInHref = `/signin?next=${encodeURIComponent(`/g/${group.slug}/join`)}`;
+
   return (
     <div className="mx-auto max-w-3xl rounded-2xl border border-rule bg-white p-6 sm:p-10">
       <p className="eyebrow">
@@ -198,7 +168,13 @@ export function JoinFlow({ group, member }: { group: JoinGroup; member: SignedIn
             about and join.
           </>
         ) : (
-          "One screen, no password. You'll see what the group is watching as soon as you join."
+          <>
+            One screen: this creates your account and joins the group. Already have an account?{" "}
+            <Link href={signInHref} className="link">
+              Log in
+            </Link>{" "}
+            first.
+          </>
         )}
       </p>
 
@@ -242,16 +218,37 @@ export function JoinFlow({ group, member }: { group: JoinGroup; member: SignedIn
                 type="email"
                 inputMode="email"
                 autoComplete="email"
+                maxLength={254}
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 aria-invalid={Boolean(errors.email)}
-                aria-describedby={`join-email-hint${errors.email ? " join-email-error" : ""}`}
+                aria-describedby={errors.email ? "join-email-error" : undefined}
                 className="field rounded-xl"
               />
-              <p id="join-email-hint" className="mt-2 text-sm text-ink-soft">
-                We&apos;ll email a code so you can vote later. You can read everything without it.
-              </p>
               <FieldError id="join-email-error" message={errors.email} />
+            </div>
+
+            <div>
+              <label htmlFor="join-password" className="label">
+                Password
+              </label>
+              <input
+                ref={passwordRef}
+                id="join-password"
+                name="password"
+                type="password"
+                autoComplete="new-password"
+                maxLength={PASSWORD_MAX}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                aria-invalid={Boolean(errors.password)}
+                aria-describedby={`join-password-hint${errors.password ? " join-password-error" : ""}`}
+                className="field rounded-xl"
+              />
+              <p id="join-password-hint" className="mt-2 text-sm text-ink-soft">
+                At least {PASSWORD_MIN} characters. You&apos;ll use it with your email to log in.
+              </p>
+              <FieldError id="join-password-error" message={errors.password} />
             </div>
           </>
         )}
@@ -311,7 +308,7 @@ export function JoinFlow({ group, member }: { group: JoinGroup; member: SignedIn
           <button type="submit" className="btn btn-primary rounded-full" disabled={submitting} aria-busy={submitting}>
             {submitting ? "Joining…" : `Join ${group.name}`}
           </button>
-          <p className="text-sm text-ink-soft">{member ? "Saved to your account." : "No password. Leave any time."}</p>
+          <p className="text-sm text-ink-soft">{member ? "Saved to your account." : "Free. Leave any time."}</p>
         </div>
       </form>
     </div>

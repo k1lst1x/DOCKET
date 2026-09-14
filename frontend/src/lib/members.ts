@@ -1,6 +1,7 @@
+import { randomUUID } from "node:crypto";
 import type { PendingJoin, Session } from "./auth";
-import type { VerifiedIdentity } from "./cognito";
 import { db } from "./db";
+import { dummyHash, hashPassword, verifyPassword } from "./passwords";
 import type { Role } from "./types";
 
 const UPSERT_MEMBERSHIP = `INSERT INTO memberships (member_id, group_slug, topics, other_topic, can_speak_evenings)
@@ -16,41 +17,71 @@ const membershipParams = (memberId: string, join: PendingJoin) => [
   join.canSpeakEvenings,
 ];
 
+export type AccountResult =
+  | { ok: true; session: Session; created: boolean }
+  | { ok: false; error: "email_taken" | "wrong_password" };
+
 /**
- * Saves a verified sign-in to DSQL: the member row (keyed by Cognito sub) and,
- * when it came from a join form, the group membership. Safe to retry, which
- * the pool's transaction helper does on optimistic-concurrency conflicts.
+ * Creates an account (and, from a join form, its first membership) and returns its session. Email must already be
+ * lowercased. No email is sent. A member from the emailed-code days has no password yet, so registering with that
+ * email sets one. Safe to retry, which the pool's transaction helper does on optimistic-concurrency conflicts.
  */
-export async function recordSignIn(identity: VerifiedIdentity, requestedName: string | null, join: PendingJoin | null): Promise<Session> {
-  const fallbackName = (requestedName ?? identity.name ?? identity.email.split("@")[0]).slice(0, 80) || "Neighbor";
+export async function registerMember(name: string, email: string, password: string, join: PendingJoin | null): Promise<AccountResult> {
+  const passwordHash = await hashPassword(password);
+  try {
+    return await db().transaction(async (client): Promise<AccountResult> => {
+      const { rows: existing } = await client.query<{ id: string; password_hash: string | null; is_sample: boolean }>(
+        "SELECT id, password_hash, is_sample FROM members WHERE email = $1",
+        [email],
+      );
+      const current = existing[0];
+      if (current && (current.password_hash || current.is_sample)) return { ok: false, error: "email_taken" };
 
-  return db().transaction(async (client) => {
-    await client.query(
-      `INSERT INTO members (id, name, email, verified_at) VALUES ($1, $2, $3, now())
-       ON CONFLICT (id) DO UPDATE SET email = EXCLUDED.email, verified_at = COALESCE(members.verified_at, EXCLUDED.verified_at)`,
-      [identity.sub, fallbackName, identity.email],
-    );
+      const memberId = current?.id ?? randomUUID();
+      if (current) {
+        await client.query("UPDATE members SET name = $2, password_hash = $3 WHERE id = $1", [memberId, name, passwordHash]);
+      } else {
+        await client.query("INSERT INTO members (id, name, email, password_hash) VALUES ($1, $2, $3, $4)", [memberId, name, email, passwordHash]);
+      }
+      if (join) await client.query(UPSERT_MEMBERSHIP, membershipParams(memberId, join));
 
-    if (join) await client.query(UPSERT_MEMBERSHIP, membershipParams(identity.sub, join));
-
-    const { rows } = await client.query<{ name: string; group_slug: string | null; role: Role | null }>(
-      `SELECT m.name, ms.group_slug, ms.role
-       FROM members m LEFT JOIN memberships ms ON ms.member_id = m.id
-       WHERE m.id = $1
-       ORDER BY ms.joined_at`,
-      [identity.sub],
-    );
-
-    return {
-      memberId: identity.sub,
-      name: rows[0]?.name ?? fallbackName,
-      email: identity.email,
-      groups: rows.flatMap((r) => (r.group_slug && r.role ? [{ slug: r.group_slug, role: r.role }] : [])),
-    };
-  });
+      const { rows } = await client.query<{ group_slug: string; role: Role }>(
+        "SELECT group_slug, role FROM memberships WHERE member_id = $1 ORDER BY joined_at",
+        [memberId],
+      );
+      return {
+        ok: true,
+        created: !current,
+        session: { memberId, name, email, groups: rows.map((r) => ({ slug: r.group_slug, role: r.role })) },
+      };
+    });
+  } catch (error) {
+    // Two registrations for the same email at once: the unique email constraint rejects the second.
+    if ((error as { code?: string } | null)?.code === "23505") return { ok: false, error: "email_taken" };
+    throw error;
+  }
 }
 
-/** A signed-in member joins another group without re-entering name, email or a code. */
+/** Checks an email and password (email already lowercased) and returns the session, joining a group first if asked. */
+export async function loginMember(email: string, password: string, join: PendingJoin | null): Promise<AccountResult> {
+  const { rows } = await db().query<{ id: string; name: string; password_hash: string | null }>(
+    "SELECT id, name, password_hash FROM members WHERE email = $1",
+    [email],
+  );
+  const member = rows[0];
+  // Always run a hash check, so the response time doesn't reveal which emails have accounts.
+  const matches = await verifyPassword(password, member?.password_hash ?? (await dummyHash()));
+  if (!member?.password_hash || !matches) return { ok: false, error: "wrong_password" };
+
+  if (join) await joinGroup(member.id, join);
+  return {
+    ok: true,
+    created: false,
+    session: { memberId: member.id, name: member.name, email, groups: await listMemberships(member.id) },
+  };
+}
+
+/** A signed-in member joins another group without re-entering their details. */
 export async function joinGroup(memberId: string, join: PendingJoin): Promise<void> {
   await db().transaction(async (client) => {
     await client.query(UPSERT_MEMBERSHIP, membershipParams(memberId, join));

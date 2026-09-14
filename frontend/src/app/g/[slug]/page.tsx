@@ -121,7 +121,7 @@ export default async function GroupPage({ params }: { params: Params }) {
                   </Link>
                 )}
                 <span className="text-base text-ink-soft">
-                  {isMember ? "Open any item below to vote." : "Free, and no password."}
+                  {isMember ? "Open any item below to vote." : "Free to join."}
                   {group.meets ? ` Meets ${group.meets}.` : ""}
                 </span>
               </div>
@@ -236,7 +236,7 @@ export default async function GroupPage({ params }: { params: Params }) {
             <div className="page py-14 sm:py-20">
               <EmptyState
                 headline={`Join ${group.name}`}
-                body={`Free, and no password. You'll see what's coming up for ${group.district} while there's still time to write a letter or show up.`}
+                body={`Free to join. You'll see what's coming up for ${group.district} while there's still time to write a letter or show up.`}
                 actions={
                   <Link href={joinHref} className="btn btn-primary rounded-full">
                     Join the group

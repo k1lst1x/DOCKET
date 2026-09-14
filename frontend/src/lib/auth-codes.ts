@@ -1,17 +1,13 @@
-// Sign-in outcome codes shared by the auth API routes and the client forms.
+// Account outcome codes shared by the auth API routes and the client forms.
 
 export type AuthErrorCode =
-  | "not_configured"
-  | "wrong_code"
-  | "expired"
-  | "undeliverable"
-  // SES is still in the sandbox and this address isn't a verified tester, so a code could never arrive.
-  | "not_invited"
+  // A field is missing or malformed; the response carries `fields`.
+  | "invalid"
+  // No account matches that email and password.
+  | "wrong_password"
+  // Registering with an email that already has an account.
+  | "email_taken"
   | "busy"
-  | "signin_required"
-  // The code was right, but the server couldn't finish signing in (for example, no database access).
+  // The database couldn't be reached.
   | "unavailable"
   | "failed";
-
-/** Result of asking Cognito to email a code: "sent", or why it wasn't. */
-export type CodeStatus = "sent" | AuthErrorCode;

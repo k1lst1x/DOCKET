@@ -32,7 +32,7 @@ const STEPS: { icon: PixelIconName; title: string; body: string }[] = [
   {
     icon: "groups",
     title: "Find your block",
-    body: "Enter a Fremont street address or the nearest cross street. Docket places you in one of the city's 32 official neighborhoods and shows its group. Joining takes an emailed code, no password.",
+    body: "Enter a Fremont street address or the nearest cross street. Docket places you in one of the city's 32 official neighborhoods and shows its group. Joining takes an email and a password.",
   },
   {
     icon: "reads",
@@ -131,7 +131,6 @@ const STACK = [
   "Amazon Bedrock AgentCore",
   "Aurora DSQL",
   "Amazon S3 Vectors",
-  "Amazon Cognito",
   "Amazon Rekognition",
   "Next.js on AWS Amplify",
   "Google Maps Platform",
@@ -335,7 +334,7 @@ export function LandingPage() {
                   One neighborhood app, two reading agents.
                 </h2>
                 <p className="mt-5 text-lg leading-relaxed text-ink-soft">
-                  The Next.js web app runs the feed, groups, news, map and votes, with sign-in through Amazon Cognito and data in
+                  The Next.js web app runs the feed, groups, news, map and votes, with email and password accounts and data in
                   Aurora DSQL. Two Amazon Bedrock AgentCore runtimes built with Strands Agents do the reading: the pipeline agent
                   ingests public records and writes verified updates, and the chat agent answers residents&apos; questions with
                   citations from that same corpus. AWS credentials stay on the server.

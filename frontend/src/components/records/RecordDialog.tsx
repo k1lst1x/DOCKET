@@ -552,9 +552,9 @@ function ReviewsCard({ recordId, reviews, signedIn, onReviews }: { recordId: str
       ) : !signedIn ? (
         <p className="mt-3 rounded-2xl bg-sky-mist p-4 text-base text-ink-soft">
           <a href={`/signin?next=${encodeURIComponent(`${pathname}?record=${recordId}`)}`} className="link">
-            Sign in
+            Log in or register
           </a>{" "}
-          to write a review. No password; we email you a code.
+          to write a review.
         </p>
       ) : null}
       {!showForm && error ? (

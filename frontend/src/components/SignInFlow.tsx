@@ -1,106 +1,206 @@
 "use client";
 
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useRef, useState, type FormEvent } from "react";
-import { CodeEntry } from "@/components/CodeEntry";
+import { PASSWORD_MAX, PASSWORD_MIN, parseLogin, parseRegistration, type AccountFieldErrors } from "@/lib/account-fields";
+import { forgetMe } from "@/lib/me-client";
 
-const START_ERRORS: Record<number, string> = {
-  400: "Enter your full email address.",
-  403: "Docket is still in testing, so sign-in codes only go to emails on the tester list. Ask the Docket team to add yours.",
-  422: "We couldn't send a code to that address.",
-  429: "Too many codes requested just now. Wait a minute, then try again.",
-  503: "Sign-in isn't set up on this server yet.",
+export type AccountMode = "login" | "register";
+
+const FAILURES: Record<number, string> = {
+  401: "That email and password don't match an account. Check both, or register if you're new.",
+  429: "Too many attempts from this connection. Wait a minute, then try again.",
+  503: "Accounts are unavailable right now. Try again in a moment.",
 };
 
-export function SignInFlow({ next }: { next: string }) {
+/** Log in or register with an email and password. Either one signs you in right away. */
+export function SignInFlow({ next, initialMode = "login" }: { next: string; initialMode?: AccountMode }) {
   const router = useRouter();
-  const emailRef = useRef<HTMLInputElement>(null);
+  const [mode, setMode] = useState<AccountMode>(initialMode);
+  const [name, setName] = useState("");
   const [email, setEmail] = useState("");
-  const [step, setStep] = useState<"email" | "code">("email");
-  const [sending, setSending] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [errors, setErrors] = useState<AccountFieldErrors>({});
+  const [formError, setFormError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
 
-  async function sendCode(event: FormEvent) {
-    event.preventDefault();
-    if (sending) return;
-    setSending(true);
-    setError(null);
-    try {
-      const res = await fetch("/api/auth/start", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, next }),
-      });
-      if (res.ok) {
-        setStep("code");
-        return;
-      }
-      setError(START_ERRORS[res.status] ?? "We couldn't send a code just now. Try again in a moment.");
-      emailRef.current?.focus();
-    } catch {
-      setError("We couldn't reach Docket. Check your connection and try again.");
-    } finally {
-      setSending(false);
-    }
+  const nameRef = useRef<HTMLInputElement>(null);
+  const emailRef = useRef<HTMLInputElement>(null);
+  const passwordRef = useRef<HTMLInputElement>(null);
+
+  const registering = mode === "register";
+
+  function switchMode(to: AccountMode) {
+    setMode(to);
+    setErrors({});
+    setFormError(null);
   }
 
-  if (step === "code") {
-    return (
-      <div>
-        <CodeEntry
-          email={email}
-          intro={
-            <>
-              If <span className="font-semibold text-ink">{email}</span> belongs to a Docket member, we just emailed it a sign-in code.
-            </>
-          }
-          onVerified={({ next: destination }) => {
-            router.push(destination || next);
-            router.refresh();
-          }}
-        />
-        <button type="button" onClick={() => setStep("email")} className="link mt-5 text-sm">
-          Use a different email
-        </button>
-      </div>
-    );
+  function focusFirst(found: AccountFieldErrors) {
+    (found.name ? nameRef : found.email ? emailRef : passwordRef).current?.focus();
+  }
+
+  async function onSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (submitting) return;
+    setFormError(null);
+
+    const check = registering ? parseRegistration({ name, email, password }) : parseLogin({ email, password });
+    if (!check.ok) {
+      setErrors(check.errors);
+      focusFirst(check.errors);
+      return;
+    }
+    setErrors({});
+    setSubmitting(true);
+
+    try {
+      const res = await fetch(registering ? "/api/auth/register" : "/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(check.value),
+      });
+      if (res.ok) {
+        forgetMe();
+        router.push(next);
+        router.refresh();
+        return;
+      }
+      const data = await res.json().catch(() => null);
+      if (data?.fields) {
+        setErrors(data.fields);
+        focusFirst(data.fields);
+      } else {
+        setFormError(FAILURES[res.status] ?? "We couldn't finish just now. Try again in a moment.");
+      }
+    } catch {
+      setFormError("We couldn't reach Docket. Check your connection and try again.");
+    }
+    setSubmitting(false);
   }
 
   return (
-    <form onSubmit={sendCode} noValidate>
-      <label htmlFor="signin-email" className="label">
-        Email
-      </label>
-      <input
-        ref={emailRef}
-        id="signin-email"
-        name="email"
-        type="email"
-        inputMode="email"
-        autoComplete="email"
-        required
-        value={email}
-        onChange={(e) => setEmail(e.target.value)}
-        aria-invalid={Boolean(error)}
-        aria-describedby={error ? "signin-error" : undefined}
-        className="field rounded-xl"
-      />
-      {error ? (
-        <p id="signin-error" role="alert" className="mt-2 text-sm font-semibold text-signal">
-          {error}
-        </p>
-      ) : null}
-      <button type="submit" className="btn btn-primary mt-5 w-full rounded-full" disabled={sending || !email.trim()} aria-busy={sending}>
-        {sending ? "Sending…" : "Email me a code"}
-      </button>
-      <p className="mt-5 text-sm text-ink-soft">
-        New to Docket?{" "}
-        <Link href="/groups" className="link">
-          Join a group
-        </Link>{" "}
-        to create your account.
+    <div>
+      <h1 className="display text-[2.25rem] leading-tight">{registering ? "Create your account" : "Log in"}</h1>
+      <p className="mt-2 text-base text-ink-soft">
+        {registering ? "Your name, email and a password. You're signed in as soon as you register." : "Use the email and password for your Docket account."}
       </p>
-    </form>
+
+      <div role="group" aria-label="Log in or register" className="mt-6 grid grid-cols-2 gap-1 rounded-full bg-sky-mist p-1">
+        {(["login", "register"] as const).map((option) => (
+          <button
+            key={option}
+            type="button"
+            aria-pressed={mode === option}
+            onClick={() => switchMode(option)}
+            className={`h-10 rounded-full text-base font-semibold ${mode === option ? "on-dark bg-ink text-white" : "text-ink hover:bg-white"}`}
+          >
+            {option === "login" ? "Log in" : "Register"}
+          </button>
+        ))}
+      </div>
+
+      <form noValidate onSubmit={onSubmit} className="mt-6 grid gap-5">
+        {formError ? (
+          <div role="alert" className="rounded-xl border border-signal/50 bg-signal-wash px-4 py-3 text-base text-signal">
+            {formError}
+          </div>
+        ) : null}
+
+        {registering ? (
+          <div>
+            <label htmlFor="account-name" className="label">
+              Your name
+            </label>
+            <input
+              ref={nameRef}
+              id="account-name"
+              name="name"
+              type="text"
+              autoComplete="name"
+              maxLength={80}
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              aria-invalid={Boolean(errors.name)}
+              aria-describedby={errors.name ? "account-name-error" : undefined}
+              className="field rounded-xl"
+            />
+            <FieldError id="account-name-error" message={errors.name} />
+          </div>
+        ) : null}
+
+        <div>
+          <label htmlFor="account-email" className="label">
+            Email
+          </label>
+          <input
+            ref={emailRef}
+            id="account-email"
+            name="email"
+            type="email"
+            inputMode="email"
+            autoComplete={registering ? "email" : "username"}
+            maxLength={254}
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            aria-invalid={Boolean(errors.email)}
+            aria-describedby={errors.email ? "account-email-error" : undefined}
+            className="field rounded-xl"
+          />
+          <FieldError id="account-email-error" message={errors.email} />
+        </div>
+
+        <div>
+          <div className="flex items-baseline justify-between gap-3">
+            <label htmlFor="account-password" className="label">
+              Password
+            </label>
+            <button type="button" onClick={() => setShowPassword((v) => !v)} aria-controls="account-password" className="link text-sm">
+              {showPassword ? "Hide" : "Show"}
+            </button>
+          </div>
+          <input
+            ref={passwordRef}
+            id="account-password"
+            name="password"
+            type={showPassword ? "text" : "password"}
+            autoComplete={registering ? "new-password" : "current-password"}
+            maxLength={PASSWORD_MAX}
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            aria-invalid={Boolean(errors.password)}
+            aria-describedby={`${registering ? "account-password-hint" : ""}${errors.password ? " account-password-error" : ""}`.trim() || undefined}
+            className="field rounded-xl"
+          />
+          {registering ? (
+            <p id="account-password-hint" className="mt-2 text-sm text-ink-soft">
+              At least {PASSWORD_MIN} characters.
+            </p>
+          ) : null}
+          <FieldError id="account-password-error" message={errors.password} />
+        </div>
+
+        <button type="submit" className="btn btn-primary w-full rounded-full" disabled={submitting} aria-busy={submitting}>
+          {submitting ? (registering ? "Creating account…" : "Logging in…") : registering ? "Create account" : "Log in"}
+        </button>
+      </form>
+
+      <p className="mt-5 text-sm text-ink-soft">
+        {registering ? "Already have an account? " : "New to Docket? "}
+        <button type="button" onClick={() => switchMode(registering ? "login" : "register")} className="link">
+          {registering ? "Log in" : "Create an account"}
+        </button>
+      </p>
+    </div>
+  );
+}
+
+function FieldError({ id, message }: { id: string; message?: string }) {
+  if (!message) return null;
+  return (
+    <p id={id} className="mt-2 text-sm font-semibold text-signal">
+      {message}
+    </p>
   );
 }
