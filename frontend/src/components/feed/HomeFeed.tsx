@@ -258,7 +258,7 @@ export function HomeFeed() {
             any other.
           </p>
           <div className="mt-4 flex flex-wrap gap-2">
-            <Link href="/signin?next=%2F" className="btn btn-primary h-11 rounded-full px-5">
+            <Link href="/signin?next=%2Fapp" className="btn btn-primary h-11 rounded-full px-5">
               Sign in to post
             </Link>
             <Link href="/groups" className="btn btn-secondary h-11 rounded-full px-5">
@@ -323,7 +323,7 @@ export function HomeFeed() {
 
       {scope === "mine" && me && !me.signedIn ? (
         <EmptyCard title="Sign in to see your neighborhood" body="Once you're signed in and in a neighborhood group, this feed shows posts from where you live.">
-          <Link href="/signin?next=%2F%3Ffeed%3Dmine" className="btn btn-primary h-11 rounded-full px-5">
+          <Link href="/signin?next=%2Fapp%3Ffeed%3Dmine" className="btn btn-primary h-11 rounded-full px-5">
             Sign in
           </Link>
         </EmptyCard>
@@ -710,7 +710,7 @@ function PostCard({
             </div>
             {signInHint ? (
               <p className="text-sm text-ink-soft">
-                <Link href="/signin?next=%2F" className="link">
+                <Link href="/signin?next=%2Fapp" className="link">
                   Sign in
                 </Link>{" "}
                 to like and reply.

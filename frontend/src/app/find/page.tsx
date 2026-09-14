@@ -50,7 +50,7 @@ function PlacedNote({ point }: { point: GeocodedPoint }) {
   return (
     <p className="text-base text-ink-soft">
       The red pin is <span className="font-semibold text-ink">{point.matchedAddress}</span>.{" "}
-      <Link href="/#address" className="link">
+      <Link href="/app#address" className="link">
         Not your place? Search again
       </Link>
     </p>

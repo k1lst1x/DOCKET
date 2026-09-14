@@ -30,7 +30,7 @@ await writeFile(path.join(stage, 'next.config.mjs'), `export default ${JSON.stri
   output: 'export', basePath, trailingSlash: true, poweredByHeader: false,
   images: { unoptimized: true },
 })};\n`);
-for (const name of ['page.tsx', 'groups/page.tsx']) {
+for (const name of ['app/page.tsx', 'groups/page.tsx']) {
   await replace(`src/app/${name}`, 'export const revalidate = 300;', 'export const dynamic = "force-static";');
 }
 // Group and join pages read the session to show member state; Pages has no session.
@@ -67,7 +67,7 @@ for (const name of ['sitemap.ts', 'robots.ts']) {
   const file = path.join(stage, 'src/app', name);
   await writeFile(file, `export const dynamic = "force-static";\n${await readFile(file, 'utf8')}`);
 }
-await replace('src/app/page.tsx', 'action="/find"', `action="${basePath}/find/"`);
+await replace('src/app/app/page.tsx', 'action="/find"', `action="${basePath}/find/"`);
 await replace('src/app/g/[slug]/join/page.tsx', 'import { getGroup }', 'import { listGroups, getGroup }');
 await replace('src/app/g/[slug]/join/page.tsx', 'type Params =', 'export function generateStaticParams() { return listGroups().map(({ slug }) => ({ slug })); }\n\ntype Params =');
 // Preserve the form, but never claim that a static host sent a sign-in email.
@@ -101,9 +101,14 @@ const build = spawnSync(process.execPath, [path.join(root, 'node_modules/next/di
 if (build.status !== 0) process.exit(build.status ?? 1);
 await cp(path.join(stage, 'out'), output, { recursive: true });
 await writeFile(path.join(output, '.nojekyll'), '');
+// / is the landing page; the app's home (the feed and address search) is /app.
 const html = await readFile(path.join(output, 'index.html'), 'utf8');
+for (const marker of ['Your whole neighborhood, in one place.', `${basePath}/_next/static/`]) {
+  if (!html.includes(marker)) throw new Error(`Missing landing page marker: ${marker}`);
+}
+const appHtml = await readFile(path.join(output, 'app', 'index.html'), 'utf8');
 for (const marker of ['Where do you live?', `${basePath}/_next/static/`, 'Find my group']) {
-  if (!html.includes(marker)) throw new Error(`Missing homepage marker: ${marker}`);
+  if (!appHtml.includes(marker)) throw new Error(`Missing app homepage marker: ${marker}`);
 }
 // These shared design files must remain byte-for-byte identical to the app.
 for (const file of ['src/app/layout.tsx', 'src/app/globals.css', 'src/components/HeroIllustration.tsx', 'src/components/SiteHeader.tsx', 'tailwind.config.ts']) {

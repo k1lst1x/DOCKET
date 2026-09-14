@@ -118,4 +118,8 @@ jobs:
           curl --fail --silent --show-error --location \
             --retry 5 --retry-delay 5 --retry-all-errors \
             --output /tmp/docket-home.html "$PAGES_URL"
-          grep -q "Where do you live?" /tmp/docket-home.html
+          grep -q "Your whole neighborhood, in one place." /tmp/docket-home.html
+          curl --fail --silent --show-error --location \
+            --retry 5 --retry-delay 5 --retry-all-errors \
+            --output /tmp/docket-app.html "${PAGES_URL%/}/app/"
+          grep -q "Where do you live?" /tmp/docket-app.html

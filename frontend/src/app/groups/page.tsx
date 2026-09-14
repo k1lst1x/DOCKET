@@ -70,7 +70,7 @@ export default async function GroupsPage() {
               headline="No groups yet."
               body="Fremont doesn't have a neighborhood group on Docket yet. Look up your address to start the first one."
               actions={
-                <Link href="/#address" className="btn btn-primary">
+                <Link href="/app#address"className="btn btn-primary">
                   Look up my address
                 </Link>
               }
@@ -79,7 +79,7 @@ export default async function GroupsPage() {
 
           <p className="mt-10 text-base text-ink-soft">
             Don&apos;t see your block?{" "}
-            <Link href="/#address" className="link">
+            <Link href="/app#address"className="link">
               Look up your address
             </Link>
           </p>

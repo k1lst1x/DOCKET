@@ -116,7 +116,7 @@ Keeping up with your own street shouldn't be a part-time job. In Fremont, city d
 <tr>
 <td width="33%" valign="top">
 <img src="docs/readme/icons/feed.svg" width="48" alt=""><br>
-<b>Neighborhood feed</b> · <code>/</code><br>
+<b>Neighborhood feed</b> · <code>/app</code><br>
 <sub>Post to your neighborhood or all of Fremont. Up to four photos or one short video, links and emoji. Reply, like, and see a <i>Show N new posts</i> button as neighbors write.</sub>
 </td>
 <td width="33%" valign="top">
@@ -630,7 +630,8 @@ DOCKET/
 
 | Route | What it does |
 | --- | --- |
-| `/` | Neighborhood feed, address search and the weekly reading stat |
+| `/` | Landing page: what Docket is and how it works |
+| `/app` | Neighborhood feed, address search and the weekly reading stat |
 | `/find?address=` | Match an address to a neighborhood and its group |
 | `/groups` | Every group, most recently active first |
 | `/g/[slug]` | A group's issues, votes, reviews and news |
@@ -639,7 +640,7 @@ DOCKET/
 | `/places` | Places map with Places, Issues and Live now tabs |
 | `/news` | Searchable Fremont news, incidents and alerts |
 | `/chat` | Full-page Ask Docket |
-| `/about` | What Docket is and how it works |
+| `/about` | Redirects to `/` |
 
 </details>
 

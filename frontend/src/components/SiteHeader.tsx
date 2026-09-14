@@ -18,13 +18,13 @@ export function SiteHeader({ tone = "plain" }: { tone?: "sky" | "plain" }) {
   return (
     <header className={tone === "sky" ? "relative z-20" : "border-b border-rule bg-white"}>
       <div className="page flex items-center justify-between gap-1 py-3 sm:gap-2 sm:py-4">
-        <Link href="/" className="flex shrink-0 items-center gap-2.5 rounded-full text-[1.375rem] font-semibold tracking-tight text-ink">
+        <Link href="/app" className="flex shrink-0 items-center gap-2.5 rounded-full text-[1.375rem] font-semibold tracking-tight text-ink">
           <DocketMark />
           <span className="hidden min-[400px]:inline">Docket</span>
         </Link>
         <nav aria-label="Main" className="flex items-center gap-0.5 min-[400px]:gap-1 sm:gap-4">
           <NavLinks />
-          <Link href="/#address" className="btn btn-primary hidden h-11 rounded-full px-5 lg:inline-flex">
+          <Link href="/app#address" className="btn btn-primary hidden h-11 rounded-full px-5 lg:inline-flex">
             Find your group
           </Link>
           <ThemeToggle />
@@ -39,8 +39,8 @@ const FOOTER_SECTIONS: { title: string; links: { href: string; label: string }[]
   {
     title: "Your neighborhood",
     links: [
-      { href: "/", label: "Neighborhood feed" },
-      { href: "/#address", label: "Find your group" },
+      { href: "/app", label: "Neighborhood feed" },
+      { href: "/app#address", label: "Find your group" },
       { href: "/groups", label: "All groups" },
     ],
   },
@@ -56,7 +56,7 @@ const FOOTER_SECTIONS: { title: string; links: { href: string; label: string }[]
     title: "Docket",
     links: [
       { href: "/chat", label: "Ask Docket" },
-      { href: "/about", label: "About Docket" },
+      { href: "/", label: "About Docket" },
       { href: "/signin", label: "Sign in" },
     ],
   },

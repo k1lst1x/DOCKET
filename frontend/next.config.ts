@@ -19,10 +19,14 @@ const nextConfig: NextConfig = {
       "centerville-together": "centerville",
       "warm-springs-hillside": "warm-springs",
     };
-    return Object.entries(legacy).flatMap(([from, to]) => [
-      { source: `/g/${from}`, destination: `/g/${to}`, permanent: true },
-      { source: `/g/${from}/:path*`, destination: `/g/${to}/:path*`, permanent: true },
-    ]);
+    return [
+      // The About page became the landing page at /; the feed moved to /app.
+      { source: "/about", destination: "/", permanent: true },
+      ...Object.entries(legacy).flatMap(([from, to]) => [
+        { source: `/g/${from}`, destination: `/g/${to}`, permanent: true },
+        { source: `/g/${from}/:path*`, destination: `/g/${to}/:path*`, permanent: true },
+      ]),
+    ];
   },
 };
 

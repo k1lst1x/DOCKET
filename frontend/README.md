@@ -42,7 +42,8 @@ neighborhoods and sample groups with `node scripts/dsql-seed.ts` (both need
 
 | Route | What it does |
 | --- | --- |
-| `/` | Address input and the weekly reading stat |
+| `/` | Landing page: what Docket is and how it works (`/about` redirects here) |
+| `/app` | Neighborhood feed, address input and the weekly reading stat |
 | `/find?address=` | Match, nearby-only, no-group and cross-street states |
 | `/groups` | Directory, most recently active first |
 | `/g/[slug]` | Public, indexable group page |

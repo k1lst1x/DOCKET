@@ -1,0 +1,884 @@
+/* Landing: a dig from the surface to bedrock. Layers are block textures (components/pixel/textures.ts,
+   passed in as --tex-* variables), panels borrow a sandbox game's inventory look, and anything marked
+   data-reveal slides, zooms or pops in when ScrollReveal sees it. Colors here are fixed in both themes,
+   except the sky, because every layer is dark and every panel paints its own ground. */
+
+.root {
+  --block: 40px;
+  --pixel: var(--font-pixel), ui-monospace, monospace;
+  --notch: polygon(3px 0, calc(100% - 3px) 0, 100% 3px, 100% calc(100% - 3px), calc(100% - 3px) 100%, 3px 100%, 0 calc(100% - 3px), 0 3px);
+}
+@media (min-width: 640px) {
+  .root {
+    --block: 48px;
+  }
+}
+
+/* ---------- Surface ---------- */
+
+.sky {
+  background: linear-gradient(180deg, #8dc2f5 0%, #b3d6f6 38%, #ddebf6 70%);
+}
+:global(html[data-theme="dark"]) .sky {
+  background: linear-gradient(180deg, #1b3350 0%, #1f3d5c 38%, #2c4f72 70%);
+}
+
+.logoWrap {
+  position: relative;
+  display: inline-block;
+  margin-inline: auto;
+}
+
+/* Stone letters with a grass cap, cut out with background-clip and extruded with stacked shadows. */
+.logo {
+  font-family: var(--pixel);
+  font-weight: 700;
+  font-size: clamp(3.75rem, 17vw, 9rem);
+  line-height: 0.95;
+  letter-spacing: 0.05em;
+  padding-left: 0.05em;
+  color: transparent;
+  background-image:
+    linear-gradient(180deg, transparent 0 16%, #8cc63f 16% 27%, #4e9a3a 27% 32%, transparent 32%),
+    var(--tex-logo);
+  background-size:
+    100% 100%,
+    24px 24px;
+  background-repeat: no-repeat, repeat;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-stroke: 2px #1c1c1c;
+  filter: drop-shadow(0 4px 0 #4a4a4a) drop-shadow(0 4px 0 #2a2a2a) drop-shadow(5px 6px 0 rgb(0 0 0 / 0.22));
+}
+
+.edition {
+  display: inline-block;
+  margin-top: 0.75rem;
+  padding: 0.25rem 0.75rem;
+  background: #262626;
+  color: #ffffff;
+  font-family: var(--pixel);
+  font-size: clamp(0.875rem, 2.4vw, 1.125rem);
+  letter-spacing: 0.25em;
+  text-transform: uppercase;
+  box-shadow: 4px 4px 0 rgb(0 0 0 / 0.25);
+}
+
+.splashTilt {
+  position: absolute;
+  right: -0.5rem;
+  bottom: 2.5rem;
+  transform: rotate(-17deg);
+  transform-origin: center;
+}
+@media (max-width: 480px) {
+  .splashTilt {
+    right: 0;
+    bottom: 3rem;
+  }
+}
+.splash {
+  display: block;
+  cursor: default;
+  user-select: none;
+  white-space: nowrap;
+  font-family: var(--pixel);
+  font-size: clamp(0.875rem, 2.8vw, 1.375rem);
+  color: #ffff55;
+  text-shadow:
+    2px 0 #3f3f15,
+    -2px 0 #3f3f15,
+    0 2px #3f3f15,
+    0 -2px #3f3f15,
+    3px 3px #3f3f15;
+}
+
+.heroTitle {
+  margin-top: 2rem;
+  font-family: var(--pixel);
+  font-weight: 700;
+  font-size: clamp(1.75rem, 1rem + 3.5vw, 3.25rem);
+  line-height: 1.1;
+  color: rgb(var(--ink));
+}
+
+.menu {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
+  max-width: 28rem;
+  margin: 2rem auto 0;
+}
+.menuWide {
+  grid-column: 1 / -1;
+}
+
+.digHint {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 1.75rem;
+  padding: 0.25rem 0.5rem;
+  font-family: var(--pixel);
+  font-size: 1rem;
+  color: rgb(var(--ink));
+}
+.digHint:hover {
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+
+/* ---------- Buttons: the title-screen kind ---------- */
+
+.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.625rem;
+  min-height: 3rem;
+  padding: 0.5rem 1rem;
+  font-family: var(--pixel);
+  font-size: 1.125rem;
+  line-height: 1.2;
+  text-align: center;
+  color: #ffffff;
+  text-shadow: 2px 2px 0 #2a2a2a;
+  background-color: #5c5c5c;
+  background-image: var(--tex-button);
+  background-size: var(--block) var(--block);
+  border: 3px solid #000000;
+  box-shadow:
+    inset 3px 3px 0 rgb(255 255 255 / 0.35),
+    inset -3px -4px 0 rgb(0 0 0 / 0.4);
+}
+.button:hover {
+  border-color: #ffffff;
+  color: #ffffa0;
+}
+.button:active {
+  box-shadow:
+    inset -3px -3px 0 rgb(255 255 255 / 0.25),
+    inset 3px 4px 0 rgb(0 0 0 / 0.45);
+}
+.button:focus-visible {
+  outline: 3px solid #ffff55;
+  outline-offset: 3px;
+  box-shadow:
+    0 0 0 3px #000000,
+    inset 3px 3px 0 rgb(255 255 255 / 0.35);
+}
+.buttonGreen {
+  background-color: #3c8527;
+  background-image: none;
+  box-shadow:
+    inset 3px 3px 0 #6cc349,
+    inset -3px -4px 0 #1f5214;
+}
+.buttonGreen:hover {
+  color: #ffffff;
+  background-color: #347522;
+}
+
+/* ---------- Layers ---------- */
+
+.layer {
+  position: relative;
+  color: #ededed;
+  background-size: var(--block) var(--block);
+}
+.dirt {
+  background-color: #463018;
+  background-image: var(--tex-dirt);
+}
+.stone {
+  background-color: #444444;
+  background-image: var(--tex-stone);
+}
+.mine {
+  background-color: #373737;
+  background-image: var(--tex-mine);
+}
+/* Wooden mineshaft supports down both sides, only where the margins are wide enough to hold them.
+   Background layers, because ::before already draws the layer edge. */
+@media (min-width: 1400px) {
+  .mine {
+    background-image: var(--tex-beam), var(--tex-beam), var(--tex-mine);
+    background-position:
+      var(--block) 0,
+      calc(100% - var(--block)) 0,
+      0 0;
+    background-repeat: repeat-y, repeat-y, repeat;
+  }
+}
+.deepslate {
+  background-color: #34343a;
+  background-image: var(--tex-deepslate);
+}
+.deeper {
+  background-color: #28282d;
+  background-image: var(--tex-deeper);
+}
+.bedrock {
+  background-color: #1c1c1c;
+  background-image: var(--tex-bedrock);
+}
+
+/* The first row of a layer: blocks of the layer above still showing through. */
+.edge::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto;
+  z-index: 0;
+  height: var(--block);
+  background-image: var(--edge);
+  background-size: calc(var(--block) * var(--edge-blocks)) var(--block);
+  pointer-events: none;
+}
+.edge > * {
+  position: relative;
+  z-index: 1;
+}
+
+/* ---------- Type ---------- */
+
+/* Pixelify Sans closes its counters at heavier weights (C reads as O, 2 as 8), so bold is kept
+   for display sizes; smaller pixel labels use the regular weight and lean on their shadow. */
+
+.eyebrow {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  font-family: var(--pixel);
+  font-size: 1rem;
+  letter-spacing: 0.03em;
+  color: #ffff55;
+  text-shadow: 2px 2px 0 #3f3f15;
+}
+.eyebrowDepth {
+  padding: 0 0.375rem;
+  background: rgb(0 0 0 / 0.55);
+  color: #80ff20;
+  text-shadow: none;
+}
+
+.heading {
+  font-family: var(--pixel);
+  font-weight: 700;
+  font-size: clamp(1.875rem, 1.1rem + 3vw, 3rem);
+  line-height: 1.12;
+  color: #ffffff;
+  text-shadow: 3px 3px 0 #2a2a2a;
+}
+
+.lead {
+  font-size: 1.1875rem;
+  line-height: 1.65;
+  color: #e4e4e4;
+}
+
+.cardTitle {
+  font-family: var(--pixel);
+  font-size: 1.375rem;
+  line-height: 1.2;
+  color: #ffffff;
+  text-shadow: 2px 2px 0 #2a2a2a;
+}
+
+/* ---------- Panels ---------- */
+
+.gui {
+  padding: 1.25rem 1.25rem 1.5rem;
+  background: #c6c6c6;
+  color: #262626;
+  border: 3px solid #000000;
+  box-shadow:
+    inset 3px 3px 0 #ffffff,
+    inset -3px -3px 0 #555555;
+  clip-path: var(--notch);
+}
+.guiTitle {
+  font-family: var(--pixel);
+  font-size: 1.25rem;
+  color: #3f3f3f;
+}
+
+.guiDark {
+  background: #2b2b2b;
+  color: #ededed;
+  border: 3px solid #000000;
+  box-shadow:
+    inset 3px 3px 0 #4a4a4a,
+    inset -3px -3px 0 #161616;
+  clip-path: var(--notch);
+}
+
+.tooltip {
+  background: #150218;
+  color: #ffffff;
+  border: 3px solid #0a000c;
+  box-shadow: inset 0 0 0 3px #3a1680;
+  clip-path: var(--notch);
+}
+
+.slot {
+  position: relative;
+  display: grid;
+  place-items: center;
+  background: #8b8b8b;
+  box-shadow:
+    inset 3px 3px 0 #373737,
+    inset -3px -3px 0 #ffffff;
+}
+.slotMini {
+  display: grid;
+  flex-shrink: 0;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
+  background: #8b8b8b;
+  box-shadow:
+    inset 2px 2px 0 #373737,
+    inset -2px -2px 0 #ffffff;
+}
+.slotCount {
+  position: absolute;
+  right: 5px;
+  bottom: 1px;
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-weight: 500;
+  font-size: 1rem;
+  line-height: 1;
+  color: #ffffff;
+  text-shadow: 2px 2px 0 #3f3f3f;
+}
+
+/* ---------- Crafting recipe ---------- */
+
+.crafting {
+  max-width: 40rem;
+  margin: 2.5rem auto 0;
+}
+.recipe {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+.recipeInputs {
+  display: flex;
+  gap: 0.25rem;
+}
+.recipeSlot {
+  width: 3.25rem;
+  height: 3.25rem;
+}
+.recipeOutput {
+  width: 4.5rem;
+  height: 4.5rem;
+}
+@media (min-width: 640px) {
+  .recipe {
+    gap: 1.5rem;
+  }
+  .recipeSlot {
+    width: 4.5rem;
+    height: 4.5rem;
+  }
+  .recipeOutput {
+    width: 6rem;
+    height: 6rem;
+  }
+}
+.arrow {
+  width: 2.75rem;
+  height: auto;
+  flex-shrink: 0;
+}
+@media (min-width: 640px) {
+  .arrow {
+    width: 4rem;
+  }
+}
+.recipeCaption {
+  margin-top: 1rem;
+  text-align: center;
+  font-size: 1rem;
+  color: #3f3f3f;
+}
+
+/* ---------- Inventory items ---------- */
+
+.item {
+  display: flex;
+  height: 100%;
+  gap: 1rem;
+  padding: 1.25rem;
+  transition:
+    transform 120ms steps(2),
+    box-shadow 120ms steps(2);
+}
+.item:hover {
+  transform: translateY(-4px);
+  box-shadow:
+    inset 0 0 0 3px #6a3cd0,
+    0 6px 0 rgb(0 0 0 / 0.35);
+}
+.item:focus-visible {
+  outline: 3px solid #ffff55;
+  outline-offset: 3px;
+}
+.itemTitle {
+  display: block;
+  font-family: var(--pixel);
+  font-size: 1.25rem;
+  line-height: 1.2;
+  color: #55ffff;
+}
+.itemId {
+  display: block;
+  margin-top: 0.125rem;
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 0.875rem;
+  color: #9a9a9a;
+}
+.item:hover .itemIcon {
+  animation: itemBob 600ms steps(3) infinite alternate;
+}
+@keyframes itemBob {
+  to {
+    transform: translateY(-3px);
+  }
+}
+
+/* ---------- Ores ---------- */
+
+.oreFrame {
+  display: inline-grid;
+  place-items: center;
+  width: 4.5rem;
+  height: 4.5rem;
+  background: #1a1a1a;
+  box-shadow:
+    inset 3px 3px 0 #0c0c0c,
+    inset -3px -3px 0 #3a3a3a;
+}
+
+/* ---------- Minecart line ---------- */
+
+.railway {
+  position: relative;
+  margin-top: 1.25rem;
+  padding-left: 4rem;
+  view-timeline-name: --rail;
+}
+.stations {
+  display: grid;
+  gap: 1rem;
+}
+.sign {
+  position: relative;
+  padding: 0.875rem 1rem 1rem;
+  color: #262626;
+  background-color: #ddcf9c;
+  background-image: linear-gradient(rgb(255 255 255 / 0.35), rgb(255 255 255 / 0.35)), var(--tex-sign);
+  background-size: 32px 32px;
+  border: 3px solid #4a3320;
+  box-shadow: 4px 4px 0 rgb(0 0 0 / 0.4);
+}
+.signStep {
+  position: absolute;
+  top: -3px;
+  right: -3px;
+  display: grid;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-weight: 500;
+  color: #ffffff;
+  background: #4a3320;
+}
+.signTitle {
+  display: block;
+  font-family: var(--pixel);
+  font-size: 1.25rem;
+  color: #262626;
+}
+
+/* Phones and tablets: the track runs down the left of the signs. */
+.rail {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0.75rem;
+  width: 2rem;
+  background:
+    linear-gradient(90deg, transparent 5px, #a8a8a8 5px 9px, transparent 9px 23px, #a8a8a8 23px 27px, transparent 27px),
+    repeating-linear-gradient(180deg, #6b4a2e 0 8px, transparent 8px 20px);
+}
+.cart {
+  position: absolute;
+  left: -0.5rem;
+  top: 0;
+  width: 3rem;
+  height: 3rem;
+  animation: cartDown 9s steps(60) infinite alternate;
+}
+@keyframes cartDown {
+  to {
+    top: calc(100% - 3rem);
+  }
+}
+
+/* Laptops: stations side by side, the track underneath. */
+@media (min-width: 1024px) {
+  .railway {
+    padding-left: 0;
+    padding-bottom: 5rem;
+  }
+  .stations {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+  }
+  .sign::after {
+    content: "";
+    position: absolute;
+    left: 50%;
+    top: 100%;
+    width: 6px;
+    height: 2.75rem;
+    margin-left: -3px;
+    background: #4a3320;
+  }
+  .rail {
+    top: auto;
+    right: 0;
+    bottom: 0.5rem;
+    left: 0;
+    width: auto;
+    height: 2rem;
+    background:
+      linear-gradient(180deg, transparent 5px, #a8a8a8 5px 9px, transparent 9px 23px, #a8a8a8 23px 27px, transparent 27px),
+      repeating-linear-gradient(90deg, #6b4a2e 0 8px, transparent 8px 20px);
+  }
+  .cart {
+    top: auto;
+    bottom: 0.75rem;
+    left: 0;
+    animation-name: cartAcross;
+  }
+  @keyframes cartAcross {
+    to {
+      left: calc(100% - 3rem);
+    }
+  }
+}
+
+/* Where the browser can, the cart moves with the scroll instead of on a loop. */
+@supports (animation-timeline: view()) {
+  .cart {
+    animation-duration: auto;
+    animation-timing-function: linear;
+    animation-iteration-count: 1;
+    animation-direction: normal;
+    animation-fill-mode: both;
+    animation-timeline: --rail;
+    animation-range: cover 30% cover 75%;
+  }
+}
+
+.commandBlock {
+  width: 1.25rem;
+  height: 1.25rem;
+  flex-shrink: 0;
+  background: var(--block-color);
+  box-shadow:
+    inset 0 0 0 3px rgb(0 0 0 / 0.35),
+    inset 0 0 0 6px rgb(255 255 255 / 0.25);
+}
+
+.chip {
+  padding: 0.25rem 0.625rem;
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 0.875rem;
+  color: #ffffff;
+  background: #1a1a1a;
+  border: 2px solid #555555;
+}
+
+/* ---------- Chat log and advancements ---------- */
+
+.chat {
+  display: grid;
+  gap: 0.375rem;
+  margin-top: 2rem;
+}
+.chatLine {
+  padding: 0.375rem 0.75rem;
+  font-size: 1rem;
+  line-height: 1.55;
+  color: #ffffff;
+  background: rgb(0 0 0 / 0.55);
+}
+.chatNeighbor {
+  font-family: var(--pixel);
+  color: #ffff55;
+}
+.chatDocket {
+  font-family: var(--pixel);
+  color: #55ffff;
+}
+
+.toast {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.875rem 1rem;
+  background: #212121;
+  border: 3px solid #000000;
+  box-shadow:
+    inset 0 0 0 3px #555555,
+    6px 6px 0 rgb(0 0 0 / 0.35);
+}
+.toastTitle {
+  display: block;
+  font-family: var(--pixel);
+  font-size: 0.9375rem;
+  color: #ffff55;
+}
+.toastBar {
+  display: block;
+  height: 8px;
+  margin-top: 0.375rem;
+  background: #111111;
+  border: 1px solid #000000;
+}
+.toastBar > span {
+  display: block;
+  height: 100%;
+  background: #80ff20;
+}
+/* Scores and counts in mono: in the pixel face 5 and S, 2 and Z look alike. */
+.toastScore {
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-weight: 500;
+  font-size: 1.375rem;
+  color: #80ff20;
+  text-shadow: 2px 2px 0 #1f3f08;
+}
+
+/* ---------- Bedrock marquee and night ---------- */
+
+.marquee {
+  display: flex;
+  width: max-content;
+  animation: marquee 48s linear infinite;
+}
+.marqueeWrap:hover .marquee {
+  animation-play-state: paused;
+}
+@keyframes marquee {
+  to {
+    transform: translateX(-50%);
+  }
+}
+.marqueeItem {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding-right: 1rem;
+  white-space: nowrap;
+  font-family: var(--pixel);
+  font-size: 1.125rem;
+}
+.marqueeItem::before {
+  content: "";
+  width: 0.625rem;
+  height: 0.625rem;
+  background: #80ff20;
+  box-shadow: 2px 2px 0 #1f3f08;
+}
+
+.night {
+  background: linear-gradient(180deg, #0e1a2b 0%, #172b45 100%);
+}
+
+/* ---------- Depth meter ---------- */
+
+.depth {
+  position: fixed;
+  left: 50%;
+  bottom: 1.25rem;
+  z-index: 40;
+  display: grid;
+  justify-items: center;
+  gap: 2px;
+  width: min(20rem, calc(100vw - 12rem));
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+.depthLevel {
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-weight: 500;
+  font-size: 1rem;
+  line-height: 1;
+  color: #80ff20;
+  text-shadow:
+    2px 0 #000,
+    -2px 0 #000,
+    0 2px #000,
+    0 -2px #000;
+}
+.depthBar {
+  position: relative;
+  display: block;
+  width: 100%;
+  height: 12px;
+  background: #1a1a1a;
+  border: 2px solid #000000;
+  overflow: hidden;
+}
+.depthFill {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, #b6ff6a 0 30%, #80ff20 30% 70%, #4fb80e 70%);
+  transform-origin: left;
+  transform: scaleX(var(--progress, 0));
+}
+.depthBar::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(90deg, transparent 0 calc(10% - 2px), #000000 calc(10% - 2px) 10%);
+}
+
+/* ---------- Motion ---------- */
+
+@media (prefers-reduced-motion: no-preference) {
+  .logo {
+    animation: logoDrop 900ms cubic-bezier(0.2, 1.5, 0.4, 1) both;
+  }
+  .edition {
+    animation: enterUp 500ms ease-out 250ms both;
+  }
+  .splashTilt {
+    animation: splashPop 450ms steps(6) 1000ms both;
+  }
+  .splash {
+    animation: splashPulse 450ms ease-in-out infinite alternate;
+  }
+  .enter {
+    animation: enterUp 650ms cubic-bezier(0.2, 0.9, 0.25, 1.1) var(--delay, 0ms) both;
+  }
+  .pickaxe {
+    animation: dig 900ms steps(4) infinite;
+    transform-origin: 50% 90%;
+  }
+
+  /* Scroll reveals. Hidden only once ScrollReveal has marked the root, so no-JS readers see everything. */
+  .root[data-motion] [data-reveal] {
+    opacity: 0;
+    transition:
+      opacity 450ms ease-out,
+      transform 700ms cubic-bezier(0.2, 0.9, 0.25, 1.12);
+    transition-delay: var(--delay, 0ms);
+  }
+  .root[data-motion] [data-reveal="up"] {
+    transform: translateY(48px);
+  }
+  .root[data-motion] [data-reveal="down"] {
+    transform: translateY(-48px);
+  }
+  .root[data-motion] [data-reveal="left"] {
+    transform: translateX(-80px);
+  }
+  .root[data-motion] [data-reveal="right"] {
+    transform: translateX(80px);
+  }
+  .root[data-motion] [data-reveal="zoom"] {
+    transform: scale(0.72);
+  }
+  .root[data-motion] [data-reveal="flip"] {
+    transform: perspective(700px) rotateX(-75deg);
+    transform-origin: 50% 0;
+  }
+  /* Blocks snap into place in whole steps, like being placed. */
+  .root[data-motion] [data-reveal="place"] {
+    transform: scale(0);
+    transition-duration: 320ms, 320ms;
+    transition-timing-function: steps(4, jump-end), steps(4, jump-end);
+  }
+  .root[data-motion] [data-reveal][data-in] {
+    opacity: 1;
+    transform: none;
+  }
+
+  /* The crafting arrow fills once the recipe is in view. */
+  .arrowFill {
+    transition: clip-path 1000ms steps(11, jump-end) 1000ms;
+  }
+  .root[data-motion] [data-reveal]:not([data-in]) .arrowFill,
+  .root[data-motion] .arrow:not([data-in]) .arrowFill {
+    clip-path: inset(0 100% 0 0);
+  }
+  .arrowFill {
+    clip-path: inset(0 0 0 0);
+  }
+
+  .marqueeWrap .marquee {
+    will-change: transform;
+  }
+}
+
+@keyframes logoDrop {
+  from {
+    opacity: 0;
+    transform: translateY(-70px) scale(1.2);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes enterUp {
+  from {
+    opacity: 0;
+    transform: translateY(28px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes splashPop {
+  from {
+    opacity: 0;
+    transform: rotate(-17deg) scale(0);
+  }
+  to {
+    opacity: 1;
+    transform: rotate(-17deg) scale(1);
+  }
+}
+@keyframes splashPulse {
+  to {
+    transform: scale(1.09);
+  }
+}
+@keyframes dig {
+  0%,
+  100% {
+    transform: rotate(0deg);
+  }
+  50% {
+    transform: rotate(-28deg) translateY(2px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .marquee,
+  .cart {
+    animation: none;
+  }
+}

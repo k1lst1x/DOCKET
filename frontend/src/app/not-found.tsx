@@ -20,7 +20,7 @@ export default function NotFound() {
             <Link href="/groups" className="btn btn-primary rounded-full">
               See all groups
             </Link>
-            <Link href="/" className="btn btn-secondary rounded-full">
+            <Link href="/app" className="btn btn-secondary rounded-full">
               Back to the feed
             </Link>
           </>

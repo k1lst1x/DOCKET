@@ -43,7 +43,7 @@ export default function PageError({ error, reset }: { error: Error & { digest?: 
             <button type="button" onClick={retry} className="btn btn-primary rounded-full">
               Try again
             </button>
-            <Link href="/" className="btn btn-secondary rounded-full">
+            <Link href="/app" className="btn btn-secondary rounded-full">
               Back to the feed
             </Link>
           </>
