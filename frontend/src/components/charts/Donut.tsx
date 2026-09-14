@@ -13,7 +13,20 @@ export interface DonutSegment {
 const pct = (value: number, total: number) => (total ? `${Math.round((value / total) * 100)}%` : "0%");
 
 /** Part-to-whole ring (≤3 segments here) with the total in the middle and a legend that always shows numbers. */
-export function Donut({ segments, title, size = 176, thickness = 22 }: { segments: DonutSegment[]; title: string; size?: number; thickness?: number }) {
+export function Donut({
+  segments,
+  title,
+  size = 176,
+  thickness = 22,
+  unit = ["vote", "votes"],
+}: {
+  segments: DonutSegment[];
+  title: string;
+  size?: number;
+  thickness?: number;
+  /** What the total counts, singular and plural. */
+  unit?: [string, string];
+}) {
   const [active, setActive] = useState<string | null>(null);
   const total = segments.reduce((s, x) => s + x.value, 0);
   const r = (size - thickness) / 2;
@@ -62,7 +75,7 @@ export function Donut({ segments, title, size = 176, thickness = 22 }: { segment
         <div className="pointer-events-none absolute inset-0 grid place-items-center text-center">
           <div>
             <p className="text-[2rem] font-semibold leading-none text-ink">{focus ? pct(focus.value, total) : total}</p>
-            <p className="mt-1 text-sm text-ink-muted">{focus ? focus.label : total === 1 ? "vote" : "votes"}</p>
+            <p className="mt-1 text-sm text-ink-muted">{focus ? focus.label : total === 1 ? unit[0] : unit[1]}</p>
           </div>
         </div>
       </div>

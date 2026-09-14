@@ -41,6 +41,7 @@ export default async function Home() {
             <nav aria-label="Explore Docket" className="rounded-2xl border border-rule bg-white p-2">
               {[
                 { href: "/news", icon: "🗞️", title: "Fremont news", body: "Police, fire, traffic and city hall, live" },
+                { href: "/insights", icon: "📊", title: "What Fremont is saying", body: "Where residents stand on city agenda items" },
                 { href: "/places", icon: "🗺️", title: "Places map", body: "Schools, food, issues and live incidents" },
                 { href: "/groups", icon: "🏘️", title: "Neighborhood groups", body: "What each group is watching" },
                 { href: "/chat", icon: "💬", title: "Ask Docket", body: "Questions about city documents" },
