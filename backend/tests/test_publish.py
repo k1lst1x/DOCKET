@@ -88,6 +88,7 @@ class ItemRulesTests(unittest.TestCase):
 
 class PostTests(unittest.TestCase):
     TOPIC = {
+        "id": "cc-2026-09-08-item-7a",
         "body": "city_council",
         "meeting_date": date(2026, 9, 8),
         "item_label": "Item 7A",
@@ -119,9 +120,13 @@ class PostTests(unittest.TestCase):
             "citation": "City Council Regular Meeting – Sep 15, 2026 7:00 PM, 2. Consent Calendar",
             "summary": "The council would update the city's conflict of interest code.",
         }
-        posts = planned_posts([self.TOPIC], [issue], NEIGHBORHOODS)
+        # Letters also mention Niles (an existing center across town); only where writers live counts.
+        areas = {"cc-2026-09-08-item-7a": ["Ardenwood", "Quail Run/Northgate", "Ardenwood neighborhood", "District 1"]}
+        posts = planned_posts([self.TOPIC], [issue], NEIGHBORHOODS, areas)
         targets = [post["neighborhood_slug"] for post in posts]
         self.assertEqual(targets, ["ardenwood", "northgate", None, "niles"])
+        no_areas = planned_posts([self.TOPIC], [], NEIGHBORHOODS, {})
+        self.assertEqual([post["neighborhood_slug"] for post in no_areas], [None])
         self.assertTrue(all(post["sources"] and post["sources"][0]["url"].startswith("https://") for post in posts))
         agenda = agenda_post({"body_name": "City Council", "meeting_at": issue["meeting_at"]}, [issue])
         self.assertTrue(agenda.startswith("City Council meets Sep 15 at 7:00 PM. On the agenda: 2C Update"))

@@ -14,6 +14,7 @@ Usage: python scripts/publish_posts.py [--dry-run]
 
 import argparse
 import json
+import re
 import sys
 from collections import defaultdict
 from datetime import datetime, timedelta
@@ -82,13 +83,27 @@ def neighborhood_post(issue: dict, neighborhood_name: str) -> str:
     )
 
 
-def planned_posts(topics: list[dict], issues: list[dict], neighborhoods: dict[str, str]) -> list[dict]:
+def writer_neighborhoods(areas: list[str], neighborhoods: dict[str, str]) -> list[str]:
+    """Neighborhoods the letter writers said they live in, most often named first. A place a letter only
+    mentions (an existing community center across town) is not a reason to post in that neighborhood."""
+    counts: dict[str, int] = {}
+    for area in areas:
+        lowered = area.lower()
+        for slug, name in neighborhoods.items():
+            if re.search(rf"\b{re.escape(name.lower())}\b", lowered):
+                counts[slug] = counts.get(slug, 0) + 1
+    return sorted(counts, key=lambda slug: (-counts[slug], slug))
+
+
+def planned_posts(
+    topics: list[dict], issues: list[dict], neighborhoods: dict[str, str], writer_areas: dict[str, list[str]]
+) -> list[dict]:
     posts = []
     for topic in topics:
         if topic["comment_count"] < MIN_COMMENTS:
             continue
         sources = [{"title": f"{topic['item_label']} public correspondence", "url": topic["source_url"]}]
-        targets = [slug for slug in topic["neighborhood_slugs"] if slug in neighborhoods][:MAX_NEIGHBORHOODS]
+        targets = writer_neighborhoods(writer_areas.get(topic["id"], []), neighborhoods)[:MAX_NEIGHBORHOODS]
         for slug in targets or [None]:
             posts.append({"neighborhood_slug": slug, "body": comment_post(topic), "sources": sources})
 
@@ -115,8 +130,14 @@ def run(dry_run: bool = False) -> dict:
         topic_rows = run_with_retry(
             conn,
             lambda c: c.execute(
-                "SELECT body, meeting_date, item_label, title, neighborhood_slugs, comment_count, support_count, "
+                "SELECT id, body, meeting_date, item_label, title, neighborhood_slugs, comment_count, support_count, "
                 "oppose_count, mixed_count, neutral_count, themes, source_url FROM agent_comment_topics"
+            ).fetchall(),
+        )
+        area_rows = run_with_retry(
+            conn,
+            lambda c: c.execute(
+                "SELECT topic_id, author_area FROM agent_comments WHERE author_area IS NOT NULL"
             ).fetchall(),
         )
         issue_rows = run_with_retry(
@@ -132,12 +153,15 @@ def run(dry_run: bool = False) -> dict:
                 (datetime.now().astimezone() + timedelta(days=7),),
             ).fetchall(),
         )
-    topic_keys = ("body", "meeting_date", "item_label", "title", "neighborhood_slugs", "comment_count",
+    writer_areas: dict[str, list[str]] = defaultdict(list)
+    for topic_id, area in area_rows:
+        writer_areas[topic_id].append(area)
+    topic_keys = ("id", "body", "meeting_date", "item_label", "title", "neighborhood_slugs", "comment_count",
                   "support_count", "oppose_count", "mixed_count", "neutral_count", "themes", "source_url")
     issue_keys = ("ref", "title", "body", "meeting_at", "neighborhood_slugs", "source_url", "citation", "summary")
     topics = [dict(zip(topic_keys, row, strict=True)) for row in topic_rows]
     issues = [dict(zip(issue_keys, row, strict=True)) for row in issue_rows]
-    posts = planned_posts(topics, issues, neighborhoods)
+    posts = planned_posts(topics, issues, neighborhoods, writer_areas)
     if dry_run:
         for post in posts:
             print(f"[{post['neighborhood_slug'] or 'all of Fremont'}] {post['body']}")
