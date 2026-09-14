@@ -3,8 +3,8 @@ import Link from "next/link";
 import { Deadline } from "@/components/Deadline";
 import { EmptyState } from "@/components/EmptyState";
 import { SiteFooter, SiteHeader } from "@/components/SiteHeader";
-import { listGroups } from "@/lib/data";
 import { formatNumber, plural, relativeSince } from "@/lib/format";
+import { listLiveGroups } from "@/lib/live-data";
 
 export const metadata: Metadata = {
   title: "Neighborhood groups in Fremont",
@@ -13,8 +13,8 @@ export const metadata: Metadata = {
 
 export const revalidate = 300;
 
-export default function GroupsPage() {
-  const groups = listGroups();
+export default async function GroupsPage() {
+  const groups = await listLiveGroups();
 
   return (
     <>

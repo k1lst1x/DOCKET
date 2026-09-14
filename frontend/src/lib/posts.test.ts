@@ -2,7 +2,26 @@ import { describe, expect, it } from "vitest";
 import { SAMPLE_POSTS, samplePostId, sampleReplyId } from "../data/sample-posts";
 import { moderateText } from "./moderation";
 import { areaBySlug } from "./places";
-import { POST_MAX_LENGTH, sampleFeed, sampleMemberHome, sampleMemberName, sampleReplies, shortName, validatePostBody } from "./posts-shared";
+import { cleanSources, POST_MAX_LENGTH, sampleFeed, sampleMemberHome, sampleMemberName, sampleReplies, shortName, validatePostBody } from "./posts-shared";
+
+describe("Docket post sources", () => {
+  it("keep titled http(s) links and drop anything else", () => {
+    expect(
+      cleanSources([
+        { title: "  City Council agenda,\n Sept 8  ", url: "https://fremont.gov/agenda?id=1" },
+        { title: "Minutes", url: "javascript:alert(1)" },
+        { title: "No link" },
+        { title: "", url: "https://fremont.gov" },
+        { title: "Bad URL", url: "not a url" },
+        "https://fremont.gov",
+        null,
+      ]),
+    ).toEqual([{ title: "City Council agenda, Sept 8", url: "https://fremont.gov/agenda?id=1" }]);
+    expect(cleanSources(null)).toEqual([]);
+    expect(cleanSources({ title: "x", url: "https://x.org" })).toEqual([]);
+    expect(cleanSources(Array.from({ length: 12 }, (_, i) => ({ title: `Doc ${i}`, url: `https://x.org/${i}` })))).toHaveLength(8);
+  });
+});
 
 const NOW = Date.parse("2026-09-13T22:00:00Z");
 

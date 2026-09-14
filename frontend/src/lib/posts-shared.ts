@@ -55,6 +55,8 @@ function samplePost(index: number, now: number): FeedPost {
     likedByMe: false,
     mine: false,
     sample: true,
+    byDocket: false,
+    sources: [],
   };
 }
 
@@ -80,5 +82,31 @@ export function sampleReplies(postId: string, now: number): FeedPost[] {
     likedByMe: false,
     mine: false,
     sample: true,
+    byDocket: false,
+    sources: [],
   }));
+}
+
+/** The fixed member id the Docket agent posts as (db/migrations/0005_docket_posts.sql). */
+export const DOCKET_MEMBER_ID = "00000000-0000-4000-8000-00000000d0c7";
+const MAX_SOURCES = 8;
+
+/** A Docket post's sources from the database: http(s) links with a title, at most eight. Anything else is dropped. */
+export function cleanSources(raw: unknown): { title: string; url: string }[] {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .flatMap((item) => {
+      if (!item || typeof item !== "object") return [];
+      const { title, url } = item as { title?: unknown; url?: unknown };
+      if (typeof url !== "string" || typeof title !== "string") return [];
+      try {
+        const parsed = new URL(url.trim());
+        if (parsed.protocol !== "https:" && parsed.protocol !== "http:") return [];
+        const cleanTitle = title.replace(/\s+/g, " ").trim().slice(0, 200);
+        return cleanTitle ? [{ title: cleanTitle, url: parsed.href }] : [];
+      } catch {
+        return [];
+      }
+    })
+    .slice(0, MAX_SOURCES);
 }

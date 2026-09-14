@@ -10,6 +10,7 @@ import { ItemRef } from "@/components/ItemRef";
 import { SiteFooter, SiteHeader } from "@/components/SiteHeader";
 import { getSession } from "@/lib/auth";
 import { getGroup } from "@/lib/data";
+import { getLiveGroup } from "@/lib/live-data";
 import { formatDate, formatNumber } from "@/lib/format";
 import { listMemberships } from "@/lib/members";
 import type { Outcome } from "@/lib/types";
@@ -42,7 +43,8 @@ async function membershipFor(slug: string): Promise<boolean> {
 }
 
 export default async function GroupPage({ params }: { params: Params }) {
-  const group = getGroup((await params).slug);
+  // Real open items, decisions and member counts from the database; the static preview keeps the saved samples.
+  const group = await getLiveGroup((await params).slug);
   if (!group) notFound();
 
   const isMember = await membershipFor(group.slug);
@@ -212,10 +214,25 @@ const RESULT_COLOR: Record<Outcome["result"], string> = {
   "Approved with changes": "text-park",
   Denied: "text-signal",
   Continued: "text-ochre",
+  Referred: "text-ochre",
+  "Received and filed": "text-ink-soft",
+  "No action": "text-ink-soft",
 };
 
 function OutcomeRow({ outcome }: { outcome: Outcome }) {
-  const { yes, no, abstain, absent } = outcome.vote;
+  const vote = outcome.vote;
+  if (!vote) {
+    return (
+      <li className="grid gap-5 p-5 sm:p-6 md:grid-cols-[minmax(0,1fr)_17rem] md:gap-10">
+        <OutcomeText outcome={outcome} />
+        <div>
+          <p className={`text-base font-semibold ${RESULT_COLOR[outcome.result]}`}>{outcome.result}</p>
+          <p className="mt-2 text-sm text-ink-soft">The minutes don&apos;t list a vote count.</p>
+        </div>
+      </li>
+    );
+  }
+  const { yes, no, abstain, absent } = vote;
   const total = yes + no + abstain + absent || 1;
   const tally = [`${yes} yes`, `${no} no`, abstain ? `${abstain} abstain` : "", absent ? `${absent} absent` : ""]
     .filter(Boolean)
@@ -223,17 +240,7 @@ function OutcomeRow({ outcome }: { outcome: Outcome }) {
 
   return (
     <li className="grid gap-5 p-5 sm:p-6 md:grid-cols-[minmax(0,1fr)_17rem] md:gap-10">
-      <div>
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
-          <ItemRef value={outcome.ref} />
-          <time dateTime={outcome.decidedOn} className="font-mono text-sm text-ink-soft">
-            {formatDate(`${outcome.decidedOn}T12:00:00-07:00`)}
-          </time>
-        </div>
-        <h3 className="mt-2 text-lg font-semibold leading-snug text-ink">{outcome.title}</h3>
-        <p className="mt-1 text-base text-ink-soft">{outcome.body}</p>
-        {outcome.note ? <p className="reading mt-2 text-ink-soft">{outcome.note}</p> : null}
-      </div>
+      <OutcomeText outcome={outcome} />
       <div>
         <p className="flex items-baseline justify-between gap-3">
           <span className={`text-base font-semibold ${RESULT_COLOR[outcome.result]}`}>{outcome.result}</span>
@@ -247,11 +254,35 @@ function OutcomeRow({ outcome }: { outcome: Outcome }) {
           <span className="bg-ochre" style={{ width: `${(abstain / total) * 100}%` }} />
         </div>
         <p className="mt-2 text-sm text-ink-soft">{tally}</p>
-        <p className="mt-2 text-sm">
-          <span className="text-ink-muted">Group position: </span>
-          <span className="font-semibold text-ink">{outcome.groupPosition}</span>
-        </p>
+        {outcome.groupPosition !== "No position" ? (
+          <p className="mt-2 text-sm">
+            <span className="text-ink-muted">Group position: </span>
+            <span className="font-semibold text-ink">{outcome.groupPosition}</span>
+          </p>
+        ) : null}
       </div>
     </li>
+  );
+}
+
+function OutcomeText({ outcome }: { outcome: Outcome }) {
+  return (
+    <div>
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+        <ItemRef value={outcome.ref} />
+        <time dateTime={outcome.decidedOn} className="font-mono text-sm text-ink-soft">
+          {formatDate(`${outcome.decidedOn}T12:00:00-07:00`)}
+        </time>
+      </div>
+      <h3 className="mt-2 text-lg font-semibold leading-snug text-ink">{outcome.title}</h3>
+      <p className="mt-1 text-base text-ink-soft">{outcome.body}</p>
+      {outcome.note ? <p className="reading mt-2 text-ink-soft">{outcome.note}</p> : null}
+      {outcome.sourceUrl ? (
+        <a href={outcome.sourceUrl} target="_blank" rel="noopener noreferrer" className="link mt-2 inline-block text-sm">
+          Read the minutes
+          <span className="sr-only"> (opens in a new tab)</span>
+        </a>
+      ) : null}
+    </div>
   );
 }

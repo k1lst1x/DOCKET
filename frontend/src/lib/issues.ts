@@ -104,7 +104,7 @@ export async function getIssueDetail(issueId: string, memberId: string | null): 
      FROM issues i
      LEFT JOIN groups g ON g.slug = i.group_slug
      LEFT JOIN issue_analyses a ON a.issue_id = i.id
-     WHERE i.id = $1 AND i.status IN ${PUBLIC_STATUSES}`,
+     WHERE i.id = $1 AND i.status IN ${PUBLIC_STATUSES} AND i.is_sample = false`,
     [issueId],
   );
   const issue = issueRows[0];
@@ -324,7 +324,7 @@ export async function listIssueMarkers(): Promise<IssueMarker[]> {
        WHERE p.kind = 'stance'
        GROUP BY p.issue_id
      ) t ON t.issue_id = i.id
-     WHERE i.status IN ${PUBLIC_STATUSES} AND i.location IS NOT NULL
+     WHERE i.status IN ${PUBLIC_STATUSES} AND i.is_sample = false AND i.location IS NOT NULL
      ORDER BY i.deadline NULLS LAST, i.id`,
   );
   return rows.flatMap((r) => {
@@ -361,7 +361,7 @@ export async function castVote(memberId: string, issueId: string, pollId: string
     }>(
       `SELECT p.kind, p.options, i.group_slug, i.neighborhood_slugs, i.status, i.deadline
        FROM polls p JOIN issues i ON i.id = p.issue_id
-       WHERE p.id = $1 AND p.issue_id = $2 AND i.status IN ${PUBLIC_STATUSES}`,
+       WHERE p.id = $1 AND p.issue_id = $2 AND i.status IN ${PUBLIC_STATUSES} AND i.is_sample = false`,
       [pollId, issueId],
     );
     const poll = rows[0];
@@ -395,7 +395,7 @@ export async function postReview(memberId: string, issueId: string, rating: numb
     await db().transaction(async (client) => {
       const { rows } = await client.query<{ id: string; status: string; deadline: Date | null }>(
         `SELECT p.id, i.status, i.deadline FROM polls p JOIN issues i ON i.id = p.issue_id
-         WHERE p.issue_id = $1 AND p.kind = 'stance' AND i.status IN ${PUBLIC_STATUSES}`,
+         WHERE p.issue_id = $1 AND p.kind = 'stance' AND i.status IN ${PUBLIC_STATUSES} AND i.is_sample = false`,
         [issueId],
       );
       const stance = rows[0];
