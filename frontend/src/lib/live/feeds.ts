@@ -1,4 +1,16 @@
-import { FREMONT_CENTER, NEARBY_BOUNDS, parseCalFire, parseChpXml, parseClosures, parseNwsAlerts, parseOutages, parseUsgs, QUAKE_RADIUS_KM } from "./parsers";
+import {
+  FREMONT_CENTER,
+  NEARBY_BOUNDS,
+  parseBartAdvisories,
+  parseCalFire,
+  parseChpXml,
+  parseCitySourced,
+  parseClosures,
+  parseNwsAlerts,
+  parseOutages,
+  parseUsgs,
+  QUAKE_RADIUS_KM,
+} from "./parsers";
 import type { FeedId, LiveAlert, LiveIncident } from "./types";
 
 // The public real-time feeds behind the Places live layer. Each has its own refresh interval,
@@ -110,4 +122,79 @@ export const FEEDS: Feed[] = [
       alerts: parseNwsAlerts(await (await request("https://api.weather.gov/alerts/active?zone=CAZ508,CAC001", server, "application/geo+json")).json(), now),
     }),
   },
+  {
+    id: "reports",
+    name: "Fremont App resident reports",
+    ttlMs: 5 * 60_000,
+    // Needs the site's session cookie and CSRF token, which browsers can't read cross-origin.
+    browser: false,
+    load: async (now) => incidentsOnly(parseCitySourced(await loadCitySourced(), now)),
+  },
+  {
+    id: "bart",
+    name: "BART service advisories",
+    ttlMs: 2 * 60_000,
+    browser: false,
+    load: async (now, { server }) =>
+      // BART publishes this key for anyone to use with its public API.
+      ({ incidents: [], alerts: parseBartAdvisories(await (await request("https://api.bart.gov/api/bsa.aspx?cmd=bsa&key=MW9S-E7SL-26DU-VV8V&json=y", server, "application/json")).json(), now) }),
+  },
 ];
+
+const CITYSOURCED = "https://fremontca.citysourced.com";
+
+/** Cookie header from a response's Set-Cookie headers (name=value pairs only). */
+function cookiesFrom(res: Response): string {
+  const headers = res.headers as Headers & { getSetCookie?: () => string[] };
+  const list = headers.getSetCookie?.() ?? (res.headers.get("set-cookie") ?? "").split(/,(?=\s*[\w-]+=)/);
+  return list
+    .map((c) => c.split(";")[0].trim())
+    .filter((c) => c.includes("="))
+    .join("; ");
+}
+
+/**
+ * Every service request the Fremont App (CitySourced) shows on its public "nearby" map. The map page
+ * hands out a CSRF token and cookies, which the data endpoint requires. The response is citywide
+ * (about 1,000 requests since 2020, ~1.6 MB), so the parser keeps only recent ones.
+ */
+async function loadCitySourced(): Promise<unknown> {
+  const page = await fetch(`${CITYSOURCED}/servicerequests/nearby`, {
+    headers: { "User-Agent": USER_AGENT, Accept: "text/html" },
+    signal: AbortSignal.timeout(TIMEOUT_MS),
+    cache: "no-store",
+  });
+  if (!page.ok) throw new Error(`HTTP ${page.status}`);
+  const token = (await page.text()).match(/id="hdnCsrfToken"[^>]*?value="([^"]+)"/)?.[1];
+  if (!token) throw new Error("No CSRF token");
+  const body = new URLSearchParams({
+    uniqueid: "docket-web",
+    verb: "Post",
+    endpoint: "D365Proxy",
+    token,
+    json: JSON.stringify({
+      Path: "rst_oneviewcustomactions",
+      AuthType: 2,
+      HTTPVerb: "POST",
+      Body: JSON.stringify({ Endpoint: "NEARBYREQUEST", XCoordinate: FREMONT_CENTER.lng.toFixed(4), YCoordinate: FREMONT_CENTER.lat.toFixed(4), IncludeAttachmentInfo: "false" }),
+      IsCustomAction: true,
+    }),
+  });
+  const res = await fetch(`${CITYSOURCED}/pages/ajax/callapiendpoint.ashx`, {
+    method: "POST",
+    headers: {
+      "User-Agent": USER_AGENT,
+      Accept: "application/json",
+      "Content-Type": "application/x-www-form-urlencoded",
+      "X-Requested-With": "XMLHttpRequest",
+      Cookie: cookiesFrom(page),
+    },
+    body,
+    signal: AbortSignal.timeout(20_000),
+    cache: "no-store",
+  });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const json = (await res.json()) as { HasErrors?: boolean; Results?: unknown };
+  if (json?.HasErrors || !Array.isArray(json?.Results)) throw new Error("Fremont App returned an error");
+  return json;
+}

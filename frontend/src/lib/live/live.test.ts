@@ -1,18 +1,24 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Feed } from "./feeds";
+import { alertToNewsItem, incidentToNewsItem, newsworthyIncident } from "../news/incidents";
 import {
+  bartTimeToIso,
+  citySourcedName,
+  citySourcedTimeToIso,
   humanizeChpType,
   inNearbyBounds,
   pacificTimeToIso,
+  parseBartAdvisories,
   parseCalFire,
   parseChpXml,
+  parseCitySourced,
   parseClosures,
   parseNwsAlerts,
   parseOutages,
   parseUsgs,
 } from "./parsers";
 import { getLiveSnapshot, resetLiveCache } from "./snapshot";
-import type { LiveIncident } from "./types";
+import type { LiveAlert, LiveIncident } from "./types";
 
 const NOW = Date.parse("2026-09-13T22:00:00Z");
 
@@ -229,5 +235,199 @@ describe("live snapshot cache", () => {
   it("checks the Fremont area bounds", () => {
     expect(inNearbyBounds(37.5485, -121.9886)).toBe(true);
     expect(inNearbyBounds(37.7749, -122.4194)).toBe(false);
+  });
+
+  it("puts the most severe alert first across feeds", async () => {
+    const alert = (id: string, severity: LiveAlert["severity"]): LiveAlert => ({
+      id,
+      event: id,
+      headline: null,
+      severity,
+      urgency: null,
+      effective: null,
+      endsAt: null,
+      areaDesc: null,
+      description: null,
+      instruction: null,
+      sourceUrl: null,
+    });
+    const feeds: Feed[] = [
+      { id: "alerts", name: "NWS", ttlMs: 60_000, browser: true, load: async () => ({ incidents: [], alerts: [alert("wind", "Minor")] }) },
+      { id: "bart", name: "BART", ttlMs: 60_000, browser: false, load: async () => ({ incidents: [], alerts: [alert("bart-1", "Severe")] }) },
+    ];
+    expect((await getLiveSnapshot({ now: NOW, feeds })).alerts.map((a) => a.id)).toEqual(["bart-1", "wind"]);
+  });
+});
+
+describe("Fremont App resident reports", () => {
+  const record = (overrides: Record<string, unknown> = {}) => ({
+    Id: "aaaa-1",
+    CaseNumber: "CAS-12345-ABCDEF",
+    CreatedOn: "9/13/2026 5:30:19 PM",
+    ModifiedOn: "9/13/2026 6:00:00 PM",
+    Description: "Tent on the sidewalk blocking the path. Call me at 510-555-0142 or jane@example.com",
+    Line1: "39100 Liberty St",
+    ZipCode: "94538",
+    Latitude: "37.5485",
+    Longitude: "-121.9886",
+    ServiceActivityStatus: { Id: "s1", NameEN: "Open", NameES: "Abierto" },
+    ServiceActivityStatusReason: { Id: "r1", NameEN: "Assigned", NameES: "Asignado" },
+    RequestDetail: { Id: "d1", Name: "Encampment - Tent - Homeless Response", NameEN: "Encampment - Tent - Homeless Response" },
+    ReportedById: "reporter-secret-guid",
+    ParentCaseId: "parent-1",
+    HasImage: false,
+    ...overrides,
+  });
+  const parse = (...records: Record<string, unknown>[]) => parseCitySourced({ HasErrors: false, ResultsCount: records.length, Results: records }, NOW);
+
+  it("maps a recent report with category, address, status and case number, without contact details or reporter ids", () => {
+    const [report] = parse(record());
+    expect(report).toMatchObject({
+      id: "report-aaaa-1",
+      kind: "report",
+      title: "Encampment - Tent - Homeless Response",
+      severity: "minor",
+      lat: 37.5485,
+      lng: -121.9886,
+      startedAt: "2026-09-13T17:30:19.000Z",
+      updatedAt: "2026-09-13T18:00:00.000Z",
+      endsAt: null,
+      magnitude: null,
+      sourceName: "Fremont App",
+      sourceUrl: "https://fremontca.citysourced.com/servicerequests/aaaa-1",
+    });
+    expect(report.subtitle).toMatch(/^39100 Liberty St · Open \(Assigned\) · CAS-12345-ABCDEF · “Tent on the sidewalk/);
+    const json = JSON.stringify(report);
+    expect(json).not.toContain("reporter-secret-guid");
+    expect(json).not.toContain("555-0142");
+    expect(json).not.toContain("jane@example.com");
+  });
+
+  it("keeps reports inside the Fremont area with valid coordinates", () => {
+    const incidents = parse(
+      record({ Id: "in" }),
+      record({ Id: "sf", Latitude: "37.7749", Longitude: "-122.4194" }),
+      record({ Id: "blank", Latitude: "", Longitude: "" }),
+      record({ Id: "null", Latitude: null, Longitude: null }),
+      record({ Id: "junk", Latitude: "n/a", Longitude: "-121.98" }),
+    );
+    expect(incidents.map((i) => i.id)).toEqual(["report-in"]);
+  });
+
+  it("keeps the last 7 days, plus older reports still open that changed this week", () => {
+    const incidents = parse(
+      record({ Id: "new-closed", ServiceActivityStatus: { NameEN: "Closed" }, ServiceActivityStatusReason: { NameEN: "Service Completed" } }),
+      record({ Id: "old-open-touched", CreatedOn: "7/1/2026 9:00:00 AM", ModifiedOn: "9/12/2026 9:00:00 AM" }),
+      record({ Id: "old-closed-touched", CreatedOn: "7/1/2026 9:00:00 AM", ModifiedOn: "9/12/2026 9:00:00 AM", ServiceActivityStatus: { NameEN: "Closed" } }),
+      record({ Id: "old-open-quiet", CreatedOn: "7/1/2026 9:00:00 AM", ModifiedOn: "7/2/2026 9:00:00 AM" }),
+      record({ Id: "week-old-open", CreatedOn: "9/1/2026 9:00:00 AM" }),
+      record({ Id: "duplicate", ServiceActivityStatus: { NameEN: "Duplicate" } }),
+      record({ Id: "staff", Description: "STAFF ENTRY, ES clean up (Industrial Dr ROW)" }),
+    );
+    expect(incidents.map((i) => i.id)).toEqual(["report-new-closed", "report-old-open-touched", "report-week-old-open"]);
+    expect(incidents.map((i) => i.severity)).toEqual(["minor", "moderate", "moderate"]);
+    expect(incidents[0].subtitle).toContain("Closed (Service Completed)");
+  });
+
+  it("reads Python-style lookup values, apostrophes included, and falls back when the category is missing", () => {
+    const incidents = parse(
+      record({
+        Id: "repr",
+        RequestDetail: `{'Id': 'x', 'NameEN': "Other (City Manager's Office)", 'NameES': "Otro"}`,
+        ServiceActivityStatus: "{'Id': 's', 'NameEN': 'Pending', 'NameES': 'Pendiente'}",
+        ServiceActivityStatusReason: "{'Id': 'r', 'NameEN': 'Pending', 'NameES': 'Pendiente'}",
+      }),
+      record({ Id: "none", RequestDetail: null, ServiceActivityStatusReason: null, Description: null }),
+    );
+    expect(incidents[0].title).toBe("Other (City Manager's Office)");
+    expect(incidents[0].subtitle).toBe("39100 Liberty St · Pending · CAS-12345-ABCDEF · “Tent on the sidewalk blocking the path. Call me at [phone] or [email]”");
+    expect(incidents[1]).toMatchObject({ title: "Service request", subtitle: "39100 Liberty St · Open · CAS-12345-ABCDEF" });
+    expect(citySourcedName("{'Id': 'a', 'NameEN': 'Closed', 'NameES': 'Cerrado'}")).toBe("Closed");
+    expect(citySourcedName(null)).toBeNull();
+  });
+
+  it("shortens long descriptions and parses UTC times", () => {
+    const [report] = parse(record({ Description: "word ".repeat(80) }));
+    expect(report.subtitle?.endsWith("…”")).toBe(true);
+    expect(report.subtitle!.length).toBeLessThan(200);
+    expect(citySourcedTimeToIso("1/5/2026 12:05:09 AM")).toBe("2026-01-05T00:05:09.000Z");
+    expect(citySourcedTimeToIso("9/14/2026 12:30:00 PM")).toBe("2026-09-14T12:30:00.000Z");
+    expect(citySourcedTimeToIso("yesterday")).toBeNull();
+  });
+
+  it("goes in the news for three days", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(NOW);
+    try {
+      const [report] = parse(record());
+      expect(incidentToNewsItem(report)).toMatchObject({ category: "community", source: "Fremont App", kind: "incident" });
+      expect(newsworthyIncident(report)).toBe(true);
+      expect(newsworthyIncident({ ...report, startedAt: new Date(NOW - 4 * 86_400_000).toISOString() })).toBe(false);
+      expect(newsworthyIncident({ ...report, startedAt: null })).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
+describe("BART advisories", () => {
+  const item = (id: string, station: string, description: string, extra: Record<string, unknown> = {}) => ({
+    "@id": id,
+    station,
+    type: "DELAY",
+    description: { "#cdata-section": description },
+    sms_text: { "#cdata-section": description },
+    posted: "Sun Sep 13 2026 01:15 PM PDT",
+    expires: "No time provided.",
+    ...extra,
+  });
+  const feed = (bsa: unknown) => ({ root: { date: "09/13/2026", time: "15:00:00 PM PDT", bsa } });
+
+  it("reads Pacific posted and expiry times", () => {
+    expect(bartTimeToIso("Mon Sep 14 2026 06:27 AM PDT")).toBe("2026-09-14T13:27:00.000Z");
+    expect(bartTimeToIso("Mon Jan 05 2026 11:05 PM PST")).toBe("2026-01-06T07:05:00.000Z");
+    expect(bartTimeToIso("No time provided.")).toBeNull();
+  });
+
+  it("skips the no-delays placeholder, whether bsa is one object or a list", () => {
+    expect(parseBartAdvisories(feed({ "@id": "", station: "", description: { "#cdata-section": "No delays reported." } }), NOW)).toEqual([]);
+    expect(parseBartAdvisories(feed([{ station: "", description: { "#cdata-section": "No delays reported." } }]), NOW)).toEqual([]);
+    expect(parseBartAdvisories(feed(item("1", "FRMT", "Elevator out at Fremont.", { type: "" })), NOW).map((a) => a.id)).toEqual(["bart-1"]);
+  });
+
+  it("keeps advisories for Fremont-area stations and systemwide ones that affect them, most severe first", () => {
+    const alerts = parseBartAdvisories(
+      feed([
+        item("560", "BART", "Expect 30-minute delays between Millbrae, SFO, and Daly City stations due to construction. More details online."),
+        item("561", "BART", "A 15-minute delay on the Berryessa/North San José–Richmond (Orange) line in the Fremont direction. Trains are single tracking."),
+        item("562", "WARM", "Police activity at Warm Springs. Expect delays.", { type: "EMERGENCY", expires: "Sun Sep 13 2026 11:00 PM PDT" }),
+        item("563", "MONT", "Escalator out at Montgomery Street. Fremont riders unaffected."),
+        item("564", "BART", "Systemwide delays due to a power problem. Allow extra time.", { type: "INFO" }),
+        item("565", "UCTY", "Parking lot closed.", { type: "INFO", expires: "Sun Sep 13 2026 01:00 PM PDT" }),
+      ]),
+      NOW,
+    );
+    expect(alerts.map((a) => a.id)).toEqual(["bart-562", "bart-561", "bart-564"]);
+    expect(alerts[0]).toMatchObject({
+      event: "BART emergency",
+      headline: "Police activity at Warm Springs.",
+      severity: "Severe",
+      effective: "2026-09-13T20:15:00.000Z",
+      endsAt: "2026-09-14T06:00:00.000Z",
+      areaDesc: "Warm Springs/South Fremont",
+      description: "Police activity at Warm Springs. Expect delays.",
+      sourceName: "BART",
+      sourceUrl: "https://www.bart.gov/schedules/advisories",
+    });
+    expect(alerts[1]).toMatchObject({ event: "BART delay", severity: "Moderate", endsAt: null, areaDesc: "All BART stations" });
+    expect(alerts[2]).toMatchObject({ event: "BART advisory", severity: "Minor" });
+  });
+
+  it("labels BART alerts as BART in the news, and weather alerts as the weather service", () => {
+    const [bart] = parseBartAdvisories(feed(item("9", "FRMT", "Delays at Fremont.")), NOW);
+    expect(alertToNewsItem(bart)).toMatchObject({ source: "BART", category: "traffic", title: "BART delay" });
+    const { sourceName: _drop, ...weather } = bart;
+    void _drop;
+    expect(alertToNewsItem(weather)).toMatchObject({ source: "National Weather Service", category: "disaster" });
   });
 });

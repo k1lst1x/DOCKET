@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import neighborhoods from "../../data/fremont-neighborhoods.json";
 import type { LiveIncident } from "../live/types";
 import { incidentToNewsItem, newsworthyIncident } from "./incidents";
 import {
@@ -6,6 +7,7 @@ import {
   aboutElsewhere,
   classifyNews,
   decodeEntities,
+  DISTRICT_ALIASES,
   isLocalSource,
   isPromotional,
   mentionsFremontArea,
@@ -96,9 +98,48 @@ describe("place matching", () => {
   });
 
   it("lists every neighborhood a story names, skipping same-name towns elsewhere", () => {
-    expect(neighborhoodsMentioned("Traffic from Niles backs up into Centerville")).toEqual(["Niles", "Centerville"]);
+    expect(neighborhoodsMentioned("Traffic from Niles backs up into Centerville").sort()).toEqual(["Centerville", "Niles"]);
     expect(neighborhoodsMentioned("10 Niles students achieve perfect scores on their Ohio State Tests")).toEqual([]);
     expect(neighborhoodsMentioned("Fremont council meets tonight")).toEqual([]);
+  });
+
+  it("covers exactly the 32 Fremont neighborhoods", () => {
+    const names = (neighborhoods as { name: string }[]).map((n) => n.name).sort();
+    expect(names).toHaveLength(32);
+    expect(Object.keys(DISTRICT_ALIASES).sort()).toEqual(names);
+    expect(Object.keys(DISTRICT_ALIASES)).toEqual(names);
+    for (const aliases of Object.values(DISTRICT_ALIASES)) expect(aliases.length).toBeGreaterThan(0);
+  });
+
+  it.each([
+    ["Crash near Pacific Commons in Fremont", ["Pacific Commons/Auto Mall"]],
+    ["Ardenwood Historic Farm reopens its barn", ["Ardenwood"]],
+    ["New plaza planned for Downtown Fremont", ["Downtown"]],
+    ["Tesla's Fremont factory adds a shift", ["Innovation District"]],
+    ["Canyon Heights residents ask for a speed bump", ["Canyon Heights/Vallejo Mills/Niles Crest"]],
+    ["Parkmont Elementary wins a science award", ["Parkmont"]],
+    ["South Sundale block party returns", ["South Sundale"]],
+    ["Gomes Elementary students plant a garden", ["Kimber/Gomes"]],
+    ["Warm Springs Technology Park lab expands", ["Warm Springs", "Warm Springs Technology Park"]],
+  ])("tags %s", (text, expected) => expect(neighborhoodsMentioned(text).sort()).toEqual(expected));
+
+  it.each([
+    "Downtown San Jose apartment tower approved",
+    "Mission Valley in San Diego floods again",
+    "Cabrillo College in Aptos names new president",
+    "Northgate Mall in Seattle is being redeveloped",
+    "Cabrillo Elementary in Pacifica closes for repairs",
+    "Northgate High School in Walnut Creek wins title",
+    "Mission Hills in Los Angeles sees a heat wave",
+    "Parkmont School in Washington, D.C. graduates its seniors",
+    "Fremont City Council meets tonight",
+    "The lakes and birds of Coyote Hills",
+    "Agility Robotics opens Fremont hub to train its robots",
+  ])("doesn't tag %s", (text) => expect(neighborhoodsMentioned(text)).toEqual([]));
+
+  it("screens out Fremont, Ohio's paper even when it says downtown Fremont", () => {
+    expect(aboutAnotherFremont("Car shows throughout downtown Fremont this year Advertiser-Tribune")).toBe(true);
+    expect(neighborhoodsMentioned("Colors at Lake Elizabeth: Fremont photo of the day")).toEqual(["City Center"]);
   });
 
   it("recognizes the Fremont area and screens out other Fremonts", () => {
@@ -123,6 +164,10 @@ describe("place matching", () => {
     expect(isPromotional("Pacific Attorney Group", "Pedestrian Killed in Fremont Crash")).toBe(true);
     expect(isPromotional("Arash Law", "60-Year-Old Pedestrian Killed in Fremont")).toBe(true);
     expect(isPromotional("MaxPreps", "Irvington High School (Fremont, CA) Volleyball")).toBe(true);
+    // Funeral-home listings are not neighborhood news.
+    expect(isPromotional("Dignity Memorial", "Jane Doe Obituary - Fremont, CA")).toBe(true);
+    expect(isPromotional("Legacy.com", "John Smith (1950-2026) - Fremont, CA")).toBe(true);
+    expect(isPromotional("Tri City Voice", "Obituary: longtime Niles merchant")).toBe(true);
     expect(isPromotional("The Mercury News", "Fremont sued over housing element")).toBe(false);
     expect(isPromotional("SFGATE", "Fremont: 81-Year-Old Man Dies After Falling From E-Bike")).toBe(false);
   });

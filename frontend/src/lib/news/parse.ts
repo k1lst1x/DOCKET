@@ -138,13 +138,48 @@ export function classifyNews(text: string): NewsCategory {
 // ------------------------------------------------------------------------------------------------
 // Places
 
-/** Names people use for each Docket neighborhood group's area, including landmarks inside it. */
+/**
+ * Names people use for each of Fremont's 32 neighborhoods (the Docket groups), including landmarks
+ * inside it. Names that are ordinary words or shared with other places ("Downtown", "Northgate",
+ * "Mission Valley") only count when tied to Fremont; landmarks are ones mapped inside the
+ * neighborhood's boundary. The first three also build that neighborhood's Google News search.
+ */
 export const DISTRICT_ALIASES: Record<string, string[]> = {
-  Niles: ["Niles", "Niles Canyon", "Niles Boulevard", "Niles Blvd"],
-  Irvington: ["Irvington", "Five Corners"],
-  "Mission San Jose": ["Mission San Jose", "Mission Peak", "Ohlone College"],
+  "28 Palms": ["28 Palms neighborhood", "Fremont's 28 Palms", "28 Palms, Fremont"],
+  Ardenwood: ["Ardenwood", "Ardenwood Historic Farm"],
+  "Ardenwood Technology Park": ["Ardenwood Technology Park", "Ardenwood Tech Park"],
+  "Bayside Technology Park": ["Bayside Technology Park", "Bayside Tech Park"],
+  // Blacow Road and Blacow Elementary are in neighboring areas (28 Palms, South Sundale).
+  Blacow: ["Blacow neighborhood", "Fremont's Blacow", "Blacow, Fremont"],
+  Brookvale: ["Brookvale Elementary", "Brookvale neighborhood", "Brookvale, Fremont"],
+  Cabrillo: ["Cabrillo Elementary", "Fremont's Cabrillo", "Cabrillo, Fremont"],
+  "Cameron Hills": ["Cameron Hills"],
+  // Vallejo Mill Historical Park itself is in Niles, so only the plural neighborhood name counts here.
+  "Canyon Heights/Vallejo Mills/Niles Crest": ["Canyon Heights", "Vallejo Mills", "Niles Crest"],
   Centerville: ["Centerville"],
+  "Cherry/Guardino": ["Cherry/Guardino", "Cherry-Guardino", "Cherry Guardino"],
+  // "Fremont hub" alone is often a company's new office.
+  "City Center": ["Fremont City Center", "Lake Elizabeth", "Fremont Hub shopping center"],
+  Downtown: ["Downtown Fremont", "Fremont's downtown", "Fremont Downtown Event Center"],
+  Glenmoor: ["Glenmoor Elementary", "Glenmoor neighborhood", "Glenmoor, Fremont"],
+  Grimmer: ["Grimmer Elementary", "Grimmer neighborhood", "Grimmer, Fremont"],
+  "Innovation District": ["Fremont Innovation District", "Tesla's Fremont factory", "Tesla Fremont factory", "Fremont's Innovation District"],
+  Irvington: ["Irvington", "Five Corners"],
+  "Kimber/Gomes": ["Kimber/Gomes", "Gomes Elementary", "Kimber-Gomes"],
+  "Lakes and Birds": ["Lakes and Birds neighborhood", "Lakes & Birds", "Lakes and Birds, Fremont"],
+  "Mission Hills": ["Fremont's Mission Hills", "Mission Hills, Fremont", "Mission Hills in Fremont"],
+  "Mission San Jose": ["Mission San Jose", "Mission Peak", "Ohlone College"],
+  "Mission Valley": ["Mission Valley Elementary", "Fremont's Mission Valley", "Mission Valley, Fremont"],
+  Niles: ["Niles", "Niles Canyon", "Niles Boulevard", "Niles Blvd"],
+  Northgate: ["Fremont's Northgate", "Northgate, Fremont", "Northgate in Fremont"],
+  "Pacific Commons/Auto Mall": ["Pacific Commons", "Fremont Auto Mall"],
+  Parkmont: ["Parkmont"],
+  "South Sundale": ["South Sundale"],
+  Sundale: ["Sundale neighborhood", "Fremont's Sundale", "Sundale, Fremont"],
+  "Vineyards/Avalon": ["Vineyards/Avalon", "Vineyards-Avalon", "Vineyards Avalon"],
   "Warm Springs": ["Warm Springs"],
+  "Warm Springs Technology Park": ["Warm Springs Technology Park", "Warm Springs Tech Park"],
+  Weibel: ["Weibel Elementary", "Weibel neighborhood", "Weibel, Fremont"],
 };
 
 const fold = (text: string) => text.normalize("NFKD").replace(/\p{M}/gu, "").toLowerCase();
@@ -217,10 +252,11 @@ export const isLocalSource = (source: string | null) => {
   return Boolean(name) && LOCAL_SOURCES.some((local) => name.includes(local));
 };
 
-/** Paid press releases, law-firm ads written to look like news, and sports schedule pages. */
-const PROMOTIONAL_SOURCES = /(openpr|financialcontent|einpresswire|ein presswire|accesswire|newswire|press release|attorneys?|law (group|firm|offices?)|\blaw\b|injury lawyers?|lawyers?|maxpreps)/i;
+/** Paid press releases, law-firm ads written to look like news, sports schedule pages, and obituary listings. */
+const PROMOTIONAL_SOURCES =
+  /(openpr|financialcontent|einpresswire|ein presswire|accesswire|newswire|press release|attorneys?|law (group|firm|offices?)|\blaw\b|injury lawyers?|lawyers?|maxpreps|dignity memorial|legacy\.com|echovita|tributearchive|everloved|forevermissed|obituar(y|ies)|funeral homes?|mortuary|memorial chapel)/i;
 export const isPromotional = (source: string | null, title: string) =>
-  PROMOTIONAL_SOURCES.test(source ?? "") || /\b(top|best) [a-z ]*realtor|named #1|passes \d+ client reviews/i.test(title);
+  PROMOTIONAL_SOURCES.test(source ?? "") || /\b(top|best) [a-z ]*realtor|named #1|passes \d+ client reviews|\bobituar(y|ies)\b/i.test(title);
 
 /** Other places that share a Fremont neighborhood's name. */
 const ELSEWHERE: Record<string, RegExp> = {
@@ -229,11 +265,22 @@ const ELSEWHERE: Record<string, RegExp> = {
   Centerville: /\b(ohio|utah|iowa|georgia|texas|tennessee|massachusetts|minnesota|maryland|virginia|indiana|south dakota|pennsylvania|cape cod)\b/i,
   "Warm Springs": /\b(oregon|georgia|virginia|nevada|arkansas|montana|reservation|confederated tribes)\b/i,
   "Mission San Jose": /\b(texas|san antonio)\b/i,
+  Brookvale: /\b(australia|sydney|new south wales|nsw)\b/i,
+  Cabrillo: /\b(pacifica|aptos|santa cruz|cabrillo college|san diego|santa clara|half moon bay|lompoc|oxnard|san pedro)\b/i,
+  "Cameron Hills": /\b(alberta|canada|northwest territories)\b/i,
+  "Canyon Heights/Vallejo Mills/Niles Crest": /\b(utah|arizona|new mexico|texas|colorado|idaho|washington state)\b/i,
+  Glenmoor: /\b(ohio|canton|florida|missouri)\b/i,
+  "Mission Hills": /\b(los angeles|san fernando|kansas|rancho mirage|san diego)\b/i,
+  "Mission Valley": /\b(san diego|kansas|texas)\b/i,
+  Northgate: /\b(seattle|berkeley|san rafael|walnut creek|northgate (mall|high))\b/i,
+  Parkmont: /\b(washington,? d\.?c\.?|d\.c\.)/i,
+  Sundale: /\b(bakersfield|tasmania)\b/i,
+  "South Sundale": /\b(bakersfield|tasmania)\b/i,
 };
 
 /** Stories about the other Fremonts (Nebraska, Ohio, Seattle's Fremont neighborhood…). */
 const OTHER_FREMONTS =
-  /\bfremont,?\s+(neb|nebraska|ohio|oh|mich|michigan|ind|indiana|wis|wisconsin|n\.?\s?c|north carolina|wyo?|wyoming|n\.?\s?h|new hampshire|iowa|mo|missouri)\b|fremont tribune|news-messenger|fremont county|fremont street experience|seattle'?s fremont|fremont, seattle|fremont bridge|wnax|kfor/i;
+  /\bfremont,?\s+(neb|nebraska|ohio|oh|mich|michigan|ind|indiana|wis|wisconsin|n\.?\s?c|north carolina|wyo?|wyoming|n\.?\s?h|new hampshire|iowa|mo|missouri)\b|fremont tribune|news-messenger|advertiser-tribune|fremont county|fremont street experience|seattle'?s fremont|fremont, seattle|fremont bridge|wnax|kfor/i;
 export const aboutAnotherFremont = (text: string) => OTHER_FREMONTS.test(text);
 
 /** About another Fremont, or another town sharing this neighborhood's name (Niles, Ohio). */

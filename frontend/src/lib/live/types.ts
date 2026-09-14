@@ -1,6 +1,6 @@
 // Live incidents and alerts around Fremont, normalized from public real-time feeds.
 
-export type LiveKind = "traffic" | "closure" | "quake" | "fire" | "outage";
+export type LiveKind = "traffic" | "closure" | "quake" | "fire" | "outage" | "report";
 export type LiveSeverity = "minor" | "moderate" | "severe";
 
 export interface LiveIncident {
@@ -35,9 +35,13 @@ export interface LiveAlert {
   description: string | null;
   instruction: string | null;
   sourceUrl: string | null;
+  /** Who issued it; treated as the National Weather Service when missing. */
+  sourceName?: string;
 }
 
-export type FeedId = "chp" | "closures" | "quakes" | "fires" | "outages" | "alerts";
+export const alertSourceName = (alert: Pick<LiveAlert, "sourceName">) => alert.sourceName ?? "National Weather Service";
+
+export type FeedId = "chp" | "closures" | "quakes" | "fires" | "outages" | "alerts" | "reports" | "bart";
 
 export interface FeedStatus {
   id: FeedId;
@@ -62,6 +66,7 @@ export const LIVE_KINDS: { kind: LiveKind; label: string; icon: string; color: s
   { kind: "quake", label: "Earthquakes", icon: "🌎", color: "#6d28d9" },
   { kind: "fire", label: "Wildfires", icon: "🔥", color: "#dc2626" },
   { kind: "outage", label: "Power outages", icon: "⚡", color: "#a16207" },
+  { kind: "report", label: "Resident reports", icon: "📣", color: "#0e7490" },
 ];
 
 export const liveKindInfo = (kind: LiveKind) => LIVE_KINDS.find((k) => k.kind === kind) ?? LIVE_KINDS[0];

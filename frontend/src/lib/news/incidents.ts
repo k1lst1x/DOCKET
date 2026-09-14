@@ -1,4 +1,4 @@
-import type { LiveAlert, LiveIncident } from "../live/types";
+import { alertSourceName, type LiveAlert, type LiveIncident } from "../live/types";
 import { neighborhoodAt } from "../places";
 import type { NewsCategory, NewsItem } from "./types";
 
@@ -12,10 +12,21 @@ const CATEGORY: Record<LiveIncident["kind"], NewsCategory> = {
   quake: "disaster",
   fire: "disaster",
   outage: "disaster",
+  report: "community",
 };
 
-/** Small earthquakes stay on the Places map; the news list only carries ones people might feel. */
-export const newsworthyIncident = (incident: LiveIncident) => incident.kind !== "quake" || (incident.magnitude ?? 0) >= 2.5;
+/** Resident reports stay on the map for a month; the news list only carries the last few days. */
+export const REPORT_NEWS_MS = 3 * 86_400_000;
+
+/**
+ * Small earthquakes stay on the Places map; the news list only carries ones people might feel.
+ * Takes one argument on purpose (it's passed straight to Array.filter), so reports use the clock.
+ */
+export const newsworthyIncident = (incident: LiveIncident) => {
+  if (incident.kind === "quake") return (incident.magnitude ?? 0) >= 2.5;
+  if (incident.kind === "report") return !!incident.startedAt && Date.now() - Date.parse(incident.startedAt) <= REPORT_NEWS_MS;
+  return true;
+};
 
 export function incidentToNewsItem(incident: LiveIncident): NewsItem {
   const neighborhood = neighborhoodAt(incident.lng, incident.lat)?.name;
@@ -34,16 +45,17 @@ export function incidentToNewsItem(incident: LiveIncident): NewsItem {
   };
 }
 
-/** A National Weather Service alert in the same shape, so it opens in the same popup. */
+/** A weather, disaster or BART alert in the same shape, so it opens in the same popup. */
 export function alertToNewsItem(alert: LiveAlert): NewsItem {
+  const source = alertSourceName(alert);
   return {
     id: `alert:${alert.id}`,
     title: alert.event,
     url: alert.sourceUrl,
-    source: "National Weather Service",
+    source,
     publishedAt: alert.effective,
     snippet: alert.headline,
-    category: "disaster",
+    category: source === "BART" ? "traffic" : "disaster",
     neighborhoods: [],
     kind: "incident",
     severity: alert.severity === "Extreme" || alert.severity === "Severe" ? "severe" : alert.severity === "Moderate" ? "moderate" : "minor",

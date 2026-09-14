@@ -1,4 +1,5 @@
 import { FEEDS, type Feed, type FeedResult } from "./feeds";
+import { alertRank } from "./parsers";
 import type { FeedStatus, LiveAlert, LiveIncident, LiveSnapshot } from "./types";
 
 // One cached entry per feed. Each feed refreshes on its own interval no matter how many people
@@ -78,7 +79,8 @@ export async function getLiveSnapshot({
   return {
     generatedAt: new Date(now).toISOString(),
     incidents: [...incidents.values()].sort((a, b) => startedMs(b) - startedMs(a)),
-    alerts: [...alerts.values()],
+    // Weather and BART alerts share one list; the most severe leads (the map banner shows the first).
+    alerts: [...alerts.values()].sort((a, b) => alertRank(a.severity) - alertRank(b.severity)),
     feeds: statuses,
   };
 }

@@ -20,13 +20,26 @@ const ENDS_LABEL: Record<LiveKind, string> = {
   quake: "",
   fire: "",
   outage: "Estimated restoration",
+  report: "",
 };
 
+const WEATHER_SOURCE = "National Weather Service";
+
 const kindLabel = (item: NewsItem) =>
-  item.alert ? "Weather alert" : item.kind === "incident" ? "Live incident" : item.kind === "community" ? "Community post" : "News article";
+  item.alert
+    ? item.source === WEATHER_SOURCE
+      ? "Weather alert"
+      : `${item.source} alert`
+    : item.incident?.kind === "report"
+      ? "Resident report"
+      : item.kind === "incident"
+        ? "Live incident"
+        : item.kind === "community"
+          ? "Community post"
+          : "News article";
 
 function sourceAction(item: NewsItem): string {
-  if (item.alert) return "Read the full alert from the National Weather Service";
+  if (item.alert) return item.source === WEATHER_SOURCE ? "Read the full alert from the National Weather Service" : `Read advisories on ${item.source}`;
   if (item.kind === "incident") return `View on ${item.source}`;
   if (item.kind === "community") return `Read the post on ${item.source}`;
   return `Read the full story on ${item.source}`;
@@ -36,7 +49,7 @@ function facts(item: NewsItem): { label: string; value: string }[] {
   const list: { label: string; value: string }[] = [];
   const incident = item.incident;
   if (incident) {
-    if (item.publishedAt) list.push({ label: "Started", value: clock(item.publishedAt) });
+    if (item.publishedAt) list.push({ label: incident.kind === "report" ? "Reported" : "Started", value: clock(item.publishedAt) });
     if (incident.updatedAt) list.push({ label: "Last updated", value: clock(incident.updatedAt) });
     if (incident.endsAt && ENDS_LABEL[incident.kind]) list.push({ label: ENDS_LABEL[incident.kind], value: clock(incident.endsAt) });
     if (incident.magnitude !== null) {
@@ -62,7 +75,7 @@ export function newsChatContext(item: NewsItem): ChatContext {
     title: item.title,
     details: [
       `Source: ${item.source}`,
-      item.publishedAt ? `${item.kind === "incident" ? "Started" : "Published"}: ${clock(item.publishedAt)}` : "",
+      item.publishedAt ? `${item.incident?.kind === "report" ? "Reported" : item.kind === "incident" ? "Started" : "Published"}: ${clock(item.publishedAt)}` : "",
       item.neighborhoods.length ? `Fremont neighborhoods: ${item.neighborhoods.join(", ")}` : "Area: Fremont",
       `Topic: ${newsCategoryInfo(item.category).label}`,
       item.snippet ? `Summary: ${item.snippet}` : "",

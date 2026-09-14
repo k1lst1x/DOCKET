@@ -31,8 +31,8 @@ const KIND_RANK: Record<NewsKind, number> = { article: 0, community: 1, incident
 export const areaSlug = (name: string) => name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
 
 /**
- * The news page for a neighborhood: its filter when news is tagged by that area (the five historic
- * districts), otherwise a search for the neighborhood's name.
+ * The news page for a neighborhood: its area filter, since news is tagged with all 32 Fremont
+ * neighborhoods. A name that isn't one of them falls back to a search for it.
  */
 export const newsHrefFor = (neighborhoodName: string) =>
   neighborhoodName in DISTRICT_ALIASES ? `/news?area=${areaSlug(neighborhoodName)}` : `/news?q=${encodeURIComponent(neighborhoodName)}`;

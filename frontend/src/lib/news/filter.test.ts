@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { aboutNeighborhood, DEFAULT_NEWS_QUERY, filterNews, newsHrefFor, paramsToQuery, queryToParams, relevance, searchTerms, type NewsQuery } from "./filter";
+import { aboutNeighborhood, areaSlug, DEFAULT_NEWS_QUERY, filterNews, newsHrefFor, paramsToQuery, queryToParams, relevance, searchTerms, type NewsQuery } from "./filter";
+import { DISTRICT_ALIASES } from "./parse";
 import type { NewsItem } from "./types";
 
 const NOW = Date.parse("2026-09-13T22:00:00Z");
@@ -72,9 +73,19 @@ describe("filterNews", () => {
 });
 
 describe("neighborhood news", () => {
-  it("links districts to their filter and other neighborhoods to a name search", () => {
+  it("links every neighborhood to its area filter and other names to a search", () => {
     expect(newsHrefFor("Mission San Jose")).toBe("/news?area=mission-san-jose");
-    expect(newsHrefFor("Kimber/Gomes")).toBe("/news?q=Kimber%2FGomes");
+    expect(newsHrefFor("Kimber/Gomes")).toBe("/news?area=kimber-gomes");
+    expect(newsHrefFor("Canyon Heights/Vallejo Mills/Niles Crest")).toBe("/news?area=canyon-heights-vallejo-mills-niles-crest");
+    expect(newsHrefFor("Somewhere Else")).toBe("/news?q=Somewhere%20Else");
+  });
+
+  it("gives every neighborhood an area slug the URL accepts", () => {
+    const allowed = { categories: [], kinds: [] };
+    for (const name of Object.keys(DISTRICT_ALIASES)) {
+      const slug = areaSlug(name);
+      expect(paramsToQuery(new URLSearchParams({ area: slug }), allowed).area).toBe(slug);
+    }
   });
 
   it("matches stories tagged with a neighborhood or naming it", () => {

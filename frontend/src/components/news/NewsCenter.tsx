@@ -169,7 +169,8 @@ export function NewsCenter() {
           <div className="grid gap-5 rounded-2xl border border-rule bg-white p-5 lg:sticky lg:top-4">
             <fieldset>
               <legend className="text-sm font-semibold text-ink">Neighborhood</legend>
-              <div className="mt-2 grid gap-1">
+              {/* 32 neighborhoods: scroll inside the list so the sticky sidebar's other filters stay reachable. */}
+              <div className="mt-2 grid max-h-80 gap-1 overflow-y-auto overscroll-contain pr-1">
                 <Radio name="area" value="all" checked={query.area === "all"} onChange={() => update({ area: "all" })} label="All of Fremont" count={areaCounts.get("all")} />
                 {NEIGHBORHOODS.map((name) => (
                   <Radio
@@ -322,8 +323,9 @@ export function NewsCenter() {
           ) : null}
 
           <p className="mt-6 text-sm text-ink-muted">
-            From Google News, Tri-City Voice, Patch Fremont and r/Fremont, plus CHP, Caltrans, CAL FIRE, USGS, the National Weather Service and
-            California&apos;s outage map. Fremont Police and Fire don&apos;t publish live incident feeds; for police alerts follow{" "}
+            From Google News searches for all 32 neighborhoods, Tri-City Voice, Patch Fremont, KTVU, NBC Bay Area, CBS San Francisco, SFGATE,
+            ABC7 and r/Fremont, plus resident reports from the Fremont App, CHP, Caltrans, CAL FIRE, USGS, BART, the National Weather Service
+            and California&apos;s outage map. Fremont Police and Fire don&apos;t publish live incident feeds; for police alerts follow{" "}
             <a href="https://local.nixle.com/fremont-police-department-ca/" target="_blank" rel="noopener noreferrer" className="underline">
               Fremont PD on Nixle
             </a>

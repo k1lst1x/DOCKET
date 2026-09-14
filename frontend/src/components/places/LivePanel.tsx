@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { kmFromFremont } from "@/lib/live/parsers";
-import { LIVE_KINDS, liveKindInfo, type AlertSeverity, type LiveAlert, type LiveIncident, type LiveKind } from "@/lib/live/types";
+import { alertSourceName, LIVE_KINDS, liveKindInfo, type AlertSeverity, type LiveAlert, type LiveIncident, type LiveKind } from "@/lib/live/types";
 import { neighborhoodAt } from "@/lib/places";
 import { FREMONT_CENTER } from "@/lib/live/parsers";
 import type { LiveState } from "./useLiveIncidents";
@@ -44,6 +44,7 @@ const ENDS_LABEL: Record<LiveKind, string> = {
   quake: "",
   fire: "",
   outage: "Estimated restoration",
+  report: "",
 };
 
 const ALERT_STYLE: Record<AlertSeverity, string> = {
@@ -204,7 +205,11 @@ export function LivePanel({ live, kinds, onToggleKind, showOnMap, onShowOnMap, s
                 </button>
                 {selected ? (
                   <div className="mx-1 -mt-2 rounded-b-2xl border border-t-0 border-ink bg-white px-3.5 pb-4 pt-4 text-sm text-ink-soft">
-                    {incident.startedAt ? <p>Started {clock(incident.startedAt)}</p> : null}
+                    {incident.startedAt ? (
+                      <p>
+                        {incident.kind === "report" ? "Reported" : "Started"} {clock(incident.startedAt)}
+                      </p>
+                    ) : null}
                     {incident.updatedAt ? <p>Last updated {clock(incident.updatedAt)}</p> : null}
                     {incident.endsAt && ENDS_LABEL[incident.kind] ? (
                       <p>
@@ -243,12 +248,16 @@ export function LivePanel({ live, kinds, onToggleKind, showOnMap, onShowOnMap, s
         </p>
       ) : null}
       {live.mode === "browser" ? (
-        <p className="mt-3 text-sm text-ink-muted">This preview shows earthquakes, weather alerts and power outages. The full site adds CHP incidents, road closures and wildfires.</p>
+        <p className="mt-3 text-sm text-ink-muted">
+          This preview shows earthquakes, weather alerts and power outages. The full site adds CHP incidents, road closures, wildfires, Fremont App resident reports and BART
+          advisories.
+        </p>
       ) : null}
 
       <p className="mt-4 text-sm text-ink-muted">
         Sources: CHP live incident log (freeways and highways), Caltrans lane closures, USGS earthquakes within 150 km, CAL FIRE incidents within 200 km,
-        California&apos;s power outage map and National Weather Service alerts. Fremont Police and Fire don&apos;t publish live calls; for police alerts follow{" "}
+        California&apos;s power outage map, National Weather Service alerts, BART advisories for Fremont-area stations, and requests residents sent the city
+        through the Fremont App in the last 30 days. Fremont Police and Fire don&apos;t publish live calls; for police alerts follow{" "}
         <a href="https://local.nixle.com/fremont-police-department-ca/" target="_blank" rel="noopener noreferrer" className="underline">
           Fremont PD on Nixle
         </a>
@@ -260,7 +269,7 @@ export function LivePanel({ live, kinds, onToggleKind, showOnMap, onShowOnMap, s
 
 function AlertList({ alerts, now }: { alerts: LiveAlert[]; now: number }) {
   if (!alerts.length) {
-    return <p className="mt-3 rounded-2xl bg-white p-3 text-sm text-ink-soft">No weather or disaster alerts for Fremont right now.</p>;
+    return <p className="mt-3 rounded-2xl bg-white p-3 text-sm text-ink-soft">No weather, disaster or BART alerts for Fremont right now.</p>;
   }
   return (
     <ul aria-label="Alerts for Fremont" className="mt-3 grid gap-2">
@@ -281,7 +290,8 @@ function AlertList({ alerts, now }: { alerts: LiveAlert[]; now: number }) {
               {alert.instruction ? <p className="mt-2 whitespace-pre-line font-semibold">{alert.instruction}</p> : null}
               {alert.sourceUrl ? (
                 <a href={alert.sourceUrl} target="_blank" rel="noopener noreferrer" className="mt-2 inline-block underline">
-                  National Weather Service forecast for Fremont
+                  {alertSourceName(alert) === "National Weather Service" ? "National Weather Service forecast for Fremont" : `${alertSourceName(alert)} advisories`}
+                  <span className="sr-only"> (opens in a new tab)</span>
                 </a>
               ) : null}
             </details>

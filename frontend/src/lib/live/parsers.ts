@@ -402,6 +402,9 @@ interface NwsProps {
   messageType?: string;
 }
 
+/** Most severe first, for alerts from any source. */
+export const alertRank = (severity: AlertSeverity) => ALERT_RANK[severity] ?? ALERT_RANK.Unknown;
+
 export function parseNwsAlerts(json: unknown, nowMs: number): LiveAlert[] {
   const features = (json as { features?: { id?: string; properties?: NwsProps }[] } | null)?.features ?? [];
   const seen = new Set<string>();
@@ -430,4 +433,193 @@ export function parseNwsAlerts(json: unknown, nowMs: number): LiveAlert[] {
     });
   }
   return alerts.sort((a, b) => ALERT_RANK[a.severity] - ALERT_RANK[b.severity]);
+}
+
+// ------------------------------------------------------------------------------------------------
+// Fremont App resident reports (CitySourced service requests, citywide, times in UTC)
+
+const DAY_MS = 86_400_000;
+/**
+ * Reports filed in the last 7 days, plus older ones still open that the city touched this week. A month
+ * of reports put ~170 pins over the whole city and hid the other incidents.
+ */
+export const REPORT_WINDOW_MS = 7 * DAY_MS;
+/** Still open a week after it was filed: shown as moderate so lingering problems stand out. */
+const REPORT_STALE_MS = 7 * DAY_MS;
+const REPORT_DESCRIPTION_MAX = 120;
+
+interface CitySourcedRecord {
+  Id?: string;
+  CaseNumber?: string | null;
+  CreatedOn?: string | null;
+  ModifiedOn?: string | null;
+  Description?: string | null;
+  Line1?: string | null;
+  Latitude?: string | number | null;
+  Longitude?: string | number | null;
+  ServiceActivityStatus?: unknown;
+  ServiceActivityStatusReason?: unknown;
+  RequestDetail?: unknown;
+}
+
+/** "9/14/2026 5:30:19 PM" in UTC, as an ISO timestamp. */
+export function citySourcedTimeToIso(text: unknown): string | null {
+  if (typeof text !== "string") return null;
+  const m = text.trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})\s+(\d{1,2}):(\d{2})(?::(\d{2}))?\s*(AM|PM)$/i);
+  if (!m) return null;
+  const hour = (Number(m[4]) % 12) + (m[7].toUpperCase() === "PM" ? 12 : 0);
+  const ms = Date.UTC(Number(m[3]), Number(m[1]) - 1, Number(m[2]), hour, Number(m[5]), Number(m[6] ?? 0));
+  return Number.isFinite(ms) ? new Date(ms).toISOString() : null;
+}
+
+/**
+ * The English name of a lookup value. The API sends objects ({ NameEN: "Closed" }) but has also sent
+ * Python-style reprs ("{'Id': '…', 'NameEN': 'Closed'}"), which switch to double quotes when the
+ * name holds an apostrophe ("Other (City Manager's Office)").
+ */
+export function citySourcedName(value: unknown): string | null {
+  if (value && typeof value === "object") {
+    const { NameEN, Name } = value as { NameEN?: unknown; Name?: unknown };
+    const name = typeof NameEN === "string" && NameEN.trim() ? NameEN : typeof Name === "string" ? Name : "";
+    return name.trim() || null;
+  }
+  if (typeof value !== "string" || !value.trim()) return null;
+  const m = value.match(/['"]NameEN['"]\s*:\s*(?:'((?:[^'\\]|\\.)*)'|"((?:[^"\\]|\\.)*)")/);
+  if (m) return (m[1] ?? m[2]).replace(/\\(['"\\])/g, "$1").trim() || null;
+  return /^\s*\{/.test(value) ? null : value.trim();
+}
+
+const clip = (text: string, max: number) => {
+  if (text.length <= max) return text;
+  const cut = text.slice(0, max - 1);
+  const space = cut.lastIndexOf(" ");
+  return `${(space > max * 0.6 ? cut.slice(0, space) : cut).replace(/[\s.,;:!?-]+$/, "")}…`;
+};
+
+/** A short summary of what the resident wrote, with emails and phone numbers removed. */
+function reportDescription(text: unknown): string | null {
+  if (typeof text !== "string") return null;
+  const clean = text
+    .replace(/[\w.+-]+@[\w-]+(\.[\w-]+)+/g, "[email]")
+    .replace(/(\+?1[\s.-]?)?\(?\b\d{3}\)?[\s.-]?\d{3}[\s.-]?\d{4}\b/g, "[phone]")
+    .replace(/\s+/g, " ")
+    .trim();
+  return clean ? clip(clean, REPORT_DESCRIPTION_MAX) : null;
+}
+
+/** City staff log their own cleanups and outreach ("STAFF ENTRY, …"); those aren't resident reports. */
+const isStaffEntry = (description: unknown) => typeof description === "string" && /^\s*STAFF\b/i.test(description);
+
+export function parseCitySourced(json: unknown, nowMs: number): LiveIncident[] {
+  const records = (json as { Results?: CitySourcedRecord[] } | null)?.Results;
+  if (!Array.isArray(records)) return [];
+  return records.flatMap((r) => {
+    if (!r || typeof r.Id !== "string" || !r.Id || isStaffEntry(r.Description)) return [];
+    if (r.Latitude == null || r.Longitude == null || r.Latitude === "" || r.Longitude === "") return [];
+    const lat = Number(r.Latitude);
+    const lng = Number(r.Longitude);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng) || !inNearbyBounds(lat, lng)) return [];
+
+    const status = citySourcedName(r.ServiceActivityStatus);
+    if (status && /^duplicate/i.test(status)) return [];
+    const closed = !!status && /^(closed|cancel)/i.test(status);
+    const startedAt = citySourcedTimeToIso(r.CreatedOn);
+    const updatedAt = citySourcedTimeToIso(r.ModifiedOn);
+    const age = startedAt ? nowMs - Date.parse(startedAt) : Infinity;
+    const touched = updatedAt ? nowMs - Date.parse(updatedAt) : Infinity;
+    if (!(age <= REPORT_WINDOW_MS || (!closed && touched <= REPORT_WINDOW_MS))) return [];
+
+    const reason = citySourcedName(r.ServiceActivityStatusReason);
+    const statusText = status ? (reason && reason.toLowerCase() !== status.toLowerCase() ? `${status} (${clip(reason, 60)})` : status) : null;
+    const description = reportDescription(r.Description);
+    const incident: LiveIncident = {
+      id: `report-${r.Id}`,
+      kind: "report",
+      title: citySourcedName(r.RequestDetail) ?? "Service request",
+      subtitle: [r.Line1?.trim() || null, statusText, r.CaseNumber?.trim() || null, description ? `“${description}”` : null].filter(Boolean).join(" · ") || null,
+      severity: !closed && age > REPORT_STALE_MS ? "moderate" : "minor",
+      lat,
+      lng,
+      startedAt,
+      updatedAt,
+      endsAt: null,
+      magnitude: null,
+      sourceName: "Fremont App",
+      sourceUrl: `https://fremontca.citysourced.com/servicerequests/${encodeURIComponent(r.Id)}`,
+    };
+    return [incident];
+  });
+}
+
+// ------------------------------------------------------------------------------------------------
+// BART service advisories (JSON converted from XML, times in Pacific time)
+
+/** Stations Fremont riders use. */
+export const BART_STATIONS: Record<string, string> = {
+  FRMT: "Fremont",
+  WARM: "Warm Springs/South Fremont",
+  UCTY: "Union City",
+  SHAY: "South Hayward",
+  BERY: "Berryessa/North San José",
+  MLPT: "Milpitas",
+};
+/** Systemwide advisories count only when they name a Fremont-area station, line or the whole system. */
+const BART_RELEVANT =
+  /\b(fremont|warm springs|union city|hayward|milpitas|berryessa|orange line|green line|system[\s-]?wide|all stations|all lines|FRMT|WARM|UCTY|SHAY|BERY|MLPT)\b/i;
+
+interface BartItem {
+  "@id"?: string;
+  station?: string;
+  type?: string;
+  description?: { "#cdata-section"?: string } | string | null;
+  posted?: string;
+  expires?: string;
+}
+
+const cdata = (value: BartItem["description"]) => (typeof value === "string" ? value : (value?.["#cdata-section"] ?? "")).trim();
+
+/** "Mon Sep 14 2026 06:27 AM PDT" as an ISO timestamp; null for "No time provided." and the like. */
+export function bartTimeToIso(text: unknown): string | null {
+  if (typeof text !== "string") return null;
+  return pacificTimeToIso(
+    text
+      .trim()
+      .replace(/^[A-Za-z]{3,}\s+(?=[A-Za-z]{3}\s)/, "")
+      .replace(/\s+P[SD]?T$/i, ""),
+  );
+}
+
+export function parseBartAdvisories(json: unknown, nowMs: number): LiveAlert[] {
+  const raw = (json as { root?: { bsa?: BartItem | BartItem[] } } | null)?.root?.bsa;
+  const items = Array.isArray(raw) ? raw : raw ? [raw] : [];
+  const alerts: LiveAlert[] = [];
+  const seen = new Set<string>();
+  for (const item of items) {
+    const description = cdata(item?.description);
+    if (!description || /^no delays reported/i.test(description)) continue;
+    const codes = (item.station ?? "").toUpperCase().split(/[\s,;]+/).filter(Boolean);
+    const local = codes.filter((c) => Object.hasOwn(BART_STATIONS, c));
+    if (!local.length && !(codes.includes("BART") && BART_RELEVANT.test(description))) continue;
+    const endsAt = bartTimeToIso(item.expires);
+    if (endsAt && Date.parse(endsAt) < nowMs) continue;
+    const id = `bart-${item["@id"] ?? description.slice(0, 40)}`;
+    if (seen.has(id)) continue;
+    seen.add(id);
+    const type = (item.type ?? "").toUpperCase();
+    alerts.push({
+      id,
+      event: type === "EMERGENCY" ? "BART emergency" : type === "DELAY" ? "BART delay" : "BART advisory",
+      headline: description.match(/^[\s\S]*?[.!?](?=\s|$)/)?.[0].trim() ?? description,
+      severity: type === "EMERGENCY" ? "Severe" : type === "DELAY" ? "Moderate" : "Minor",
+      urgency: null,
+      effective: bartTimeToIso(item.posted),
+      endsAt,
+      areaDesc: local.length ? local.map((c) => BART_STATIONS[c]).join(", ") : "All BART stations",
+      description,
+      instruction: null,
+      sourceUrl: "https://www.bart.gov/schedules/advisories",
+      sourceName: "BART",
+    });
+  }
+  return alerts.sort((a, b) => alertRank(a.severity) - alertRank(b.severity));
 }
