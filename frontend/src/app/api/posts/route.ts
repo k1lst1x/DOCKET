@@ -31,16 +31,16 @@ export async function GET(request: Request) {
   }
 }
 
-/** Post, or reply with parentId. Body: { body, neighborhood?, parentId? } */
+/** Post, or reply with parentId. Body: { body, neighborhood?, parentId?, media? } (media from /api/posts/media uploads) */
 export async function POST(request: Request) {
   if (!isSameOrigin(request)) return NextResponse.json({ error: "forbidden" }, { status: 403, headers: noStore });
   if (!allowPostRequest(request)) return postFailure("busy");
   const session = await getSession();
   if (!session) return postFailure("not_signed_in");
-  const input = (await request.json().catch(() => null)) as { body?: unknown; neighborhood?: unknown; parentId?: unknown } | null;
+  const input = (await request.json().catch(() => null)) as { body?: unknown; neighborhood?: unknown; parentId?: unknown; media?: unknown } | null;
   if (!input) return postFailure("invalid_post");
   try {
-    const post = await createPost(session.memberId, { body: input.body, neighborhood: input.neighborhood, parentId: input.parentId });
+    const post = await createPost(session.memberId, { body: input.body, neighborhood: input.neighborhood, parentId: input.parentId, media: input.media });
     return NextResponse.json({ post }, { status: 201, headers: noStore });
   } catch (error) {
     if (error instanceof PostActionError) return postFailure(error.code);

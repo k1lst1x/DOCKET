@@ -3,16 +3,23 @@ import { SAMPLE_FIRST_NAMES, SAMPLE_LAST_INITIALS } from "../data/sample-activit
 import { SAMPLE_POSTS, samplePostId, sampleReplyId } from "../data/sample-posts";
 import { moderateText } from "./moderation";
 import { areaBySlug } from "./places";
+import { hasBlockedLink } from "./post-media";
 import type { FeedPost } from "./posts-types";
 
 // Rules and sample data for the home feed that both the server and the browser use.
 
 export const POST_MAX_LENGTH = 500;
 
-export function validatePostBody(raw: unknown): { ok: true; body: string } | { ok: false; error: "invalid_post" | "post_blocked" } {
+/** Post text: up to 500 characters, clean language, http(s) links only. Empty only when allowEmpty (a post with media). */
+export function validatePostBody(
+  raw: unknown,
+  { allowEmpty = false }: { allowEmpty?: boolean } = {},
+): { ok: true; body: string } | { ok: false; error: "invalid_post" | "post_blocked" | "link_blocked" } {
+  if (raw !== undefined && raw !== null && typeof raw !== "string") return { ok: false, error: "invalid_post" };
   const body = typeof raw === "string" ? raw.replace(/\r\n/g, "\n").trim() : "";
-  if (!body || body.length > POST_MAX_LENGTH) return { ok: false, error: "invalid_post" };
+  if ((!body && !allowEmpty) || body.length > POST_MAX_LENGTH) return { ok: false, error: "invalid_post" };
   if (!moderateText(body).ok) return { ok: false, error: "post_blocked" };
+  if (hasBlockedLink(body)) return { ok: false, error: "link_blocked" };
   return { ok: true, body };
 }
 
@@ -39,6 +46,7 @@ function samplePost(index: number, now: number): FeedPost {
     id: samplePostId(index),
     parentId: null,
     body: post.body,
+    media: [],
     createdAt: new Date(now - post.hoursAgo * HOUR_MS).toISOString(),
     author: { name: sampleMemberName(post.author), homeNeighborhood: sampleMemberHome(post.author) },
     neighborhood: area ? { slug: area.slug, name: area.name } : null,
@@ -63,6 +71,7 @@ export function sampleReplies(postId: string, now: number): FeedPost[] {
     id: sampleReplyId(index, r),
     parentId: parent.id,
     body: reply.body,
+    media: [],
     createdAt: new Date(Date.parse(parent.createdAt) + reply.minutesAfter * 60_000).toISOString(),
     author: { name: sampleMemberName(reply.author), homeNeighborhood: sampleMemberHome(reply.author) },
     neighborhood: parent.neighborhood,

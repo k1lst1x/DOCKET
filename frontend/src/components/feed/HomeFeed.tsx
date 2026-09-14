@@ -5,12 +5,16 @@ import { useCallback, useEffect, useId, useMemo, useRef, useState, type FormEven
 import { timeAgo } from "@/components/places/LivePanel";
 import { moderateText } from "@/lib/moderation";
 import { areaBySlug, neighborhoodForGroups, NEIGHBORHOODS } from "@/lib/places";
+import { ACCEPT_MEDIA, hasBlockedLink } from "@/lib/post-media";
 import { POST_MAX_LENGTH, sampleFeed, sampleReplies } from "@/lib/posts-shared";
 import type { FeedPage, FeedPost, PostErrorCode } from "@/lib/posts-types";
+import { AttachButton, AttachmentPreviews, EmojiButton, insertAtCursor, useAttachments } from "./ComposerMedia";
+import { LinkCard, MediaGallery, PostText } from "./PostContent";
 
 // The home feed: neighbors posting about Fremont. Read the whole city, your own neighborhoods or any
-// one neighborhood; post to your neighborhood or another; reply and like. New posts arrive every
-// 15 seconds behind a "Show new posts" button so the list doesn't jump while you read.
+// one neighborhood; post to your neighborhood or another; reply and like. Posts can carry up to four
+// photos or one video (up to 5 minutes), links and emoji. New posts arrive every 15 seconds behind a
+// "Show new posts" button so the list doesn't jump while you read.
 
 type Me = { signedIn: false } | { signedIn: true; name: string; groups: { slug: string }[] };
 
@@ -19,8 +23,11 @@ const FEED_PARAM = /^(all|mine|[a-z0-9]+(-[a-z0-9]+)*)$/;
 
 const ERRORS: Record<PostErrorCode, string> = {
   not_signed_in: "Your sign-in has expired. Sign in again to post.",
-  invalid_post: "Write something up to 500 characters, then pick where to post it.",
+  invalid_post: "Write something up to 500 characters or add a photo or video, then pick where to post it.",
   post_blocked: "That includes language Docket doesn't allow, such as swear words, slurs or threats. Please rephrase it.",
+  link_blocked: "Links need to start with http:// or https://.",
+  media_invalid: "One of the photos or videos didn't finish uploading. Remove it and add it again.",
+  media_unavailable: "Photo and video posts aren't available right now. You can still post text.",
   not_found: "That post isn't available anymore.",
   forbidden: "You can only delete your own posts.",
   busy: "You're posting quickly. Wait a minute, then try again.",
@@ -394,28 +401,44 @@ function Composer({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [posted, setPosted] = useState<{ slug: string; name: string } | null>(null);
+  const textRef = useRef<HTMLTextAreaElement>(null);
+  const attachments = useAttachments();
 
   // Default audience: the neighborhood being browsed, else your own, else all of Fremont.
   const defaultTarget = scope !== "all" && scope !== "mine" ? scope : (homeSlugs[0] ?? "fremont");
   const audience = target ?? defaultTarget;
   const language = useMemo(() => moderateText(body), [body]);
+  const badLink = useMemo(() => hasBlockedLink(body), [body]);
   const length = body.trim().length;
   const over = length > POST_MAX_LENGTH;
+  const hasMedia = attachments.items.length > 0;
+  const canPost = (length > 0 || hasMedia) && !over && language.ok && !badLink && !attachments.uploading && !attachments.failed && !busy;
   const neighborhoods = useMemo(() => [...NEIGHBORHOODS].sort((a, b) => a.name.localeCompare(b.name)), []);
+
+  function resize(el: HTMLTextAreaElement) {
+    el.style.height = "auto";
+    el.style.height = `${Math.min(el.scrollHeight, 320)}px`;
+  }
 
   async function submit(event: FormEvent) {
     event.preventDefault();
-    if (!length || over || !language.ok || busy) return;
+    if (!canPost) return;
     setBusy(true);
     setError(null);
     setPosted(null);
-    const result = await send<{ post: FeedPost }>("/api/posts", "POST", { body, neighborhood: audience === "fremont" ? null : audience });
+    const result = await send<{ post: FeedPost }>("/api/posts", "POST", {
+      body,
+      neighborhood: audience === "fremont" ? null : audience,
+      media: attachments.media.length ? attachments.media : undefined,
+    });
     setBusy(false);
     if (!result.ok) {
       setError(ERRORS[result.code]);
       return;
     }
     setBody("");
+    attachments.clear();
+    if (textRef.current) textRef.current.style.height = "auto";
     const shown = onPosted(result.data.post);
     const where = result.data.post.neighborhood;
     if (!shown) setPosted(where ? { slug: where.slug, name: where.name } : { slug: "all", name: "All of Fremont" });
@@ -430,6 +453,7 @@ function Composer({
             Write a post
           </label>
           <textarea
+            ref={textRef}
             id={`${id}-body`}
             value={body}
             rows={2}
@@ -437,15 +461,33 @@ function Composer({
             onChange={(e) => {
               setBody(e.target.value);
               setPosted(null);
-              e.target.style.height = "auto";
-              e.target.style.height = `${Math.min(e.target.scrollHeight, 320)}px`;
+              resize(e.target);
+            }}
+            onPaste={(e) => {
+              // Pasting a screenshot or copied photo attaches it.
+              const files = Array.from(e.clipboardData.files);
+              if (files.length && attachments.canAddMore) {
+                e.preventDefault();
+                void attachments.add(files);
+              }
             }}
             placeholder={`What's happening in ${areaBySlug(audience)?.name ?? "Fremont"}?`}
-            aria-invalid={!language.ok || over}
-            aria-describedby={!language.ok ? `${id}-language` : undefined}
+            aria-invalid={!language.ok || over || badLink}
+            aria-describedby={!language.ok ? `${id}-language` : badLink ? `${id}-link` : undefined}
             className="block min-h-[4.5rem] w-full resize-none bg-transparent py-2 text-lg text-ink placeholder:text-ink-muted focus:outline-none"
           />
+          <AttachmentPreviews items={attachments.items} onRemove={attachments.remove} />
           {!language.ok ? <LanguageWarning id={`${id}-language`} matches={language.matches} /> : null}
+          {badLink ? (
+            <p id={`${id}-link`} role="alert" className="mt-2 rounded-xl bg-signal-wash px-3 py-2 text-sm text-signal">
+              {ERRORS.link_blocked}
+            </p>
+          ) : null}
+          {attachments.error ? (
+            <p role="alert" className="mt-2 rounded-xl bg-signal-wash px-3 py-2 text-sm font-semibold text-signal">
+              {attachments.error}
+            </p>
+          ) : null}
           {error ? (
             <p role="alert" className="mt-2 rounded-xl bg-signal-wash px-3 py-2 text-sm font-semibold text-signal">
               {error}
@@ -460,6 +502,17 @@ function Composer({
             </p>
           ) : null}
           <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-rule pt-3">
+            <div className="-ml-2 flex items-center">
+              <AttachButton onFiles={(files) => void attachments.add(files)} disabled={!attachments.canAddMore || busy} accept={ACCEPT_MEDIA} multiple />
+              <EmojiButton
+                onPick={(emoji) =>
+                  insertAtCursor(textRef.current, body, emoji, (next) => {
+                    setBody(next);
+                    setPosted(null);
+                  })
+                }
+              />
+            </div>
             <label htmlFor={`${id}-target`} className="text-sm text-ink-soft">
               Post to
             </label>
@@ -483,8 +536,8 @@ function Composer({
             <span className={`ml-auto font-mono text-sm ${over ? "text-signal" : "text-ink-muted"}`} aria-live="polite">
               {POST_MAX_LENGTH - length}
             </span>
-            <button type="submit" disabled={busy || !length || over || !language.ok} className="btn btn-primary h-10 rounded-full px-5 text-sm">
-              {busy ? "Posting…" : "Post"}
+            <button type="submit" disabled={!canPost} className="btn btn-primary h-10 rounded-full px-5 text-sm">
+              {busy ? "Posting…" : attachments.uploading ? "Uploading…" : "Post"}
             </button>
           </div>
         </div>
@@ -574,7 +627,8 @@ function PostCard({
                 </button>
               )}
             </p>
-            <p className="mt-2 whitespace-pre-wrap break-words text-base leading-relaxed text-ink">{post.body}</p>
+            <PostText text={post.body} className="mt-2 whitespace-pre-wrap break-words text-base leading-relaxed text-ink" />
+            {post.media.length ? <MediaGallery media={post.media} author={post.mine ? "you" : post.author.name} /> : <LinkCard text={post.body} />}
 
             <div className="-ml-2 mt-2 flex flex-wrap items-center gap-1">
               <button
@@ -663,7 +717,9 @@ function Thread({ post, signedIn, readOnly, now, onCount }: { post: FeedPost; si
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const draftRef = useRef<HTMLTextAreaElement>(null);
   const language = useMemo(() => moderateText(draft), [draft]);
+  const badLink = useMemo(() => hasBlockedLink(draft), [draft]);
   const length = draft.trim().length;
 
   useEffect(() => {
@@ -684,7 +740,7 @@ function Thread({ post, signedIn, readOnly, now, onCount }: { post: FeedPost; si
 
   async function submit(event: FormEvent) {
     event.preventDefault();
-    if (!length || length > POST_MAX_LENGTH || !language.ok || busy) return;
+    if (!length || length > POST_MAX_LENGTH || !language.ok || badLink || busy) return;
     setBusy(true);
     setError(null);
     const result = await send<{ post: FeedPost }>("/api/posts", "POST", { body: draft, parentId: post.id });
@@ -737,7 +793,7 @@ function Thread({ post, signedIn, readOnly, now, onCount }: { post: FeedPost; si
                     </button>
                   ) : null}
                 </p>
-                <p className="mt-0.5 whitespace-pre-wrap break-words text-base text-ink">{reply.body}</p>
+                <PostText text={reply.body} className="mt-0.5 whitespace-pre-wrap break-words text-base text-ink" />
               </div>
             </li>
           ))}
@@ -751,21 +807,28 @@ function Thread({ post, signedIn, readOnly, now, onCount }: { post: FeedPost; si
           </label>
           <div className="flex items-end gap-2 rounded-2xl border border-field bg-white p-1.5 pl-3 focus-within:border-ink">
             <textarea
+              ref={draftRef}
               id={`${id}-reply`}
               rows={1}
               value={draft}
               maxLength={POST_MAX_LENGTH + 50}
               onChange={(e) => setDraft(e.target.value)}
               placeholder="Write a reply…"
-              aria-invalid={!language.ok}
-              aria-describedby={!language.ok ? `${id}-language` : undefined}
+              aria-invalid={!language.ok || badLink}
+              aria-describedby={!language.ok ? `${id}-language` : badLink ? `${id}-link` : undefined}
               className="min-h-[2.5rem] min-w-0 flex-1 resize-none bg-transparent py-2 text-base text-ink placeholder:text-ink-muted focus:outline-none"
             />
-            <button type="submit" disabled={busy || !length || length > POST_MAX_LENGTH || !language.ok} className="btn btn-primary h-10 rounded-full px-4 text-sm">
+            <EmojiButton align="right" onPick={(emoji) => insertAtCursor(draftRef.current, draft, emoji, setDraft)} />
+            <button type="submit" disabled={busy || !length || length > POST_MAX_LENGTH || !language.ok || badLink} className="btn btn-primary h-10 rounded-full px-4 text-sm">
               {busy ? "…" : "Reply"}
             </button>
           </div>
           {!language.ok ? <LanguageWarning id={`${id}-language`} matches={language.matches} /> : null}
+          {badLink ? (
+            <p id={`${id}-link`} role="alert" className="mt-2 text-sm text-signal">
+              {ERRORS.link_blocked}
+            </p>
+          ) : null}
           {error ? (
             <p role="alert" className="mt-2 text-sm font-semibold text-signal">
               {error}

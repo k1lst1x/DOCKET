@@ -1,5 +1,16 @@
 // Home feed: neighbors' posts, replies and likes. Shared by the API and the browser.
 
+import type { PostMediaKind } from "./post-media";
+
+/** A photo or video in a post. url is a temporary signed link. */
+export interface FeedMedia {
+  kind: PostMediaKind;
+  url: string;
+  width: number | null;
+  height: number | null;
+  durationS: number | null;
+}
+
 export interface FeedAuthor {
   /** Short display name, e.g. "Priya A." */
   name: string;
@@ -11,7 +22,10 @@ export interface FeedPost {
   id: string;
   /** Set on replies: the top-level post they answer. */
   parentId: string | null;
+  /** May be empty when the post has photos or a video. */
   body: string;
+  /** Up to four photos, or one video. Replies have none. */
+  media: FeedMedia[];
   createdAt: string;
   author: FeedAuthor;
   /** Where it was posted; null means All of Fremont. */
@@ -34,4 +48,14 @@ export interface FeedPage {
   neighborhoods: string[];
 }
 
-export type PostErrorCode = "not_signed_in" | "invalid_post" | "post_blocked" | "not_found" | "forbidden" | "busy" | "unavailable";
+export type PostErrorCode =
+  | "not_signed_in"
+  | "invalid_post"
+  | "post_blocked"
+  | "link_blocked"
+  | "media_invalid"
+  | "media_unavailable"
+  | "not_found"
+  | "forbidden"
+  | "busy"
+  | "unavailable";

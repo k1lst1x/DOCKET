@@ -66,9 +66,16 @@ const postByClient = new FixedWindowLimiter(8);
 const postGlobal = new FixedWindowLimiter(240, 1);
 const likeByClient = new FixedWindowLimiter(60);
 const likeGlobal = new FixedWindowLimiter(1200, 1);
+// Upload tickets: a post can carry four photos, so allow a few posts' worth per minute.
+const mediaByClient = new FixedWindowLimiter(16);
+const mediaGlobal = new FixedWindowLimiter(240, 1);
 
 export function allowPostRequest(request: Request): boolean {
   return postByClient.allow(clientKey(request)) && postGlobal.allow("all");
+}
+
+export function allowMediaRequest(request: Request): boolean {
+  return mediaByClient.allow(clientKey(request)) && mediaGlobal.allow("all");
 }
 
 export function allowLikeRequest(request: Request): boolean {

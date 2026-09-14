@@ -1,8 +1,10 @@
 import { db } from "./db";
+import { confirmUploads, mediaBucket, viewUrl } from "./media-storage";
 import { moderateText } from "./moderation";
 import { areaBySlug } from "./places";
+import { validatePostMedia, type StoredMedia } from "./post-media";
 import { shortName, validatePostBody } from "./posts-shared";
-import type { FeedPage, FeedPost, PostErrorCode } from "./posts-types";
+import type { FeedMedia, FeedPage, FeedPost, PostErrorCode } from "./posts-types";
 
 // Home feed data in Aurora DSQL: posts, replies (one level) and likes.
 // Lists are passed to SQL as jsonb arrays (DSQL has no array columns).
@@ -23,6 +25,7 @@ interface PostRow {
   id: string;
   parent_id: string | null;
   body: string;
+  media: StoredMedia[] | null;
   created_at: Date;
   member_id: string;
   name: string;
@@ -30,12 +33,27 @@ interface PostRow {
   neighborhood_slug: string | null;
 }
 
-const SELECT_POSTS = `SELECT p.id, p.parent_id, p.body, p.created_at, p.member_id, m.name, p.is_sample, p.neighborhood_slug
+const SELECT_POSTS = `SELECT p.id, p.parent_id, p.body, p.media, p.created_at, p.member_id, m.name, p.is_sample, p.neighborhood_slug
   FROM posts p JOIN members m ON m.id = p.member_id`;
 
 const iso = (d: Date) => new Date(d).toISOString();
 
-/** Adds like and reply counts, the viewer's likes and authors' home neighborhoods. */
+/** Temporary links for a post's photos and video. A signing failure hides the media, not the post. */
+async function feedMedia(stored: StoredMedia[] | null): Promise<FeedMedia[]> {
+  if (!Array.isArray(stored) || !stored.length) return [];
+  try {
+    const urls = await Promise.all(stored.map((m) => viewUrl(m.key)));
+    return stored.flatMap((m, i) => {
+      const url = urls[i];
+      return url ? [{ kind: m.kind, url, width: m.width ?? null, height: m.height ?? null, durationS: m.durationS ?? null }] : [];
+    });
+  } catch (error) {
+    console.error("[docket] couldn't sign post media links", error);
+    return [];
+  }
+}
+
+/** Adds like and reply counts, the viewer's likes, authors' home neighborhoods and media links. */
 async function hydrate(rows: PostRow[], viewerId: string | null): Promise<FeedPost[]> {
   // Anything that fails today's language filter stays visible only to its author.
   const visible = rows.filter((r) => r.member_id === viewerId || moderateText(r.body).ok);
@@ -43,7 +61,7 @@ async function hydrate(rows: PostRow[], viewerId: string | null): Promise<FeedPo
   const pool = db();
   const postIds = JSON.stringify(visible.map((r) => r.id));
   const memberIds = JSON.stringify([...new Set(visible.map((r) => r.member_id))]);
-  const [likes, replies, liked, homes] = await Promise.all([
+  const [likes, replies, liked, homes, media] = await Promise.all([
     pool.query<{ post_id: string; n: number }>(`SELECT post_id, count(*)::int AS n FROM post_likes WHERE post_id IN ${IDS(1)} GROUP BY post_id`, [postIds]),
     pool.query<{ parent_id: string; n: number }>(
       `SELECT parent_id, count(*)::int AS n FROM posts WHERE deleted_at IS NULL AND parent_id IN ${IDS(1)} GROUP BY parent_id`,
@@ -57,6 +75,7 @@ async function hydrate(rows: PostRow[], viewerId: string | null): Promise<FeedPo
        WHERE ms.member_id IN ${IDS(1)} ORDER BY ms.joined_at`,
       [memberIds],
     ),
+    Promise.all(visible.map((r) => feedMedia(r.media))),
   ]);
   const likeCounts = new Map(likes.rows.map((r) => [r.post_id, Number(r.n)]));
   const replyCounts = new Map(replies.rows.map((r) => [r.parent_id, Number(r.n)]));
@@ -64,13 +83,14 @@ async function hydrate(rows: PostRow[], viewerId: string | null): Promise<FeedPo
   const homeOf = new Map<string, string>();
   for (const r of homes.rows) if (!homeOf.has(r.member_id)) homeOf.set(r.member_id, r.neighborhood_slug);
 
-  return visible.map((r) => {
+  return visible.map((r, i) => {
     const area = r.neighborhood_slug ? areaBySlug(r.neighborhood_slug) : undefined;
     const home = homeOf.get(r.member_id);
     return {
       id: r.id,
       parentId: r.parent_id,
       body: r.body,
+      media: media[i],
       createdAt: iso(r.created_at),
       author: {
         name: moderateText(r.name).ok ? shortName(r.name) : "Neighbor",
@@ -139,15 +159,24 @@ export async function listReplies(postId: string, viewerId: string | null): Prom
   return hydrate(rows, viewerId);
 }
 
-/** New post or reply. Replies always attach to the top-level post and inherit its neighborhood. */
-export async function createPost(memberId: string, input: { body: unknown; neighborhood: unknown; parentId: unknown }): Promise<FeedPost> {
-  const checked = validatePostBody(input.body);
+/**
+ * New post or reply. Replies always attach to the top-level post, inherit its neighborhood and
+ * are text only. A post may have photos or a video instead of text; uploads are checked in the bucket.
+ */
+export async function createPost(
+  memberId: string,
+  input: { body: unknown; neighborhood: unknown; parentId: unknown; media?: unknown },
+): Promise<FeedPost> {
+  const mediaCheck = validatePostMedia(input.media, memberId);
+  if (!mediaCheck.ok) throw new PostActionError("media_invalid");
+  const checked = validatePostBody(input.body, { allowEmpty: mediaCheck.media.length > 0 });
   if (!checked.ok) throw new PostActionError(checked.error);
 
   let neighborhood: string | null = null;
   let parentId: string | null = null;
   if (input.parentId !== undefined && input.parentId !== null && input.parentId !== "") {
     if (typeof input.parentId !== "string" || !POST_ID_PATTERN.test(input.parentId)) throw new PostActionError("invalid_post");
+    if (mediaCheck.media.length) throw new PostActionError("media_invalid");
     const { rows } = await db().query<{ id: string; parent_id: string | null; neighborhood_slug: string | null }>(
       "SELECT id, parent_id, neighborhood_slug FROM posts WHERE id = $1 AND deleted_at IS NULL",
       [input.parentId],
@@ -161,14 +190,22 @@ export async function createPost(memberId: string, input: { body: unknown; neigh
     neighborhood = input.neighborhood;
   }
 
+  let media: StoredMedia[] | null = null;
+  if (mediaCheck.media.length) {
+    if (!mediaBucket()) throw new PostActionError("media_unavailable");
+    media = await confirmUploads(mediaCheck.media);
+    if (!media) throw new PostActionError("media_invalid");
+  }
+
   const id = crypto.randomUUID();
   try {
-    await db().query("INSERT INTO posts (id, member_id, neighborhood_slug, parent_id, body) VALUES ($1, $2, $3, $4, $5)", [
+    await db().query("INSERT INTO posts (id, member_id, neighborhood_slug, parent_id, body, media) VALUES ($1, $2, $3, $4, $5, $6::jsonb)", [
       id,
       memberId,
       neighborhood,
       parentId,
       checked.body,
+      media ? JSON.stringify(media) : null,
     ]);
   } catch (error) {
     // A missing member or neighborhood row (foreign key).
