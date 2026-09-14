@@ -7,7 +7,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 
-from publish_issues import AgendaItem, Fact, verified_item  # noqa: E402
+from publish_issues import AgendaItem, Fact, issue_rows, verified_item  # noqa: E402
 from publish_posts import MAX_BODY, agenda_post, comment_post, planned_posts  # noqa: E402
 
 NEIGHBORHOODS = {"ardenwood": "Ardenwood", "niles": "Niles", "northgate": "Northgate"}
@@ -47,6 +47,43 @@ class VerifiedItemTests(unittest.TestCase):
             topic="Budget",
         )
         self.assertIsNone(verified_item(wrong_section, AGENDA, NEIGHBORHOODS))
+
+
+class ItemRulesTests(unittest.TestCase):
+    def test_bare_letters_and_procedural_items_are_not_issues(self):
+        agenda = "|  | a. | Draft Resolution- ICE Free Zone |\n|  | A. | Waive Further Reading of Proposed Ordinances |"
+        attachment = AgendaItem(
+            number="A", section="other", title="Draft Resolution- ICE Free Zone", summary="x", topic="x"
+        )
+        procedural = AgendaItem(
+            number="2A",
+            section="consent calendar",
+            title="Waive Further Reading of Proposed Ordinances",
+            summary="x",
+            topic="x",
+        )
+        self.assertIsNone(verified_item(attachment, agenda, NEIGHBORHOODS))
+        self.assertIsNone(verified_item(procedural, agenda, NEIGHBORHOODS))
+
+    def test_ids_use_the_meetings_fremont_date(self):
+        doc = {
+            "source_id": "fremont-council-iqm2",
+            "title": "City Council Regular Meeting – Sep 15, 2026 7:00 PM",
+            "url": "https://fremontcityca.iqm2.com/Citizens/Detail_Meeting.aspx?ID=2091",
+            "published_at": datetime(2026, 9, 16, 2, 0, tzinfo=UTC),  # 7:00 PM Sep 15 in Fremont
+        }
+        item = {
+            "number": "2C",
+            "section": "consent calendar",
+            "title": "Item title",
+            "summary": "Summary.",
+            "topic": "Budget",
+            "facts": [],
+            "neighborhood_slugs": [],
+            "locator": "2. Consent Calendar",
+        }
+        row = issue_rows(doc, item, {})
+        self.assertEqual((row["id"], row["ref"]), ("cc-2026-09-15-2c", "CC-26-0915-2C"))
 
 
 class PostTests(unittest.TestCase):

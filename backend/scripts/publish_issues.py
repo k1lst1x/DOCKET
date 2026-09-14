@@ -22,6 +22,7 @@ import sys
 from collections import Counter
 from datetime import datetime, timedelta
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
@@ -33,6 +34,15 @@ from core.geo import geocode, neighborhood_at
 from pydantic import BaseModel, Field
 from strands import Agent
 
+FREMONT_TZ = ZoneInfo("America/Los_Angeles")  # ids and refs use the meeting's local date
+# Business items are numbered like "2C" or "5A". A bare letter is an attachment row ("a. Draft Resolution")
+# or an item seen without its section number; either way it is not stored as its own issue.
+ITEM_NUMBER = re.compile(r"\d{1,2}[A-Z]?")
+PROCEDURAL = re.compile(
+    r"\b(?:waive (?:further )?reading|approv\w* (?:of )?(?:the )?minutes|call to order|roll call|closed session|"
+    r"adjournment|acronyms?|meeting schedule|pledge of allegiance|salute (?:to )?the flag)\b",
+    re.IGNORECASE,
+)
 LOOKAHEAD_DAYS = 21
 MAX_ITEMS_PER_AGENDA = 12
 BODIES = {
@@ -94,7 +104,9 @@ def verified_item(item: AgendaItem, chunk_text: str, neighborhoods: dict[str, st
     """The item as it will be stored, or None when its title or summary can't be verified in the chunk."""
     number = re.sub(r"[^0-9A-Za-z]", "", item.number).upper()
     title = re.sub(r"\s+", " ", item.title).strip(" |-")
-    if not number or len(title) < 8 or squash(title) not in squash(chunk_text):
+    if not ITEM_NUMBER.fullmatch(number) or len(title) < 8 or PROCEDURAL.search(title):
+        return None
+    if squash(title) not in squash(chunk_text):
         return None
     summary = enforce(item.summary.strip(), [chunk_text]).text
     if not summary:
@@ -122,7 +134,7 @@ def verified_item(item: AgendaItem, chunk_text: str, neighborhoods: dict[str, st
 def issue_rows(doc: dict, item: dict, groups: dict[str, str]) -> dict:
     body_name, code = BODIES[doc["source_id"]]
     meeting_at: datetime = doc["published_at"]
-    local = meeting_at.astimezone()
+    local = meeting_at.astimezone(FREMONT_TZ)
     issue_id = f"{code}-{local:%Y-%m-%d}-{item['number'].lower()}"
     group_slug = next((groups[slug] for slug in item["neighborhood_slugs"] if slug in groups), None)
     return {
@@ -266,7 +278,8 @@ def run() -> dict:
                 if checked is None:
                     totals["items_rejected"] += 1
                     continue
-                if checked["number"] in seen:
+                title_key = squash(checked["title"])[:120]
+                if checked["number"] in seen or any(squash(s["title"])[:120] == title_key for s in seen.values()):
                     continue
                 checked["locator"] = locator
                 if checked["address"]:
