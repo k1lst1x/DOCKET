@@ -8,13 +8,15 @@ import { ChatPanel, SparkIcon, useChat } from "@/components/chat/ChatPanel";
 import { contextKey } from "@/lib/chat-context";
 
 /**
- * The open modal dialog on top, if any. A modal dialog makes the rest of the page inert and blurs it
- * behind its backdrop, so the chat bubble moves inside the dialog while one is open.
+ * The element on top of the page, if any: a fullscreen element (a map in fullscreen) or the open modal
+ * dialog. Both hide or make inert everything else, so the chat bubble moves inside while one is open and
+ * stays visible on every page and popup.
  */
-function useTopModal(): HTMLDialogElement | null {
-  const [modal, setModal] = useState<HTMLDialogElement | null>(null);
+function useTopLayer(): Element | null {
+  const [top, setTop] = useState<Element | null>(null);
   useEffect(() => {
     const check = () => {
+      if (document.fullscreenElement) return setTop(document.fullscreenElement);
       const open = [...document.querySelectorAll("dialog")].filter((d) => {
         try {
           return d.open && d.matches(":modal");
@@ -22,14 +24,18 @@ function useTopModal(): HTMLDialogElement | null {
           return d.open;
         }
       });
-      setModal(open.at(-1) ?? null);
+      setTop(open.at(-1) ?? null);
     };
     check();
     const observer = new MutationObserver(check);
     observer.observe(document.body, { subtree: true, childList: true, attributes: true, attributeFilter: ["open"] });
-    return () => observer.disconnect();
+    document.addEventListener("fullscreenchange", check);
+    return () => {
+      observer.disconnect();
+      document.removeEventListener("fullscreenchange", check);
+    };
   }, []);
-  return modal;
+  return top;
 }
 
 /** Floating chat bubble, bottom right, on every page except /chat. It knows what you're looking at. */
@@ -40,7 +46,7 @@ export function ChatWidget() {
   const [dismissed, setDismissed] = useState("");
   const buttonRef = useRef<HTMLButtonElement>(null);
   const chat = useChat();
-  const modal = useTopModal();
+  const modal = useTopLayer();
   const current = useCurrentChatContext();
   const context = current && contextKey(current) !== dismissed ? current : null;
   const { warm } = chat;

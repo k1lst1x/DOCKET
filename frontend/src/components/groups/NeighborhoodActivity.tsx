@@ -1,10 +1,17 @@
+"use client";
+
+import { useCallback, useEffect, useRef, useState } from "react";
+import { RecordDialog } from "@/components/records/RecordDialog";
 import { formatDate, formatNumber, plural } from "@/lib/format";
 import type { CityProject, NeighborhoodActivity, ProjectKind, ResidentReport, SafetyAlert } from "@/lib/neighborhood-activity";
 
 // Group-page sections built from the reading agent's records for one neighborhood: what residents filed on
 // the Fremont App, the city's projects and development sites there, and the latest police and city alerts.
+// Every card opens the record in its own popup (charts, map, related records, neighbor reviews); the open
+// record is kept in the URL (?record=) so it can be shared and the back button closes it.
 
 const REPORT_A_PROBLEM = "https://fremontca.citysourced.com/servicerequests/create";
+const RECORD_PARAM = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 const KIND_LABEL: Record<ProjectKind, string> = {
   capital: "Capital project",
@@ -31,17 +38,61 @@ function filedLabel(iso: string, now: number): string {
   return label.endsWith("ago") ? label : `on ${label}`;
 }
 
-const external = { target: "_blank", rel: "noopener noreferrer" } as const;
+const readRecordParam = () => {
+  const id = new URLSearchParams(window.location.search).get("record");
+  return id && RECORD_PARAM.test(id) ? id : null;
+};
 
 export function NeighborhoodActivitySections({ name, activity, now }: { name: string; activity: NeighborhoodActivity; now: number }) {
+  const [openId, setOpenId] = useState<string | null>(null);
+  const [fallbackTitle, setFallbackTitle] = useState<string | undefined>();
+  // True when opening pushed a history entry, so closing can step back instead of leaving the page.
+  const pushed = useRef(false);
+
+  useEffect(() => {
+    const sync = () => setOpenId(readRecordParam());
+    sync();
+    window.addEventListener("popstate", sync);
+    return () => window.removeEventListener("popstate", sync);
+  }, []);
+
+  const open = useCallback((id: string, title?: string) => {
+    const url = new URL(window.location.href);
+    url.searchParams.set("record", id);
+    if (readRecordParam()) {
+      window.history.replaceState({ ...window.history.state, docketRecord: id }, "", url);
+    } else {
+      window.history.pushState({ ...window.history.state, docketRecord: id }, "", url);
+      pushed.current = true;
+    }
+    setFallbackTitle(title);
+    setOpenId(id);
+  }, []);
+
+  const close = useCallback(() => {
+    if (!readRecordParam()) return setOpenId(null);
+    if (pushed.current) {
+      pushed.current = false;
+      window.history.back();
+    } else {
+      const url = new URL(window.location.href);
+      url.searchParams.delete("record");
+      window.history.replaceState(window.history.state, "", url);
+      setOpenId(null);
+    }
+  }, []);
+
   return (
     <>
-      <ReportsSection name={name} activity={activity} now={now} />
-      <ProjectsSection name={name} activity={activity} />
-      {activity.alerts.length ? <AlertsSection alerts={activity.alerts} now={now} /> : null}
+      <ReportsSection name={name} activity={activity} now={now} onOpen={open} />
+      <ProjectsSection name={name} activity={activity} onOpen={open} />
+      {activity.alerts.length ? <AlertsSection alerts={activity.alerts} now={now} onOpen={open} /> : null}
+      <RecordDialog recordId={openId} onClose={close} onOpen={(id) => open(id)} fallbackTitle={fallbackTitle} />
     </>
   );
 }
+
+type OpenRecord = (id: string, title?: string) => void;
 
 function SectionHeading({ id, eyebrow, title, children }: { id: string; eyebrow: string; title: string; children?: React.ReactNode }) {
   return (
@@ -57,13 +108,27 @@ function SectionHeading({ id, eyebrow, title, children }: { id: string; eyebrow:
   );
 }
 
-function ReportsSection({ name, activity, now }: { name: string; activity: NeighborhoodActivity; now: number }) {
+const cardButton =
+  "group flex h-full w-full flex-col rounded-2xl border border-rule p-5 text-left transition-[border-color,box-shadow,transform] hover:-translate-y-0.5 hover:border-ink/40 hover:shadow-[0_8px_24px_rgba(38,38,38,0.08)]";
+
+function ExploreHint() {
+  return (
+    <span aria-hidden="true" className="mt-2 inline-flex items-center gap-1 text-sm font-semibold text-ink group-hover:underline group-hover:underline-offset-4">
+      Explore
+      <svg viewBox="0 0 16 16" className="h-3.5 w-3.5">
+        <path d="M6 3l5 5-5 5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    </span>
+  );
+}
+
+function ReportsSection({ name, activity, now, onOpen }: { name: string; activity: NeighborhoodActivity; now: number; onOpen: OpenRecord }) {
   const { reports, reportsLast30Days, reportsTotal, openReports } = activity;
   return (
     <section aria-labelledby="neighborhood-reports" className="border-t border-rule bg-sky-mist">
       <div className="page py-14 sm:py-20">
         <SectionHeading id="neighborhood-reports" eyebrow="Reported to the city" title="What neighbors are reporting">
-          <a href={REPORT_A_PROBLEM} {...external} className="btn btn-secondary h-11 rounded-full px-5">
+          <a href={REPORT_A_PROBLEM} target="_blank" rel="noopener noreferrer" className="btn btn-secondary h-11 rounded-full px-5">
             Report a problem
             <span className="sr-only"> on the Fremont App (opens in a new tab)</span>
           </a>
@@ -72,7 +137,7 @@ function ReportsSection({ name, activity, now }: { name: string; activity: Neigh
           {reportsTotal ? (
             <>
               {plural(reportsLast30Days, "request")} filed from {name} on the Fremont App in the last 30 days. {formatNumber(reportsTotal)} on file in all
-              {openReports ? `, ${formatNumber(openReports)} still open` : ""}.
+              {openReports ? `, ${formatNumber(openReports)} still open` : ""}. Open one to see the map, how often it comes up here and what neighbors say.
             </>
           ) : (
             <>No Fremont App requests from {name} on file yet. Potholes, graffiti, broken streetlights and dumping reported here show up the next morning.</>
@@ -81,7 +146,9 @@ function ReportsSection({ name, activity, now }: { name: string; activity: Neigh
         {reports.length ? (
           <ul className="mt-8 grid gap-4 md:grid-cols-2">
             {reports.map((report) => (
-              <ReportCard key={report.id} report={report} now={now} />
+              <li key={report.id}>
+                <ReportCard report={report} now={now} onOpen={onOpen} />
+              </li>
             ))}
           </ul>
         ) : null}
@@ -90,10 +157,10 @@ function ReportsSection({ name, activity, now }: { name: string; activity: Neigh
   );
 }
 
-function ReportCard({ report, now }: { report: ResidentReport; now: number }) {
+function ReportCard({ report, now, onOpen }: { report: ResidentReport; now: number; onOpen: OpenRecord }) {
   return (
-    <li className="flex flex-col rounded-2xl border border-rule bg-white p-5">
-      <div className="flex flex-wrap items-center gap-2">
+    <button type="button" onClick={() => onOpen(report.id, report.category)} className={`${cardButton} bg-white`}>
+      <span className="flex flex-wrap items-center gap-2">
         <span className={`rounded-full px-2.5 py-0.5 text-sm font-semibold ${report.open ? "bg-ochre-wash text-ochre" : "bg-park-wash text-park"}`}>
           {report.open ? "Open" : "Closed"}
         </span>
@@ -102,22 +169,22 @@ function ReportCard({ report, now }: { report: ResidentReport; now: number }) {
             Filed {filedLabel(report.reportedAt, now)}
           </time>
         ) : null}
-      </div>
-      <h3 className="mt-2 text-lg font-semibold leading-snug text-ink">{report.category}</h3>
-      {report.address ? <p className="mt-1 text-base text-ink-soft">{report.address.replace(/,\s*Fremont,?\s*CA\b\s*/i, ", ").replace(/,\s*$/, "")}</p> : null}
-      {report.description ? <p className="mt-2 text-base leading-relaxed text-ink">“{report.description}”</p> : null}
-      <div className="mt-auto pt-3">
-        {report.status ? <p className="text-sm text-ink-muted">Status: {report.status}</p> : null}
-        <a href={report.url} {...external} className="link mt-1 inline-block text-sm">
-          {report.caseNumber ?? "Request"} on the Fremont App
-          <span className="sr-only"> (opens in a new tab)</span>
-        </a>
-      </div>
-    </li>
+      </span>
+      <span className="mt-2 block text-lg font-semibold leading-snug text-ink">{report.category}</span>
+      {report.address ? (
+        <span className="mt-1 block text-base text-ink-soft">{report.address.replace(/,\s*Fremont,?\s*CA\b\s*/i, ", ").replace(/,\s*$/, "")}</span>
+      ) : null}
+      {report.description ? <span className="mt-2 block text-base leading-relaxed text-ink">“{report.description}”</span> : null}
+      <span className="mt-auto block pt-3">
+        {report.status ? <span className="block text-sm text-ink-muted">Status: {report.status}</span> : null}
+        {report.caseNumber ? <span className="block text-sm text-ink-muted">{report.caseNumber}</span> : null}
+        <ExploreHint />
+      </span>
+    </button>
   );
 }
 
-function ProjectsSection({ name, activity }: { name: string; activity: NeighborhoodActivity }) {
+function ProjectsSection({ name, activity, onOpen }: { name: string; activity: NeighborhoodActivity; onOpen: OpenRecord }) {
   const { projects, projectsTotal, development, developmentTotal } = activity;
   return (
     <section aria-labelledby="neighborhood-projects" className="border-t border-rule bg-white">
@@ -136,7 +203,9 @@ function ProjectsSection({ name, activity }: { name: string; activity: Neighborh
         {projects.length ? (
           <ul className="mt-8 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
             {projects.map((project) => (
-              <ProjectCard key={project.id} project={project} />
+              <li key={project.id}>
+                <ProjectCard project={project} onOpen={onOpen} />
+              </li>
             ))}
           </ul>
         ) : null}
@@ -148,7 +217,9 @@ function ProjectsSection({ name, activity }: { name: string; activity: Neighborh
             <h3 className="text-xl font-semibold text-ink">Development sites</h3>
             <ul className="mt-4 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
               {development.map((project) => (
-                <ProjectCard key={project.id} project={project} />
+                <li key={project.id}>
+                  <ProjectCard project={project} onOpen={onOpen} />
+                </li>
               ))}
             </ul>
             {developmentTotal > development.length ? (
@@ -161,51 +232,41 @@ function ProjectsSection({ name, activity }: { name: string; activity: Neighborh
   );
 }
 
-function ProjectCard({ project }: { project: CityProject }) {
+function ProjectCard({ project, onOpen }: { project: CityProject; onOpen: OpenRecord }) {
   return (
-    <li className="flex flex-col rounded-2xl border border-rule bg-sky-mist/40 p-5">
-      <p className="eyebrow">{KIND_LABEL[project.kind]}</p>
-      <h4 className="mt-1 text-lg font-semibold leading-snug text-ink">{project.title}</h4>
-      {project.location ? <p className="mt-1 text-base text-ink-soft">{project.location}</p> : null}
-      {project.description ? <p className="mt-2 text-base leading-relaxed text-ink">{project.description}</p> : null}
-      <div className="mt-auto pt-3">
+    <button type="button" onClick={() => onOpen(project.id, project.title)} className={`${cardButton} bg-sky-mist/40`}>
+      <span className="eyebrow block">{KIND_LABEL[project.kind]}</span>
+      <span className="mt-1 block text-lg font-semibold leading-snug text-ink">{project.title}</span>
+      {project.location ? <span className="mt-1 block text-base text-ink-soft">{project.location}</span> : null}
+      {project.description ? <span className="mt-2 block text-base leading-relaxed text-ink">{project.description}</span> : null}
+      <span className="mt-auto block pt-3">
         {/* Development sites carry the city's short status code (APV, BPR, OPC, PRP, UC); the layer doesn't define
             them, so they're shown as recorded rather than guessed. The project layers only have free-text notes. */}
         {project.status ? (
-          <p className="text-sm text-ink-muted">
+          <span className="block text-sm text-ink-muted">
             {project.kind === "development" ? "City status code" : "Notes"}: {project.status}
-          </p>
+          </span>
         ) : null}
-        {project.facts.length ? <p className="text-sm text-ink-muted">{project.facts.join(" · ")}</p> : null}
-        {project.url ? (
-          <a href={project.url} {...external} className="link mt-1 inline-block text-sm">
-            Project page
-            <span className="sr-only"> for {project.title} (opens in a new tab)</span>
-          </a>
-        ) : null}
-      </div>
-    </li>
+        {project.facts.length ? <span className="block text-sm text-ink-muted">{project.facts.join(" · ")}</span> : null}
+        <ExploreHint />
+      </span>
+    </button>
   );
 }
 
-function AlertsSection({ alerts, now }: { alerts: SafetyAlert[]; now: number }) {
+function AlertsSection({ alerts, now, onOpen }: { alerts: SafetyAlert[]; now: number; onOpen: OpenRecord }) {
   return (
     <section aria-labelledby="neighborhood-alerts" className="border-t border-rule bg-sky-mist">
       <div className="page py-14 sm:py-20">
         <SectionHeading id="neighborhood-alerts" eyebrow="For all of Fremont" title="Police and city alerts" />
-        <ul className="mt-8 divide-y divide-rule rounded-2xl border border-rule bg-white">
+        <ul className="mt-8 divide-y divide-rule overflow-hidden rounded-2xl border border-rule bg-white">
           {alerts.map((alert) => (
-            <li key={alert.id} className="p-5 sm:p-6">
-              <p className="text-sm text-ink-muted">
-                {[alert.agency, alert.postedAt ? whenLabel(alert.postedAt, now) : null].filter(Boolean).join(" · ")}
-              </p>
-              <h3 className="mt-1 text-lg font-semibold leading-snug">
-                <a href={alert.url} {...external} className="text-ink hover:underline hover:underline-offset-4">
-                  {alert.title}
-                  <span className="sr-only"> (opens in a new tab)</span>
-                </a>
-              </h3>
-              {alert.excerpt ? <p className="mt-1 text-base text-ink-soft">{alert.excerpt}</p> : null}
+            <li key={alert.id}>
+              <button type="button" onClick={() => onOpen(alert.id, alert.title)} className="group block w-full p-5 text-left hover:bg-sky-mist/60 sm:p-6">
+                <span className="block text-sm text-ink-muted">{[alert.agency, alert.postedAt ? whenLabel(alert.postedAt, now) : null].filter(Boolean).join(" · ")}</span>
+                <span className="mt-1 block text-lg font-semibold leading-snug text-ink group-hover:underline group-hover:underline-offset-4">{alert.title}</span>
+                {alert.excerpt ? <span className="mt-1 block text-base text-ink-soft">{alert.excerpt}</span> : null}
+              </button>
             </li>
           ))}
         </ul>
