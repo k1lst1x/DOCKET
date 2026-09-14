@@ -25,6 +25,8 @@ DATE_PATTERN = re.compile(
     rf"\b{MONTH}\s+\d{{1,2}}(?:st|nd|rd|th)?,?\s+\d{{4}}\b|\b\d{{1,2}}/\d{{1,2}}/\d{{2,4}}\b"
     rf"|\b\d{{4}}-\d{{2}}-\d{{2}}\b|\b{MONTH}\s+\d{{4}}\b"
 )
+# "Monday, September 7" in a notice posted 09/04/2026: a month and day with no year of their own.
+MONTH_DAY = re.compile(rf"\b({MONTH})\s+(\d{{1,2}})(?:st|nd|rd|th)?\b(?!,?\s*\d{{4}}\b)(?![/:\d])")
 
 # Order matters: specific kinds are matched and masked before bare numbers.
 FACT_PATTERNS: list[tuple[str, re.Pattern]] = [
@@ -77,6 +79,7 @@ def normalize(text: str) -> str:
     text = re.sub(r"(?<=\d),(?=\d{3}\b)", "", text)  # 396,000 == 396000
     text = re.sub(r"\$\s+", "$", text)
     text = re.sub(r"[‐-―]", "-", text)
+    text = re.sub(r"§§?\s*|\bsec\.\s*", "section ", text)  # "§ 2.05.060" == "Section 2.05.060"
     return re.sub(r"\s+", " ", text).strip()
 
 
@@ -100,6 +103,15 @@ def dates_in(text: str) -> set[str]:
         if canonical:
             found.add(canonical)
             found.add(canonical[:7])  # a day also supports its month ("September 2026")
+    # A month and day without a year ("closed Monday, September 7") takes the year of the full dates in
+    # the same evidence, such as the document's own date, so "September 7, 2026" is supported by a notice
+    # dated 2026 that says "September 7". Another day or another year still is not.
+    years = {value[:4] for value in found}
+    for match in MONTH_DAY.finditer(text):
+        for year in years:
+            canonical = canonical_date(f"{match.group(1)} {match.group(2)} {year}")
+            if canonical:
+                found.add(canonical)
     return found
 
 

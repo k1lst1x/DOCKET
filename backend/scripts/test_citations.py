@@ -77,6 +77,34 @@ def main() -> int:
         kept = bool(enforce(sentence, [row.cited_text()]).text)
         failures += kept != should_keep
         print(f"{'PASS' if kept == should_keep else 'FAIL'}  {name}: kept={kept}")
+    # A news post gives the day without a year; its post date supplies the year. The model writes "§" and
+    # narrow no-break spaces where the agenda says "Section".
+    notice = Evidence(
+        chunk_id="c2",
+        document_id="d2",
+        source_id="fremont-news",
+        source_name="City of Fremont news",
+        title="City Offices Closed in Observance of Labor Day",
+        url="https://example.invalid/news",
+        locator="document start",
+        doc_type="news",
+        published_at="2026-09-04T21:31:00+00:00",
+        text="Post Date:09/04/2026 2:31 PMCity of Fremont offices will be closed Monday, September 7 in "
+        "observance of Labor Day.",
+    )
+    agenda = "Second Reading and Adoption of an Ordinance Amending Fremont Municipal Code Section 2.05.060"
+    for name, sentence, evidence, should_keep in (
+        ("day without year, year from post date", "Offices closed Monday, September 7, 2026 [1].", notice, True),
+        ("narrow no-break spaces in the date", "Offices closed Monday, September 7, 2026 [1].", notice, True),
+        ("day without year, wrong day", "Offices closed Tuesday, September 8, 2026 [1].", notice, False),
+        ("day without year, wrong year", "Offices closed Monday, September 7, 2025 [1].", notice, False),
+        ("section sign for Section", "It amends Fremont Municipal Code § 2.05.060 [1].", None, True),
+        ("section sign, wrong section", "It amends Fremont Municipal Code § 2.05.070 [1].", None, False),
+    ):
+        texts = [evidence.cited_text()] if evidence else [agenda]
+        kept = bool(enforce(sentence, texts).text)
+        failures += kept != should_keep
+        print(f"{'PASS' if kept == should_keep else 'FAIL'}  {name}: kept={kept}")
     date_cases = (("Sep. 8th 2026", "2026-09-08"), ("2026-09-08", "2026-09-08"), ("Sept 2026", "2026-09"))
     for value, expected in date_cases:
         ok = canonical_date(value) == expected

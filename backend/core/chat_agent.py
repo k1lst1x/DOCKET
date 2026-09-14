@@ -101,10 +101,17 @@ Rules for Fremont and government questions:
 - Each sentence cites the evidence number whose own text contains that sentence's facts. Do not combine
   facts from different documents or meetings in one sentence; write a separate cited sentence for each.
 - If the evidence does not answer the question, reply exactly: I don't have anything in my sources about that.
+- If the evidence answers only part of a question, answer that part with citations, then say in one short
+  sentence which part your sources don't cover. Never fill in the missing part yourself.
+- When asked what is on an agenda, name the substantive business items (consent calendar items, public
+  hearings, scheduled and other business), each cited, not procedural items such as the call to order, flag
+  salute or roll call. Search more than once if the first results only show the start of the agenda.
+- Never describe a neighborhood, place or group of people as good, bad, safe, unsafe, dangerous or
+  high-crime. If asked, say Docket doesn't rate neighborhoods and give only cited facts from the evidence.
 - When asked what someone is legally allowed or required to do, quote the relevant text, cite it, and say
   that this is the text of the source documents, not legal advice.
-- Keep answers to two or three sentences unless the user asks for detail. No greeting. Do not restate the
-  question.
+- Keep answers to two or three sentences unless the user asks for detail or a list. No greeting. Do not
+  restate the question.
 """
 
 
@@ -181,6 +188,39 @@ class RetrievalRecorder(HookProvider):
             self.turn.retrieval_calls += 1
 
 
+NEIGHBORHOODS_SOURCE_ID = "fremont-neighborhoods-gis"
+# Chunk ids of stored documents; live lookups use "lookup:" ids and are never saved as message citations.
+STORED_CHUNK_ID = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", re.IGNORECASE)
+
+
+def address_lookup_evidence(address: str, located: dict, neighborhood: str | None) -> retrieval.Evidence:
+    """A live address lookup as evidence: the US Census geocoder's match and the City of Fremont
+    Neighborhoods GIS layer's answer for that point, linked to the GIS layer."""
+    from core.registry import get_source
+
+    layer = get_source(NEIGHBORHOODS_SOURCE_ID)
+    where = (
+        f"is inside the {neighborhood} neighborhood of Fremont"
+        if neighborhood
+        else "is not inside any official City of Fremont neighborhood"
+    )
+    return retrieval.Evidence(
+        chunk_id=f"lookup:{uuid.uuid4()}",
+        document_id=f"lookup:{NEIGHBORHOODS_SOURCE_ID}:{located['matched_address']}",
+        source_id=NEIGHBORHOODS_SOURCE_ID,
+        source_name=layer.name,
+        title=f"Neighborhood lookup for {located['matched_address']}",
+        url=re.sub(r"/query$", "", layer.url.split("?")[0]),  # the layer's page, not its query endpoint
+        locator="US Census geocoder and City of Fremont Neighborhoods GIS layer",
+        doc_type="lookup",
+        published_at=None,
+        text=(
+            f"{address} (US Census geocoder match: {located['matched_address']}) {where}, according to the "
+            "City of Fremont Neighborhoods GIS layer."
+        ),
+    )
+
+
 def build_tools(turn: TurnEvidence) -> list:
     @tool
     def vector_search(query: str) -> str:
@@ -223,14 +263,10 @@ def build_tools(turn: TurnEvidence) -> list:
         items = retrieval.keyword_search(address)
         if neighborhood:
             items += retrieval.keyword_search(neighborhood)
-        if located:
-            header = (
-                f"US Census geocoder match: {located['matched_address']}. City of Fremont Neighborhoods "
-                f"GIS layer: {neighborhood or 'no neighborhood contains this point'}."
-            )
-        else:
-            header = "The US Census geocoder found no match for that address."
-        return f"{header}\n\n{turn.add(items)}"
+        if not located:
+            return f"The US Census geocoder found no match for that address.\n\n{turn.add(items)}"
+        # The lookup itself is citable evidence, so "which neighborhood is this address in" can be answered.
+        return turn.add([address_lookup_evidence(address, located, neighborhood), *items])
 
     return [
         vector_search,
@@ -297,8 +333,35 @@ def final_text(result) -> str:
     return REASONING_SPAN.sub("", text).strip()
 
 
-def _searched_source_names() -> list[str]:
-    return [source["name"] for source in retrieval.list_sources() if source["document_count"]]
+def _searched_sources() -> list[dict]:
+    return [source for source in retrieval.list_sources() if source["document_count"]]
+
+
+# How a refusal names the sources searched: one short phrase per kind of source, in this order.
+SOURCE_KIND_PHRASES = {
+    "meetings": "City Council agendas and minutes",
+    "zoning": "Planning Commission agendas",
+    "schools": "school board agendas",
+    "news": "city news",
+    "transportation": "transportation plans",
+    "resident_issues": "resident service requests",
+    "state_legislation": "state bills",
+    "reference": "state legislator listings",
+}
+
+
+def searched_summary(sources: list[dict]) -> str:
+    """ "City Council agendas and minutes, city news and state legislator listings" for a refusal."""
+    kinds = {source["kind"] for source in sources}
+    phrases = [phrase for kind, phrase in SOURCE_KIND_PHRASES.items() if kind in kinds]
+    phrases += sorted(source["name"] for source in sources if source["kind"] not in SOURCE_KIND_PHRASES)
+    if len(phrases) < 2:
+        return "".join(phrases)
+    return f"{', '.join(phrases[:-1])} and {phrases[-1]}"
+
+
+# Model output often carries narrow no-break and thin spaces ("September 7, 2026") and non-breaking hyphens.
+UNICODE_SPACES = re.compile(r"[     ]")
 
 
 def _refs_in(text: str) -> list[int]:
@@ -311,11 +374,13 @@ def _refs_in(text: str) -> list[int]:
 
 
 def finalize(question: str, raw_answer: str, turn: TurnEvidence) -> ChatResponse:
-    searched = _searched_source_names()
+    sources = _searched_sources()
+    searched = [source["name"] for source in sources]
 
     def refusal(removed: list | None = None) -> ChatResponse:
+        summary = searched_summary(sources)
         return ChatResponse(
-            answer=f"{REFUSAL} I searched: {'; '.join(searched)}.",
+            answer=f"{REFUSAL} I searched {summary}." if summary else REFUSAL,
             cited_chunk_ids=[],
             citations=[],
             refused=True,
@@ -324,7 +389,8 @@ def finalize(question: str, raw_answer: str, turn: TurnEvidence) -> ChatResponse
         )
 
     # gpt-oss cites as 【1†L31-L38】; normalize to [1]. Markdown emphasis would show as raw asterisks.
-    text = re.sub(r"【(\d+)(?:†[^】]*)?】", r"[\1]", raw_answer).replace("**", "").replace("__", "")
+    text = UNICODE_SPACES.sub(" ", raw_answer).replace("‑", "-")
+    text = re.sub(r"【(\d+)(?:†[^】]*)?】", r"[\1]", text).replace("**", "").replace("__", "")
     # Single-character emphasis (*Purchase of ...*, _term_) too; bullets and snake_case ids stay.
     text = EMPHASIS.sub(r"\2", text)
     # A refusal sentence is not an answer: drop it wherever it appears and judge what remains.
@@ -460,6 +526,8 @@ def persist_turn(
             (session_id, response.answer),
         ).fetchone()[0]
         for chunk_id in response.cited_chunk_ids:
+            if not STORED_CHUNK_ID.match(chunk_id):
+                continue  # a live lookup, not a stored chunk
             c.execute(
                 "INSERT INTO agent_message_chunks (message_id, chunk_id) VALUES (%s, %s::uuid) "
                 "ON CONFLICT DO NOTHING",

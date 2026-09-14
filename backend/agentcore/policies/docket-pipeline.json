@@ -59,13 +59,13 @@
       ]
     },
     {
-      "Sid": "AssumeBedrockRoleInDeploymentAccount",
+      "Sid": "AssumeConfiguredBedrockRole",
       "Effect": "Allow",
       "Action": [
         "sts:AssumeRole"
       ],
       "Resource": [
-        "arn:aws:iam::465083445156:role/DocketBedrockAccess"
+        "arn:aws:iam::576884310211:role/DocketBedrockAccess"
       ]
     }
   ]

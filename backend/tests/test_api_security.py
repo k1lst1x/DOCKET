@@ -56,17 +56,24 @@ class PipelineAuthorizationTests(unittest.TestCase):
 
 
 class AgentCorePolicyTests(unittest.TestCase):
-    def test_optional_bedrock_role_is_limited_to_the_deployment_account(self):
-        root = Path(__file__).resolve().parents[1]
-        target = json.loads((root / "agentcore" / "aws-targets.json").read_text(encoding="utf-8"))[0]
-        account = target["account"]
-        expected_role = f"arn:aws:iam::{account}:role/DocketBedrockAccess"
+    def test_bedrock_role_assumption_is_limited_to_the_configured_role(self):
+        # Each runtime may assume exactly one role: its BEDROCK_ROLE_ARN (the Bedrock account's
+        # DocketBedrockAccess role), or DocketBedrockAccess in the deployment account when none is set.
+        root = Path(__file__).resolve().parents[1] / "agentcore"
+        account = json.loads((root / "aws-targets.json").read_text(encoding="utf-8"))[0]["account"]
+        project = json.loads((root / "agentcore.json").read_text(encoding="utf-8"))
 
-        for name in ("docket-chat.json", "docket-pipeline.json"):
-            policy = json.loads((root / "agentcore" / "policies" / name).read_text(encoding="utf-8"))
+        for runtime in project["runtimes"]:
+            env = {item["name"]: item["value"] for item in runtime["envVars"]}
+            expected_role = env.get("BEDROCK_ROLE_ARN") or f"arn:aws:iam::{account}:role/DocketBedrockAccess"
+            self.assertRegex(expected_role, r"^arn:aws:iam::\d{12}:role/DocketBedrockAccess$")
+            if env.get("BEDROCK_ROLE_ARN"):
+                self.assertTrue(env.get("BEDROCK_EXTERNAL_ID"), runtime["name"])
+
+            (policy_path,) = runtime["additionalPolicies"]
+            policy = json.loads((root.parent / policy_path).read_text(encoding="utf-8"))
             statement = next(item for item in policy["Statement"] if item["Action"] == ["sts:AssumeRole"])
-            self.assertEqual(statement["Resource"], [expected_role])
-            self.assertNotIn("*", statement["Resource"][0])
+            self.assertEqual(statement["Resource"], [expected_role], runtime["name"])
 
 
 if __name__ == "__main__":
