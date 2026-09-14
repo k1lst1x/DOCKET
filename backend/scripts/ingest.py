@@ -3,7 +3,9 @@
 Idempotent: a document whose normalized content hash is already stored adds no rows. Minutes,
 agendas and news already stored under the same URL are skipped before fetching.
 
-Usage: python scripts/ingest.py [source_id ...] [--max-docs N] [--lookback-days N]
+Usage: python scripts/ingest.py [source_id ...] [--schedule daily|weekly|monthly] [--max-docs N] [--lookback-days N]
+
+--schedule keeps only sources whose registry schedule matches, so each scheduled run crawls its own cadence.
 """
 
 import argparse
@@ -43,6 +45,15 @@ IMMUTABLE_TYPES = {"minutes", "agenda", "meeting_document", "news"}
 
 
 LOOKAHEAD_DAYS = 14  # meetings further out rarely have an agenda posted yet
+SCHEDULES = ("daily", "weekly", "monthly")
+
+
+def select_sources(sources: list[Source], ids: list[str], schedule: str | None) -> list[Source]:
+    return [
+        source
+        for source in sources
+        if (not ids or source.id in ids) and (schedule is None or source.schedule == schedule)
+    ]
 
 
 def select_refs(refs: list[DocumentRef], lookback_days: int, max_docs: int) -> list[DocumentRef]:
@@ -143,6 +154,7 @@ def expand_bulk(fetcher: Fetcher, source: Source, refs: list[DocumentRef]) -> li
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("sources", nargs="*", help="source ids (default: all enabled)")
+    parser.add_argument("--schedule", choices=SCHEDULES, help="only sources on this registry schedule")
     parser.add_argument("--max-docs", type=int, default=10, help="documents per source")
     parser.add_argument("--lookback-days", type=int, default=120)
     args = parser.parse_args()
@@ -157,9 +169,7 @@ def main() -> int:
         run_id = start_run(conn, "ingest")
     status = "succeeded"
     try:
-        for source in load_sources():
-            if args.sources and source.id not in args.sources:
-                continue
+        for source in select_sources(load_sources(), args.sources, args.schedule):
             with connect() as conn:
                 ingest_source(conn, fetcher, vectors, s3, source, args, totals)
     except BaseException:

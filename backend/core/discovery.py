@@ -6,11 +6,16 @@ document itself). Parsers only read what the page contains; nothing is inferred.
 """
 
 import html as html_lib
+import json
 import re
+import string
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
+from email.utils import parsedate_to_datetime
 from urllib.parse import parse_qs, urlsplit
+from xml.etree import ElementTree
+from zoneinfo import ZoneInfo
 
 from core.fetcher import Artifact
 from core.registry import Source, get_source
@@ -239,11 +244,95 @@ def _simbli_meetings(source: Source, artifact: Artifact) -> list[DocumentRef]:
     return _dedupe(refs)
 
 
-def _not_built(source: Source, artifact: Artifact) -> list[DocumentRef]:
-    raise NotImplementedError(f"discovery for parser {source.parser!r} is not built yet")
+def _arcgis_value(value: object) -> str:
+    if value is None or isinstance(value, bool):
+        return ""
+    if isinstance(value, float):
+        return f"{value:,.1f}"
+    return " ".join(str(value).split())
+
+
+def _arcgis_title(params: dict, attributes: dict[str, str]) -> str:
+    template = params.get("title", "")
+    names = [name for _, name, _, _ in string.Formatter().parse(template) if name]
+    if names and all(attributes.get(name) for name in names):
+        return template.format_map(attributes)
+    return params.get("title_fallback", "").format_map(attributes) or "Untitled record"
+
+
+def _arcgis_featureserver(source: Source, artifact: Artifact) -> list[DocumentRef]:
+    """A FeatureServer layer query as one document: a heading per feature, with labeled attributes.
+
+    The source URL holds the query itself (outFields and returnGeometry=false, or
+    groupByFieldsForStatistics for layers larger than one page). params: title, a format string
+    over attributes; title_fallback, used when any field in title is blank; fields, an ordered
+    {attribute: label} map. One document per layer keeps every record inside a crawl's max_docs,
+    and each heading becomes the chunk locator.
+    """
+    data = json.loads(artifact.raw.decode("utf-8"))
+    if "error" in data:
+        raise ValueError(f"ArcGIS query for {source.id} failed: {data['error']}")
+    if data.get("exceededTransferLimit"):
+        raise ValueError(f"ArcGIS query for {source.id} returned only the first page; use statistics")
+    labels: dict[str, str] = source.params.get("fields", {})
+    sections = []
+    for feature in data.get("features", []):
+        attributes = {name: _arcgis_value(value) for name, value in (feature.get("attributes") or {}).items()}
+        lines = [f"- {label}: {attributes[name]}" for name, label in labels.items() if attributes.get(name)]
+        sections.append((_arcgis_title(source.params, attributes), lines))
+    if not sections:
+        return []
+    sections.sort(key=lambda section: (section[0].lower(), section[1]))
+    body = "\n\n".join("\n".join([f"## {title}", *lines]) for title, lines in sections)
+    # Under a heading, so the first chunk's locator names a section rather than "document start".
+    summary = f"## Layer summary\n{len(sections)} records in the City of Fremont ArcGIS layer {source.name}."
+    return [DocumentRef(source.url, source.name, "gis_layer", inline_text=f"{summary}\n\n{body}\n", locator="layer")]
+
+
+RSS_CONTENT = "{http://purl.org/rss/1.0/modules/content/}encoded"
+FREMONT_TZ = ZoneInfo("America/Los_Angeles")
+
+
+def _rss_feed(source: Source, artifact: Artifact) -> list[DocumentRef]:
+    """News items from an RSS 2.0 feed.
+
+    An item whose feed entry carries the full article (content:encoded) is stored from that text; others
+    are fetched from their link. params: mention_terms (keep only items whose title or article text names
+    one of them), exclude_category_prefixes (drop sponsored or opinion categories, case-insensitive).
+    Publication times are converted to Fremont local time like the city's own listings.
+    """
+    root = ElementTree.fromstring(artifact.raw)
+    terms = [term.lower() for term in source.params.get("mention_terms", [])]
+    excluded = tuple(prefix.lower() for prefix in source.params.get("exclude_category_prefixes", []))
+    refs = []
+    for item in root.iter("item"):
+        title = _visible_text(item.findtext("title") or "")
+        link = (item.findtext("link") or "").strip()
+        if not title or not link.startswith(("https://", "http://")):
+            continue
+        categories = [_visible_text(category.text or "").lower() for category in item.findall("category")]
+        if excluded and any(category.startswith(excluded) for category in categories):
+            continue
+        article = _visible_text(item.findtext(RSS_CONTENT) or "")
+        if terms and not any(re.search(rf"\b{re.escape(term)}\b", f"{title} {article}".lower()) for term in terms):
+            continue
+        published = None
+        if item.findtext("pubDate"):
+            try:
+                published = parsedate_to_datetime(item.findtext("pubDate")).astimezone(FREMONT_TZ)
+                published = published.replace(tzinfo=None)
+            except (TypeError, ValueError):
+                published = None
+        if article:
+            inline = f"# {title}\n\n{article}"
+            refs.append(DocumentRef(link, title, "news", published, inline_text=inline, locator="article"))
+        else:
+            refs.append(DocumentRef(link, title, "news", published))
+    return _dedupe(refs)
 
 
 PARSERS: dict[str, Callable[[Source, Artifact], list[DocumentRef]]] = {
+    "rss_feed": _rss_feed,
     "iqm2_calendar": _iqm2_calendar,
     "civicplus_agenda_center": _civicplus_agenda_center,
     "civicplus_news": _civicplus_news,
@@ -253,7 +342,7 @@ PARSERS: dict[str, Callable[[Source, Artifact], list[DocumentRef]]] = {
     "senate_members": _senate_members,
     "simbli_meetings": _simbli_meetings,
     "leginfo_pubinfo": _leginfo_pubinfo,
-    "arcgis_featureserver": _not_built,
+    "arcgis_featureserver": _arcgis_featureserver,
 }
 
 

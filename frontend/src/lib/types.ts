@@ -42,10 +42,13 @@ export interface Outcome {
   title: string;
   body: string;
   decidedOn: string;
-  result: "Approved" | "Approved with changes" | "Denied" | "Continued";
-  vote: { yes: number; no: number; abstain: number; absent: number };
+  result: "Approved" | "Approved with changes" | "Denied" | "Continued" | "Referred" | "Received and filed" | "No action";
+  /** Null when the minutes don't give vote counts. */
+  vote: { yes: number; no: number; abstain: number; absent: number } | null;
   groupPosition: "Supported" | "Opposed" | "No position";
   note: string;
+  /** The minutes or action document the decision comes from. */
+  sourceUrl?: string | null;
 }
 
 export interface Group {
@@ -92,6 +95,8 @@ export interface NearbyGroup extends GroupSummary {
 export interface WeeklyStats {
   pagesRead: number;
   documentsRead: number;
+  /** Live stats count indexed passages instead of pages. */
+  passagesRead?: number;
   itemsSurfaced: number;
   neighborhoods: number;
   windowStart: string;

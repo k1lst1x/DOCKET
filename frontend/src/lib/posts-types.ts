@@ -43,6 +43,15 @@ export interface FeedPost {
   likedByMe: boolean;
   mine: boolean;
   sample: boolean;
+  /** Written by the Docket agent rather than a neighbor. */
+  byDocket: boolean;
+  /** For Docket posts: the public documents the post came from. */
+  sources: FeedSource[];
+}
+
+export interface FeedSource {
+  title: string;
+  url: string;
 }
 
 export interface FeedPage {

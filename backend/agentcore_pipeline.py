@@ -1,8 +1,9 @@
 """Amazon Bedrock AgentCore Runtime entrypoint for docket_pipeline (ingestion and generation).
 
 Payloads:
-  {"action": "ingest", "sources": [...], "max_docs": 10, "lookback_days": 120}
+  {"action": "ingest", "sources": [...], "schedule": "daily|weekly|monthly", "max_docs": 10, "lookback_days": 120}
       Starts a crawl-and-ingest cycle in the background and returns {"job_id", "status": "running"}.
+      schedule (optional) keeps only sources on that registry schedule; EventBridge Scheduler sends one per cadence.
   {"action": "status", "job_id": "..."}
       Job state in this runtime session (reuse the same runtimeSessionId), plus the latest runs from DSQL.
   {"action": "generate", "topic": "...", "kind": "summary|announcement|proscons", "group_id": "..."}
@@ -58,10 +59,12 @@ def _latest_runs(limit: int = 5) -> list[dict]:
     ]
 
 
-def _run_ingest_job(job_id: str, task_id: int, sources: list[str], max_docs: int, lookback_days: int) -> None:
+def _run_ingest_job(
+    job_id: str, task_id: int, sources: list[str], max_docs: int, lookback_days: int, schedule: str | None
+) -> None:
     state: dict = {"status": "failed"}
     try:
-        state = {"status": "succeeded", **run_ingest(sources, max_docs, lookback_days)}
+        state = {"status": "succeeded", **run_ingest(sources, max_docs, lookback_days, schedule)}
     except IngestFailed as error:
         log.error("ingest job %s failed: %s", job_id, error)
     except Exception:
@@ -86,6 +89,37 @@ def _run_manifest_job(job_id: str, task_id: int, manifest_key: str) -> None:
         app.complete_async_task(task_id)
 
 
+def _run_sentiment_job(job_id: str, task_id: int) -> None:
+    from scripts.public_sentiment import run as run_sentiment
+
+    state: dict = {"status": "failed"}
+    try:
+        state = {"status": "succeeded", "counts": run_sentiment()}
+    except Exception:
+        log.exception("sentiment job %s crashed", job_id)
+    finally:
+        with _jobs_lock:
+            JOBS[job_id] = {**JOBS.get(job_id, {}), **state}
+        app.complete_async_task(task_id)
+
+
+def _run_script_job(job_id: str, task_id: int, name: str) -> None:
+    """publish_issues or publish_posts, in the background."""
+    state: dict = {"status": "failed"}
+    try:
+        if name == "publish_issues":
+            from scripts.publish_issues import run as run_script
+        else:
+            from scripts.publish_posts import run as run_script
+        state = {"status": "succeeded", "counts": run_script()}
+    except Exception:
+        log.exception("%s job %s crashed", name, job_id)
+    finally:
+        with _jobs_lock:
+            JOBS[job_id] = {**JOBS.get(job_id, {}), **state}
+        app.complete_async_task(task_id)
+
+
 @app.entrypoint
 def invoke(payload, context):
     if not isinstance(payload, dict):
@@ -96,15 +130,18 @@ def invoke(payload, context):
             sources = payload.get("sources", [])
             if not isinstance(sources, list) or not all(isinstance(source, str) for source in sources):
                 return {"error": "sources must be a list of source ids"}
+            schedule = payload.get("schedule")
+            if schedule is not None and schedule not in ("daily", "weekly", "monthly"):
+                return {"error": "schedule must be daily, weekly or monthly"}
             max_docs = _bounded_int(payload, "max_docs", 10, 1, 200)
             lookback_days = _bounded_int(payload, "lookback_days", 120, 1, 3650)
             job_id = str(uuid.uuid4())
             task_id = app.add_async_task("ingest", {"job_id": job_id})
             with _jobs_lock:
-                JOBS[job_id] = {"status": "running", "sources": sources, "max_docs": max_docs}
+                JOBS[job_id] = {"status": "running", "sources": sources, "schedule": schedule, "max_docs": max_docs}
             threading.Thread(
                 target=_run_ingest_job,
-                args=(job_id, task_id, sources, max_docs, lookback_days),
+                args=(job_id, task_id, sources, max_docs, lookback_days, schedule),
                 daemon=True,
             ).start()
             return {"job_id": job_id, "status": "running"}
@@ -117,6 +154,20 @@ def invoke(payload, context):
             with _jobs_lock:
                 JOBS[job_id] = {"status": "running", "manifest_key": manifest_key}
             threading.Thread(target=_run_manifest_job, args=(job_id, task_id, manifest_key), daemon=True).start()
+            return {"job_id": job_id, "status": "running"}
+        if action == "public_sentiment":
+            job_id = str(uuid.uuid4())
+            task_id = app.add_async_task("public_sentiment", {"job_id": job_id})
+            with _jobs_lock:
+                JOBS[job_id] = {"status": "running"}
+            threading.Thread(target=_run_sentiment_job, args=(job_id, task_id), daemon=True).start()
+            return {"job_id": job_id, "status": "running"}
+        if action in ("publish_issues", "publish_posts"):
+            job_id = str(uuid.uuid4())
+            task_id = app.add_async_task(action, {"job_id": job_id})
+            with _jobs_lock:
+                JOBS[job_id] = {"status": "running", "action": action}
+            threading.Thread(target=_run_script_job, args=(job_id, task_id, action), daemon=True).start()
             return {"job_id": job_id, "status": "running"}
         if action == "status":
             with _jobs_lock:

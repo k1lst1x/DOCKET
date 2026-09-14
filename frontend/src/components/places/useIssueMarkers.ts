@@ -5,7 +5,7 @@ import { fallbackIssueMarkers } from "@/lib/issue-fallback";
 import type { IssueMarker } from "@/lib/issue-types";
 
 // City issues for the Places map, refreshed every minute so vote totals stay current.
-// The static preview has no API, so it shows the saved sample issues without votes.
+// Only the static preview (no API) shows the saved sample issues; the live site never does.
 
 const POLL_MS = 60_000;
 
@@ -39,7 +39,7 @@ export function useIssueMarkers(): IssueMarkersState & { refresh: () => void } {
       const data = (await res.json()) as { live: boolean; issues: IssueMarker[] };
       setState({ issues: data.issues, live: data.live, loaded: true });
     } catch {
-      setState((s) => (s.loaded ? s : { issues: fallbackIssueMarkers(), live: false, loaded: true }));
+      setState((s) => (s.loaded ? s : { issues: [], live: false, loaded: true }));
     } finally {
       busy.current = false;
     }

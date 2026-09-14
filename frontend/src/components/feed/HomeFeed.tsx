@@ -8,6 +8,7 @@ import { areaBySlug, neighborhoodForGroups, NEIGHBORHOODS } from "@/lib/places";
 import { ACCEPT_MEDIA, hasBlockedLink } from "@/lib/post-media";
 import { POST_MAX_LENGTH, sampleFeed, sampleReplies } from "@/lib/posts-shared";
 import type { FeedPage, FeedPost, PostErrorCode } from "@/lib/posts-types";
+import { DocketMark } from "@/components/SiteHeader";
 import { AttachButton, AttachmentPreviews, EmojiButton, insertAtCursor, useAttachments } from "./ComposerMedia";
 import { LinkCard, MediaGallery, PostText } from "./PostContent";
 
@@ -604,10 +605,17 @@ function PostCard({
     <li>
       <article className="rounded-2xl border border-rule bg-white p-4 sm:p-5">
         <div className="flex gap-3">
-          <Avatar name={post.author.name} />
+          {post.byDocket ? (
+            <span aria-hidden="true" className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-sky-mist">
+              <DocketMark />
+            </span>
+          ) : (
+            <Avatar name={post.author.name} />
+          )}
           <div className="min-w-0 flex-1">
             <p className="flex flex-wrap items-baseline gap-x-1.5 text-sm">
               <span className="text-base font-semibold text-ink">{post.mine ? "You" : post.author.name}</span>
+              {post.byDocket ? <span className="rounded-full bg-park-wash px-2 text-xs font-semibold text-park">Docket summary</span> : null}
               {post.author.homeNeighborhood ? <span className="text-ink-muted">{post.author.homeNeighborhood}</span> : null}
               <span aria-hidden="true" className="text-ink-muted">
                 ·
@@ -630,7 +638,23 @@ function PostCard({
               )}
             </p>
             <PostText text={post.body} className="mt-2 whitespace-pre-wrap break-words text-base leading-relaxed text-ink" />
-            {post.media.length ? <MediaGallery media={post.media} author={post.mine ? "you" : post.author.name} /> : <LinkCard text={post.body} />}
+            {post.media.length ? <MediaGallery media={post.media} author={post.mine ? "you" : post.author.name} /> : post.sources.length ? null : <LinkCard text={post.body} />}
+            {post.sources.length ? (
+              <div className="mt-3 rounded-xl border border-rule bg-sky-mist/60 p-3">
+                <p className="text-xs font-semibold uppercase tracking-wide text-ink-muted">{post.sources.length === 1 ? "Source" : "Sources"}</p>
+                <ul className="mt-1.5 grid gap-1">
+                  {post.sources.map((source, i) => (
+                    <li key={`${source.url}-${i}`}>
+                      <a href={source.url} target="_blank" rel="noopener noreferrer" className="link break-words text-sm font-medium">
+                        {source.title}
+                        <span className="sr-only"> (opens in a new tab)</span>
+                      </a>
+                    </li>
+                  ))}
+                </ul>
+                <p className="mt-2 text-xs text-ink-muted">Written by Docket&apos;s agent from public records. Check the source before you rely on it.</p>
+              </div>
+            ) : null}
 
             <div className="-ml-2 mt-2 flex flex-wrap items-center gap-1">
               <button

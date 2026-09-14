@@ -5,7 +5,7 @@ import { confirmUploads, mediaBucket, viewUrl } from "./media-storage";
 import { moderateText } from "./moderation";
 import { areaBySlug } from "./places";
 import { validatePostMedia, type StoredMedia } from "./post-media";
-import { shortName, validatePostBody } from "./posts-shared";
+import { cleanSources, DOCKET_MEMBER_ID, shortName, validatePostBody } from "./posts-shared";
 import type { FeedMedia, FeedPage, FeedPost, PostErrorCode } from "./posts-types";
 
 // Home feed data in Aurora DSQL: posts, replies (one level) and likes.
@@ -33,10 +33,15 @@ interface PostRow {
   name: string;
   is_sample: boolean;
   neighborhood_slug: string | null;
+  kind: string | null;
+  sources: unknown;
 }
 
-const SELECT_POSTS = `SELECT p.id, p.parent_id, p.body, p.media, p.created_at, p.member_id, m.name, p.is_sample, p.neighborhood_slug
+const SELECT_POSTS = `SELECT p.id, p.parent_id, p.body, p.media, p.created_at, p.member_id, m.name, p.is_sample, p.neighborhood_slug, p.kind, p.sources
   FROM posts p JOIN members m ON m.id = p.member_id`;
+
+/** Written by the Docket agent: its system member, marked kind = 'docket'. Neither alone is enough. */
+const isDocketPost = (row: PostRow) => row.kind === "docket" && row.member_id === DOCKET_MEMBER_ID;
 
 const iso = (d: Date) => new Date(d).toISOString();
 const storedMedia = (row: PostRow): StoredMedia[] => (Array.isArray(row.media) ? row.media : []);
@@ -124,16 +129,20 @@ async function hydrate(rows: PostRow[], viewerId: string | null): Promise<FeedPo
       body: r.body,
       media: media[i],
       createdAt: iso(r.created_at),
-      author: {
-        name: moderateText(r.name).ok ? shortName(r.name) : "Neighbor",
-        homeNeighborhood: home ? (areaBySlug(home)?.name ?? null) : null,
-      },
+      author: isDocketPost(r)
+        ? { name: "Docket", homeNeighborhood: null }
+        : {
+            name: moderateText(r.name).ok ? shortName(r.name) : "Neighbor",
+            homeNeighborhood: home ? (areaBySlug(home)?.name ?? null) : null,
+          },
       neighborhood: area ? { slug: area.slug, name: area.name } : null,
       likeCount: likeCounts.get(r.id) ?? 0,
       replyCount: replyCounts.get(r.id) ?? 0,
       likedByMe: likedIds.has(r.id),
       mine: r.member_id === viewerId,
       sample: r.is_sample,
+      byDocket: isDocketPost(r),
+      sources: isDocketPost(r) ? cleanSources(r.sources) : [],
     };
   });
 }

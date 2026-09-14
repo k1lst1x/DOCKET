@@ -2,15 +2,15 @@ import Link from "next/link";
 import { AddressField } from "@/components/AddressField";
 import { HomeFeed } from "@/components/feed/HomeFeed";
 import { SiteFooter, SiteHeader } from "@/components/SiteHeader";
-import { getWeeklyStats } from "@/lib/data";
 import { formatMonthDay, plural } from "@/lib/format";
+import { getLiveWeeklyStats } from "@/lib/live-data";
 import type { WeeklyStats } from "@/lib/types";
 
 export const revalidate = 300;
 
 // Home: the neighborhood feed, with finding your group and the rest of Docket alongside.
-export default function Home() {
-  const stats = getWeeklyStats();
+export default async function Home() {
+  const stats = await getLiveWeeklyStats();
 
   return (
     <>
@@ -66,6 +66,24 @@ export default function Home() {
 
 function StatCard({ stats }: { stats: WeeklyStats }) {
   const when = stats.isCurrentWeek ? "this week" : `in the week ending ${formatMonthDay(stats.windowEnd)}`;
+  if (stats.source === "live") {
+    return (
+      <section className="rounded-2xl border border-rule bg-white p-5">
+        <p className="font-serif text-lg leading-snug text-ink">
+          Docket read <strong className="font-semibold">{plural(stats.documentsRead, "public document")}</strong> {when}
+          {stats.itemsSurfaced ? (
+            <>
+              {" "}
+              and surfaced <strong className="font-semibold">{plural(stats.itemsSurfaced, "item")}</strong> across{" "}
+              <strong className="font-semibold">{plural(stats.neighborhoods, "neighborhood")}</strong>
+            </>
+          ) : null}
+          .
+        </p>
+        <p className="mt-2 text-sm text-ink-muted">Agendas, minutes, staff reports, bills and local news. Updated every morning.</p>
+      </section>
+    );
+  }
   return (
     <section className="rounded-2xl border border-rule bg-white p-5">
       <p className="font-serif text-lg leading-snug text-ink">
