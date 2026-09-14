@@ -3,8 +3,9 @@ import Link from "next/link";
 import { Deadline } from "@/components/Deadline";
 import { EmptyState } from "@/components/EmptyState";
 import { SiteFooter, SiteHeader } from "@/components/SiteHeader";
-import { formatNumber, plural } from "@/lib/format";
+import { formatMonthDay, formatNumber, plural } from "@/lib/format";
 import { listLiveGroups } from "@/lib/live-data";
+import { getActivityCounts, type ActivityCounts } from "@/lib/neighborhood-activity";
 
 export const metadata: Metadata = {
   title: "Neighborhood groups in Fremont",
@@ -14,7 +15,17 @@ export const metadata: Metadata = {
 export const revalidate = 300;
 
 export default async function GroupsPage() {
-  const { groups, citywideCount } = await listLiveGroups();
+  const [{ groups: listed, citywideCount }, counts] = await Promise.all([listLiveGroups(), getActivityCounts()]);
+  const activityOf = (district: string) => counts?.get(district) ?? null;
+  // Members first, then open items, then the neighborhoods where residents are filing the most requests.
+  const groups = [...listed].sort(
+    (a, b) =>
+      b.memberCount - a.memberCount ||
+      Number(Boolean(b.urgentItem)) - Number(Boolean(a.urgentItem)) ||
+      (activityOf(b.district)?.reportsLast30Days ?? 0) - (activityOf(a.district)?.reportsLast30Days ?? 0) ||
+      a.name.localeCompare(b.name),
+  );
+  const totals = counts ? [...counts.values()].reduce((sum, c) => ({ reports: sum.reports + c.reportsLast30Days, projects: sum.projects + c.projects }), { reports: 0, projects: 0 }) : null;
 
   return (
     <>
@@ -27,6 +38,9 @@ export default async function GroupsPage() {
             <p className="mt-3 max-w-read text-lg text-ink-soft">
               Every one of Fremont&apos;s {groups.length} official neighborhoods has a group. Each one hears about the city-hall items
               that touch its streets{citywideCount ? `, plus ${plural(citywideCount, "citywide item")} open to everyone right now` : ""}.
+              {totals && totals.reports
+                ? ` Residents filed ${plural(totals.reports, "Fremont App request")} in the last 30 days, and the city has ${plural(totals.projects, "project")} mapped across these neighborhoods.`
+                : ""}
             </p>
           </div>
         </section>
@@ -44,9 +58,15 @@ export default async function GroupsPage() {
                     </h2>
                     <p className="mt-1 text-base text-ink-soft">{g.description}</p>
                     <p className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-sm text-ink-muted">
-                      <span>
-                        <span className="font-mono text-ink">{formatNumber(g.memberCount)}</span> members
-                      </span>
+                      {g.memberCount ? (
+                        <span>
+                          <span className="font-mono text-ink">{formatNumber(g.memberCount)}</span> {g.memberCount === 1 ? "member" : "members"}
+                        </span>
+                      ) : (
+                        <Link href={`/g/${g.slug}/join`} className="link text-sm">
+                          Be the first to join
+                        </Link>
+                      )}
                     </p>
                   </div>
                   <div className="md:border-l md:border-rule md:pl-8">
@@ -58,6 +78,8 @@ export default async function GroupsPage() {
                           <Deadline at={g.urgentItem.deadline} label={g.urgentItem.deadlineKind} />
                         </div>
                       </>
+                    ) : activityOf(g.district) ? (
+                      <GroupActivity counts={activityOf(g.district)!} />
                     ) : (
                       <p className="text-base text-ink-muted">Nothing with an open deadline right now.</p>
                     )}
@@ -86,6 +108,21 @@ export default async function GroupsPage() {
         </div>
       </main>
       <SiteFooter />
+    </>
+  );
+}
+
+function GroupActivity({ counts }: { counts: ActivityCounts }) {
+  return (
+    <>
+      <p className="eyebrow">Last 30 days</p>
+      <p className="mt-1 text-base leading-snug text-ink">
+        <span className="font-semibold">{plural(counts.reportsLast30Days, "request")}</span> to the city on the Fremont App
+      </p>
+      <p className="mt-1 text-sm text-ink-muted">
+        {[plural(counts.projects, "city project"), counts.development ? plural(counts.development, "development site") : null].filter(Boolean).join(" · ")}
+        {counts.latestReport ? ` · Latest: ${counts.latestReport.category}, ${formatMonthDay(counts.latestReport.reportedAt)}` : ""}
+      </p>
     </>
   );
 }

@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { BoundaryMap } from "@/components/BoundaryMap";
 import { ShareChatContext } from "@/components/chat/chat-context-store";
+import { NeighborhoodActivitySections } from "@/components/groups/NeighborhoodActivity";
 import { GroupNews } from "@/components/news/GroupNews";
 import { EmptyState, Hills } from "@/components/EmptyState";
 import { IssueBoard } from "@/components/issues/IssueBoard";
@@ -14,6 +15,7 @@ import { getLiveGroup } from "@/lib/live-data";
 import { formatDate, formatNumber } from "@/lib/format";
 import { currentGroupSlug } from "@/lib/data";
 import { listMemberships } from "@/lib/members";
+import { getNeighborhoodActivity } from "@/lib/neighborhood-activity";
 import { newsHrefFor } from "@/lib/news/filter";
 import type { Outcome } from "@/lib/types";
 
@@ -48,11 +50,14 @@ export default async function GroupPage({ params }: { params: Params }) {
   const { slug } = await params;
   const known = getGroup(slug);
   if (!known) notFound();
-  // Real open items, decisions and member counts from the database, read alongside your membership rather
-  // than one after the other; the static preview keeps the saved samples.
-  const [group, isMember] = await Promise.all([getLiveGroup(slug), membershipFor(known.slug)]);
+  // Real open items, decisions, member counts and the neighborhood's reports, projects and alerts from the
+  // database, read alongside your membership rather than one after the other; the static preview keeps the
+  // saved samples and has no activity.
+  const now = Date.now();
+  const [group, isMember, activity] = await Promise.all([getLiveGroup(slug), membershipFor(known.slug), getNeighborhoodActivity(known.district, now)]);
   if (!group) notFound();
   const joinHref = `/g/${group.slug}/join`;
+  const watchingCount = group.items.length + group.citywideItems.length;
 
   return (
     <>
@@ -67,6 +72,13 @@ export default async function GroupPage({ params }: { params: Params }) {
             ...group.items.slice(0, 5).map((item) => `Watching: ${item.title} (${item.deadlineKind} ${item.deadline.slice(0, 10)})`),
             ...group.citywideItems.slice(0, 5).map((item) => `Citywide item: ${item.title} (${item.deadlineKind} ${item.deadline.slice(0, 10)})`),
             ...group.outcomes.slice(0, 2).map((outcome) => `Recently decided: ${outcome.title} (${outcome.result})`),
+            ...(activity
+              ? [
+                  `Fremont App requests from this neighborhood: ${activity.reportsLast30Days} in the last 30 days, ${activity.openReports} of the latest open`,
+                  ...activity.reports.slice(0, 3).map((r) => `Recent request: ${r.category}${r.address ? ` at ${r.address}` : ""} (${r.status ?? "status unknown"})`),
+                  `City projects mapped here: ${activity.projectsTotal}; development sites: ${activity.developmentTotal}`,
+                ]
+              : []),
           ],
         }}
       />
@@ -81,9 +93,19 @@ export default async function GroupPage({ params }: { params: Params }) {
               </h1>
               <p className="mt-5 max-w-read text-lg leading-relaxed text-ink-soft sm:text-xl">{group.description}</p>
               <dl className="mt-8 grid max-w-md grid-cols-3 gap-4 border-y border-ink/20 py-5">
-                <HeroStat label="Members" value={formatNumber(group.memberCount)} />
-                <HeroStat label="Watching" value={String(group.items.length + group.citywideItems.length)} />
-                <HeroStat label="Since" value={group.foundedOn.slice(0, 4)} />
+                {activity ? (
+                  <>
+                    <HeroStat label="Reports, 30 days" value={formatNumber(activity.reportsLast30Days)} />
+                    <HeroStat label="City projects" value={formatNumber(activity.projectsTotal + activity.developmentTotal)} />
+                    {group.memberCount ? <HeroStat label="Members" value={formatNumber(group.memberCount)} /> : <HeroStat label="Watching" value={String(watchingCount)} />}
+                  </>
+                ) : (
+                  <>
+                    <HeroStat label="Members" value={formatNumber(group.memberCount)} />
+                    <HeroStat label="Watching" value={String(watchingCount)} />
+                    <HeroStat label="Since" value={group.foundedOn.slice(0, 4)} />
+                  </>
+                )}
               </dl>
               <div className="mt-8 flex flex-wrap items-center gap-x-5 gap-y-3">
                 {isMember ? (
@@ -141,6 +163,12 @@ export default async function GroupPage({ params }: { params: Params }) {
             </div>
             {group.items.length ? (
               <IssueBoard items={group.items} />
+            ) : activity ? (
+              <p className="mt-4 max-w-read text-lg leading-relaxed text-ink-soft">
+                No agenda item {group.citywideItems.length ? `just for ${group.district}` : `for ${group.district}`} has an open deadline right now.
+                Docket reads every Fremont agenda as it&apos;s posted, and anything that touches these streets shows up here before the deadline.
+                Below: what neighbors are reporting and what the city is building here.
+              </p>
             ) : (
               <EmptyState
                 className="mt-8"
@@ -165,7 +193,10 @@ export default async function GroupPage({ params }: { params: Params }) {
           </div>
         </section>
 
-        <section aria-labelledby="group-news" className="border-t border-rule bg-sky-mist">
+        {activity ? <NeighborhoodActivitySections name={group.district} activity={activity} now={now} /> : null}
+
+        {/* Alternates with the activity sections above: the alerts band is sky, so news sits on white after it. */}
+        <section aria-labelledby="group-news" className={`border-t border-rule ${activity?.alerts.length ? "bg-white" : "bg-sky-mist"}`}>
           <div className="page py-14 sm:py-20">
             <div className="flex flex-wrap items-end justify-between gap-4">
               <div>
@@ -180,23 +211,25 @@ export default async function GroupPage({ params }: { params: Params }) {
           </div>
         </section>
 
-        <section aria-labelledby="outcomes" className="border-t border-rule bg-white">
-          <div className="page py-14 sm:py-20">
-            <p className="eyebrow">Decided</p>
-            <h2 id="outcomes" className="display mt-2 text-[2.25rem] leading-tight sm:text-[2.75rem]">
-              Recent outcomes
-            </h2>
-            {group.outcomes.length ? (
-              <ul className="mt-8 divide-y divide-rule rounded-2xl border border-rule bg-sky-mist/40">
-                {group.outcomes.map((outcome) => (
-                  <OutcomeRow key={outcome.id} outcome={outcome} />
-                ))}
-              </ul>
-            ) : (
-              <p className="mt-6 text-lg text-ink-soft">No decisions on this group&apos;s items yet.</p>
-            )}
-          </div>
-        </section>
+        {group.outcomes.length || !activity ? (
+          <section aria-labelledby="outcomes" className="border-t border-rule bg-white">
+            <div className="page py-14 sm:py-20">
+              <p className="eyebrow">Decided</p>
+              <h2 id="outcomes" className="display mt-2 text-[2.25rem] leading-tight sm:text-[2.75rem]">
+                Recent outcomes
+              </h2>
+              {group.outcomes.length ? (
+                <ul className="mt-8 divide-y divide-rule rounded-2xl border border-rule bg-sky-mist/40">
+                  {group.outcomes.map((outcome) => (
+                    <OutcomeRow key={outcome.id} outcome={outcome} />
+                  ))}
+                </ul>
+              ) : (
+                <p className="mt-6 text-lg text-ink-soft">No decisions on this group&apos;s items yet.</p>
+              )}
+            </div>
+          </section>
+        ) : null}
 
         {isMember ? null : (
           <section className="border-t border-rule bg-sky-mist">
