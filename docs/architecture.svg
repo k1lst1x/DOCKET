@@ -1,43 +1,117 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="690" viewBox="0 0 1280 690" role="img" aria-labelledby="title desc">
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900" viewBox="0 0 1600 900" role="img" aria-labelledby="title desc">
   <title id="title">DOCKET architecture</title>
-  <desc id="desc">Residents use a Next.js web app. Server routes use Cognito, Aurora DSQL and an AgentCore chat runtime. An AgentCore pipeline reads public civic sources through Firecrawl or HTTP and stores evidence in DSQL, S3 and S3 Vectors.</desc>
+  <desc id="desc">Residents use a Next.js web app on AWS Amplify, which reads and writes Aurora DSQL, stores moderated media in S3 with Rekognition, pulls live incident and news feeds, and calls the docket_chat AgentCore runtime. The docket_pipeline AgentCore runtime runs on EventBridge schedules, reads public Fremont sources over HTTP and Firecrawl, and stores evidence in Aurora DSQL, Amazon S3 and S3 Vectors. Both agents use Amazon Bedrock models.</desc>
   <defs>
     <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#34536a"/></marker>
     <style>
-      text { font-family: Inter, Arial, sans-serif; fill: #112c3d; }
-      .heading { font-size: 32px; font-weight: 700; }
-      .sub { font-size: 16px; fill: #526978; }
-      .box { stroke: #34536a; stroke-width: 2; rx: 16; }
+      text { font-family: Inter, "Segoe UI", Arial, sans-serif; fill: #112c3d; }
+      .heading { font-size: 34px; font-weight: 700; }
+      .sub { font-size: 17px; fill: #526978; }
+      .box { stroke: #34536a; stroke-width: 2; }
       .label { font-size: 19px; font-weight: 700; text-anchor: middle; }
-      .detail { font-size: 14px; text-anchor: middle; fill: #526978; }
+      .detail { font-size: 14.5px; text-anchor: middle; fill: #435a69; }
       .line { stroke: #34536a; stroke-width: 2.5; fill: none; marker-end: url(#arrow); }
+      .legend { font-size: 14px; fill: #435a69; }
     </style>
   </defs>
-  <rect width="1280" height="690" fill="#f8f6ef"/>
-  <text x="70" y="66" class="heading">DOCKET · civic reading agent architecture</text>
-  <text x="70" y="96" class="sub">Evidence-first neighborhood updates for Fremont</text>
+  <rect width="1600" height="900" fill="#f8f6ef"/>
+  <text x="60" y="58" class="heading">DOCKET · architecture</text>
+  <text x="60" y="90" class="sub">Civic reading agents for Fremont's 32 neighborhoods</text>
 
-  <rect x="70" y="160" width="190" height="92" class="box" fill="#d9edf1"/>
-  <text x="165" y="198" class="label">Residents</text><text x="165" y="223" class="detail">browser</text>
-  <rect x="335" y="160" width="230" height="92" class="box" fill="#d9edf1"/>
-  <text x="450" y="198" class="label">Next.js web app</text><text x="450" y="223" class="detail">UI + server routes</text>
-  <rect x="650" y="95" width="200" height="92" class="box" fill="#f9ddbd"/>
-  <text x="750" y="133" class="label">Cognito</text><text x="750" y="158" class="detail">identity + sessions</text>
-  <rect x="650" y="250" width="200" height="92" class="box" fill="#d5e8c4"/>
-  <text x="750" y="288" class="label">AgentCore chat</text><text x="750" y="313" class="detail">Strands + citations</text>
-  <rect x="945" y="160" width="220" height="92" class="box" fill="#e2dbf3"/>
-  <text x="1055" y="198" class="label">Aurora DSQL</text><text x="1055" y="223" class="detail">community + evidence data</text>
+  <!-- Row 1: resident experience -->
+  <rect x="60" y="150" width="250" height="110" rx="16" class="box" fill="#d9edf1"/>
+  <text x="185" y="198" class="label">Residents</text>
+  <text x="185" y="224" class="detail">any browser, any device</text>
 
-  <rect x="335" y="455" width="230" height="92" class="box" fill="#d5e8c4"/>
-  <text x="450" y="493" class="label">AgentCore pipeline</text><text x="450" y="518" class="detail">Strands background work</text>
-  <rect x="70" y="455" width="190" height="92" class="box" fill="#f9ddbd"/>
-  <text x="165" y="493" class="label">Public sources</text><text x="165" y="518" class="detail">Firecrawl / HTTP</text>
-  <rect x="650" y="455" width="200" height="92" class="box" fill="#e2dbf3"/>
-  <text x="750" y="493" class="label">Amazon S3</text><text x="750" y="518" class="detail">raw documents</text>
-  <rect x="945" y="455" width="220" height="92" class="box" fill="#e2dbf3"/>
-  <text x="1055" y="493" class="label">S3 Vectors</text><text x="1055" y="518" class="detail">semantic retrieval</text>
+  <rect x="390" y="150" width="300" height="110" rx="16" class="box" fill="#d9edf1"/>
+  <text x="540" y="188" class="label">Next.js 15 web app</text>
+  <text x="540" y="214" class="detail">AWS Amplify Hosting (SSR)</text>
+  <text x="540" y="236" class="detail">accounts · groups · votes · feed · chat</text>
 
-  <path d="M260 206 H335" class="line"/><path d="M565 187 H650" class="line"/><path d="M565 230 L650 286" class="line"/><path d="M850 296 H945" class="line"/><path d="M565 220 H945" class="line"/>
-  <path d="M260 501 H335" class="line"/><path d="M565 501 H650" class="line"/><path d="M565 526 L945 526" class="line"/><path d="M450 455 L450 342" class="line"/><path d="M565 470 L945 252" class="line"/>
-  <text x="70" y="632" class="sub">The pipeline performs repetitive collection, extraction, retrieval, and verified generation; residents see the result only when they need context or want to participate.</text>
+  <rect x="770" y="150" width="330" height="110" rx="16" class="box" fill="#f9ddbd"/>
+  <text x="935" y="188" class="label">Amazon S3 + Rekognition</text>
+  <text x="935" y="214" class="detail">feed photos and video</text>
+  <text x="935" y="236" class="detail">automatic content moderation</text>
+
+  <rect x="1180" y="150" width="360" height="110" rx="16" class="box" fill="#f9ddbd"/>
+  <text x="1360" y="188" class="label">Google Maps Platform</text>
+  <text x="1360" y="214" class="detail">Maps JavaScript API</text>
+  <text x="1360" y="236" class="detail">Places API (New)</text>
+
+  <!-- Row 2 -->
+  <rect x="60" y="330" width="250" height="290" rx="16" class="box" fill="#f9ddbd"/>
+  <text x="185" y="440" class="label">Amazon Bedrock</text>
+  <text x="185" y="476" class="detail">gpt-oss-120b</text>
+  <text x="185" y="498" class="detail">generation + verification</text>
+  <text x="185" y="534" class="detail">Titan Text Embeddings V2</text>
+  <text x="185" y="556" class="detail">1024-d embeddings</text>
+
+  <rect x="390" y="330" width="300" height="110" rx="16" class="box" fill="#d5e8c4"/>
+  <text x="540" y="368" class="label">AgentCore: docket_chat</text>
+  <text x="540" y="394" class="detail">Strands agent, streaming</text>
+  <text x="540" y="416" class="detail">answers with numbered citations</text>
+
+  <rect x="770" y="330" width="330" height="110" rx="16" class="box" fill="#e2dbf3"/>
+  <text x="935" y="368" class="label">Aurora DSQL</text>
+  <text x="935" y="394" class="detail">members · groups · votes · reviews · posts</text>
+  <text x="935" y="416" class="detail">agent documents · chunks · verified outputs</text>
+
+  <rect x="1180" y="330" width="360" height="110" rx="16" class="box" fill="#f9ddbd"/>
+  <text x="1360" y="368" class="label">Live incident &amp; news feeds</text>
+  <text x="1360" y="394" class="detail">CHP · Caltrans · USGS · CAL FIRE · NWS</text>
+  <text x="1360" y="416" class="detail">power outages · BART · Fremont news</text>
+
+  <!-- Row 3 -->
+  <rect x="390" y="510" width="300" height="110" rx="16" class="box" fill="#d5e8c4"/>
+  <text x="540" y="548" class="label">AgentCore: docket_pipeline</text>
+  <text x="540" y="574" class="detail">Strands graph: fetch → extract → chunk</text>
+  <text x="540" y="596" class="detail">→ embed → verify claims → store</text>
+
+  <rect x="770" y="510" width="330" height="110" rx="16" class="box" fill="#e2dbf3"/>
+  <text x="935" y="548" class="label">Amazon S3 Vectors</text>
+  <text x="935" y="574" class="detail">1024-d chunk index</text>
+  <text x="935" y="596" class="detail">hybrid retrieval with BM25</text>
+
+  <rect x="1180" y="510" width="360" height="110" rx="16" class="box" fill="#e2dbf3"/>
+  <text x="1360" y="558" class="label">Amazon S3</text>
+  <text x="1360" y="584" class="detail">raw source originals</text>
+
+  <!-- Row 4 -->
+  <rect x="60" y="690" width="250" height="110" rx="16" class="box" fill="#f9ddbd"/>
+  <text x="185" y="728" class="label">EventBridge Scheduler</text>
+  <text x="185" y="754" class="detail">daily · weekly · monthly</text>
+  <text x="185" y="776" class="detail">ingest jobs</text>
+
+  <rect x="390" y="690" width="710" height="110" rx="16" class="box" fill="#fff4d6"/>
+  <text x="745" y="728" class="label">Public Fremont sources</text>
+  <text x="745" y="754" class="detail">fremont.gov · IQM2 agendas · Fremont App resident requests · Nixle alerts · City ArcGIS layers</text>
+  <text x="745" y="776" class="detail">HTTP and Firecrawl · robots.txt respected · contact details masked</text>
+
+  <rect x="1180" y="690" width="360" height="110" rx="16" class="box" fill="#ffffff"/>
+  <text x="1360" y="728" class="label">IAM roles + Secrets Manager</text>
+  <text x="1360" y="754" class="detail">no AWS credentials in the browser</text>
+  <text x="1360" y="776" class="detail">least-privilege runtime policies</text>
+
+  <!-- Connections -->
+  <path d="M310 205 H390" class="line"/>
+  <path d="M690 205 H770" class="line"/>
+  <path d="M540 150 V118 H1360 V150" class="line"/>
+  <path d="M660 260 V285 H1360 V330" class="line"/>
+  <path d="M480 260 V330" class="line"/>
+  <path d="M600 260 V308 H935 V330" class="line"/>
+  <path d="M690 385 H770" class="line"/>
+  <path d="M390 385 H310" class="line"/>
+  <path d="M690 420 H735 V545 H770" class="line"/>
+  <path d="M390 565 H310" class="line"/>
+  <path d="M690 575 H770" class="line"/>
+  <path d="M650 510 V478 H880 V440" class="line"/>
+  <path d="M670 620 V652 H1360 V620" class="line"/>
+  <path d="M540 620 V690" class="line"/>
+  <path d="M185 690 V665 H450 V620" class="line"/>
+
+  <rect x="60" y="836" width="22" height="16" rx="4" class="box" fill="#d9edf1"/><text x="92" y="849" class="legend">resident-facing</text>
+  <rect x="232" y="836" width="22" height="16" rx="4" class="box" fill="#d5e8c4"/><text x="264" y="849" class="legend">AI agents</text>
+  <rect x="362" y="836" width="22" height="16" rx="4" class="box" fill="#e2dbf3"/><text x="394" y="849" class="legend">data stores</text>
+  <rect x="502" y="836" width="22" height="16" rx="4" class="box" fill="#f9ddbd"/><text x="534" y="849" class="legend">managed services and APIs</text>
+  <text x="60" y="880" class="legend">The pipeline collects and verifies public evidence on a schedule; chat retrieves the same evidence and answers with citations. Accounts are email and password, hashed with scrypt in Aurora DSQL.</text>
 </svg>

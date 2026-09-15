@@ -35,7 +35,6 @@
 <img src="https://img.shields.io/badge/Bedrock-AgentCore-232F3E?style=flat-square" alt="Amazon Bedrock AgentCore">
 <img src="https://img.shields.io/badge/Aurora-DSQL-527FFF?style=flat-square" alt="Aurora DSQL">
 <img src="https://img.shields.io/badge/S3-Vectors-569A31?style=flat-square" alt="Amazon S3 Vectors">
-<img src="https://img.shields.io/badge/Amazon-Cognito-DD344C?style=flat-square" alt="Amazon Cognito">
 <img src="https://img.shields.io/badge/Amazon-Rekognition-01A88D?style=flat-square" alt="Amazon Rekognition">
 <img src="https://img.shields.io/badge/AWS-Amplify-FF9900?style=flat-square&logo=awsamplify&logoColor=white" alt="AWS Amplify">
 <img src="https://img.shields.io/badge/Google%20Maps-Places%20API-4285F4?style=flat-square&logo=googlemaps&logoColor=white" alt="Google Maps Platform">
@@ -261,8 +260,7 @@ flowchart LR
 
   UI --> API
   UI --> GM
-  API --> COG["Amazon Cognito<br/>email one-time codes"]
-  API --> DSQL[("Aurora DSQL<br/>shared source of truth")]
+  API --> DSQL[("Aurora DSQL<br/>shared source of truth<br/>email + password accounts")]
   API --> MEDIA[("Private S3 media bucket<br/>presigned uploads")]
   API --> REK["Amazon Rekognition<br/>photo and video checks"]
   API --> LIVE["Live feeds<br/>CHP · Caltrans · USGS · CAL FIRE · NWS · outages"]
@@ -285,7 +283,7 @@ flowchart LR
   class UI,GM sky
   class API,CHAT,PIPE grass
   class DSQL,MEDIA,VEC,RAW stone
-  class COG,REK,LLM,LIVE,NEWS,CIVIC wood
+  class REK,LLM,LIVE,NEWS,CIVIC wood
 ```
 
 **Boundaries that matter**
@@ -293,7 +291,7 @@ flowchart LR
 - 🔐 The browser never receives AWS credentials. The Next.js server reaches DSQL, S3, Rekognition and AgentCore with its compute role, and invokes the chat runtime server-side.
 - 🧱 Aurora DSQL is the shared source of truth. The **web app** owns neighborhoods, groups, issues, polls, members, memberships, votes, reviews, posts, likes and media reviews ([`frontend/db/migrations`](frontend/db/migrations)). The **agent** owns `agent_*` tables for sources, documents, chunks, outputs, claims, chat sessions and runs ([`backend/migrations`](backend/migrations)).
 - 🎟️ The pipeline runs in its own runtime with its own least-privilege IAM policy ([`backend/agentcore/policies`](backend/agentcore/policies)). Its Firecrawl key lives in AWS Secrets Manager.
-- 💸 Serverless all the way down (DSQL, S3 Vectors, Cognito Essentials, AgentCore), sized to run on a few dollars a month.
+- 💸 Serverless all the way down (DSQL, S3 Vectors, AgentCore, Amplify), sized to run on a few dollars a month.
 
 More detail: [architecture notes](docs/architecture.md) · [architecture diagram](docs/architecture.svg).
 
@@ -426,7 +424,7 @@ Full question-by-question results: [`backend/docs/eval-results.md`](backend/docs
 | 🗄️ | **Aurora DSQL** with IAM auth | App data, agent documents, chunks, outputs, chat history |
 | 🧲 | **Amazon S3 Vectors** + BM25 (`rank-bm25`) | Hybrid retrieval |
 | 🪣 | **Amazon S3** | Raw source originals, feed photos and videos |
-| 🔑 | **Amazon Cognito** (Essentials) + SES | Passwordless email one-time codes |
+| 🔑 | **Email + password accounts** (scrypt hashes in Aurora DSQL) | Register and log in, signed httpOnly session cookies |
 | 🛡️ | **Amazon Rekognition** | Photo and video moderation |
 | 🕸️ | **Firecrawl**, trafilatura, pypdf | Polite fetching and text extraction |
 | 🗺️ | **Google Maps JavaScript API** + **Places API (New)** | Places map, search, address autocomplete |
@@ -464,7 +462,6 @@ Open http://localhost:3000. The UI works on its own with sample data; sign-in, p
 | `SESSION_SECRET` | Signs session cookies (32+ random characters) |
 | `APP_URL` | Absolute origin of the site |
 | `DSQL_ENDPOINT`, `DSQL_USER` | Aurora DSQL cluster and role |
-| `COGNITO_USER_POOL_ID`, `COGNITO_CLIENT_ID` | Email one-time code sign-in |
 | `DOCKET_MEDIA_BUCKET` | Private S3 bucket for feed photos and videos (text-only posts without it) |
 | `DOCKET_CHAT_RUNTIME_ARN` | Deployed `docket_chat` AgentCore runtime |
 | `DOCKET_CHAT_URL` | Local fallback, e.g. `http://localhost:8000/chat` |
@@ -480,7 +477,7 @@ Open http://localhost:3000. The UI works on its own with sample data; sign-in, p
 
 ```bash
 cd frontend
-bash scripts/aws-provision.sh          # Cognito user pool and app client, IDs written to .env.local
+bash scripts/aws-provision.sh          # Aurora DSQL cluster, endpoint written to .env.local
 bash scripts/aws-media-bucket.sh       # private S3 bucket for feed media
 bash scripts/aws-media-moderation.sh   # Rekognition permissions for the local dev user
 bash scripts/aws-dev-user.sh           # least-privilege IAM user for the dev server
@@ -687,7 +684,7 @@ DOCKET/
 - [x] Automatic content checks for text, photos and videos
 - [x] Fremont news with neighborhood relevance filters
 - [x] Places map with live incidents and local issues
-- [x] Groups, passwordless sign-in, community votes and reviews
+- [x] Groups, email and password accounts, community votes and reviews
 - [x] Context-aware chat with numbered citations
 - [x] Pipeline agent with verified, cited generation
 - [x] Both AgentCore runtimes deployed, groundedness evals passing
@@ -695,7 +692,6 @@ DOCKET/
 - [x] Replace sample groups and agenda items with live agent outputs
 - [x] ArcGIS FeatureServer parser for neighborhood and zoning layers
 - [ ] Production Amplify wiring for chat, media and moderation
-- [ ] Email codes for every resident (SES production access)
 
 <img src="docs/readme/divider.svg" width="100%" alt="">
 
