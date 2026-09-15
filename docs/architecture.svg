@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1280" height="690" viewBox="0 0 1280 690" role="img" aria-labelledby="title desc">
   <title id="title">DOCKET architecture</title>
-  <desc id="desc">Residents use a Next.js web app. Server routes use Cognito, Aurora DSQL and an AgentCore chat runtime. An AgentCore pipeline reads public civic sources through Firecrawl or HTTP and stores evidence in DSQL, S3 and S3 Vectors.</desc>
+  <desc id="desc">Residents use a Next.js web app. Server routes use email-and-password accounts, Aurora DSQL and an AgentCore chat runtime. An AgentCore pipeline reads public civic sources through Firecrawl or HTTP and stores evidence in DSQL, S3 and S3 Vectors.</desc>
   <defs>
     <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#34536a"/></marker>
     <style>
@@ -22,7 +22,7 @@
   <rect x="335" y="160" width="230" height="92" class="box" fill="#d9edf1"/>
   <text x="450" y="198" class="label">Next.js web app</text><text x="450" y="223" class="detail">UI + server routes</text>
   <rect x="650" y="95" width="200" height="92" class="box" fill="#f9ddbd"/>
-  <text x="750" y="133" class="label">Cognito</text><text x="750" y="158" class="detail">identity + sessions</text>
+  <text x="750" y="133" class="label">Account auth</text><text x="750" y="158" class="detail">scrypt + sessions</text>
   <rect x="650" y="250" width="200" height="92" class="box" fill="#d5e8c4"/>
   <text x="750" y="288" class="label">AgentCore chat</text><text x="750" y="313" class="detail">Strands + citations</text>
   <rect x="945" y="160" width="220" height="92" class="box" fill="#e2dbf3"/>

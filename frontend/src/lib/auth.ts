@@ -43,7 +43,9 @@ export function signToken<T extends object>(payload: T & { typ: string }, ttlS: 
 }
 
 export function verifyToken<T>(token: string, typ: string, now = nowS()): (T & { typ: string; exp: number }) | null {
-  const [body, mac] = token.split(".");
+  const parts = token.split(".");
+  if (parts.length !== 2) return null;
+  const [body, mac] = parts;
   if (!body || !mac) return null;
   const expected = createHmac("sha256", secret()).update(body).digest();
   const given = Buffer.from(mac, "base64url");

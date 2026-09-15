@@ -494,7 +494,7 @@
   <section id="built" class="col">
     <p class="item">Item 3</p>
     <h2>A neighborhood app with a helper that reads the fine print</h2>
-    <p>Docket looks and feels like a friendly social app. You type your address, it finds which of Fremont's 32 neighborhoods you live in, and you're in. Signing in takes a 6-digit code sent to your email. No password to remember.</p>
+    <p>Docket looks and feels like a friendly social app. You type your address, it finds which of Fremont's 32 neighborhoods you live in, create an account, and you're in.</p>
 
     <dl class="features">
       <div class="feature">
@@ -569,8 +569,8 @@
         <div class="what">Keeps original PDFs and web pages, plus neighbors' photos and videos in a private bucket. Photos are shown through links that expire. <em>Why:</em> we can always go back to the original document.</div>
       </li>
       <li>
-        <div class="name">Amazon Cognito<span>sign-in</span></div>
-        <div class="what">Sends the 6-digit email code (through Amazon SES) and handles sessions. <em>Why:</em> no passwords for neighbors to forget, and no password storage for us to protect.</div>
+        <div class="name">Docket accounts<span>sign-in</span></div>
+        <div class="what">Stores scrypt password hashes and signs HTTP-only sessions. <em>Why:</em> a straightforward account flow with passwords never stored in plaintext.</div>
       </li>
       <li>
         <div class="name">Amazon Rekognition<span>photo and video checks</span></div>
@@ -619,7 +619,7 @@
         <text x="795" y="128" class="d-detail">gpt-oss-120b · Titan Embeddings</text>
 
         <rect x="140" y="176" width="120" height="34" rx="17" class="d-pill"/>
-        <text x="200" y="198" class="d-small">Cognito</text>
+        <text x="200" y="198" class="d-small">Account auth</text>
         <rect x="290" y="176" width="130" height="34" rx="17" class="d-pill"/>
         <text x="355" y="198" class="d-small">Rekognition</text>
 
@@ -681,7 +681,7 @@
         <dt class="bad">Problem</dt>
         <dd>Our first database was on a free plan, and we hit its limit partway through the hackathon.</dd>
         <dt class="fix">Fix</dt>
-        <dd>We moved everything to AWS in about a day: Aurora DSQL for data, S3 Vectors for search, Cognito for sign-in. The new database doesn't support some features we'd planned on, like built-in search add-ons and automatic rules, so we moved search to S3 Vectors plus a simple keyword search in our own code, and enforced rules like "vote before you review" in the app itself.</dd>
+        <dd>We moved everything to AWS in about a day: Aurora DSQL for data and S3 Vectors for search. The new database doesn't support some features we'd planned on, like built-in search add-ons and automatic rules, so we moved search to S3 Vectors plus a simple keyword search in our own code, and enforced rules like "vote before you review" in the app itself.</dd>
       </dl>
     </div>
 

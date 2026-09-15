@@ -8,7 +8,7 @@
 flowchart LR
   Resident --> UI[Next.js on Amplify]
   UI --> WebAPI[Next.js server routes]
-  WebAPI --> Cognito[Cognito]
+  WebAPI --> Auth[Email/password accounts and signed sessions]
   WebAPI --> DSQL[Aurora DSQL]
   WebAPI --> Chat[AgentCore chat runtime]
   Pipeline[AgentCore pipeline runtime] --> DSQL
@@ -18,7 +18,7 @@ flowchart LR
   Chat --> S3
 ```
 
-The frontend owns browser presentation. Its server routes own Cognito sessions,
+The frontend owns browser presentation. Its server routes own password authentication and signed sessions,
 membership, votes and reviews. `backend/` is the only Python backend and owns ingestion,
 retrieval, cited generation and AgentCore runtimes. Credentials stay server-side.
 

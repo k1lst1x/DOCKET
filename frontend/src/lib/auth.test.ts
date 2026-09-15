@@ -13,8 +13,20 @@ describe("signed tokens", () => {
     const mac = token.split(".")[1];
     const forged = Buffer.from(JSON.stringify({ typ: "pending", email: "b@example.com", exp: now + 60 })).toString("base64url");
     expect(verifyToken(`${forged}.${mac}`, "pending", now)).toBeNull();
+    expect(verifyToken(`${token}.extra`, "pending", now)).toBeNull();
     expect(verifyToken("not-a-token", "pending", now)).toBeNull();
   });
+});
+
+it("fails closed when the configured public origin is invalid", () => {
+  const previous = process.env.APP_URL;
+  process.env.APP_URL = "not a URL";
+  try {
+    expect(isSameOrigin(new Request("https://docket.example/api/posts", { headers: { origin: "https://docket.example" } }))).toBe(false);
+  } finally {
+    if (previous === undefined) delete process.env.APP_URL;
+    else process.env.APP_URL = previous;
+  }
 });
 
 it("only allows same-site next paths", () => {

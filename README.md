@@ -35,12 +35,12 @@
 <img src="https://img.shields.io/badge/Bedrock-AgentCore-232F3E?style=flat-square" alt="Amazon Bedrock AgentCore">
 <img src="https://img.shields.io/badge/Aurora-DSQL-527FFF?style=flat-square" alt="Aurora DSQL">
 <img src="https://img.shields.io/badge/S3-Vectors-569A31?style=flat-square" alt="Amazon S3 Vectors">
-<img src="https://img.shields.io/badge/Amazon-Cognito-DD344C?style=flat-square" alt="Amazon Cognito">
+<img src="https://img.shields.io/badge/Auth-scrypt%20sessions-34536A?style=flat-square" alt="scrypt password authentication and signed sessions">
 <img src="https://img.shields.io/badge/Amazon-Rekognition-01A88D?style=flat-square" alt="Amazon Rekognition">
 <img src="https://img.shields.io/badge/AWS-Amplify-FF9900?style=flat-square&logo=awsamplify&logoColor=white" alt="AWS Amplify">
 <img src="https://img.shields.io/badge/Google%20Maps-Places%20API-4285F4?style=flat-square&logo=googlemaps&logoColor=white" alt="Google Maps Platform">
 <img src="https://img.shields.io/badge/uv-managed-DE5FE9?style=flat-square&logo=uv&logoColor=white" alt="uv">
-<img src="https://img.shields.io/badge/Vitest-81%20cases-6E9F18?style=flat-square&logo=vitest&logoColor=white" alt="81 Vitest cases">
+<img src="https://img.shields.io/badge/Vitest-383%20cases-6E9F18?style=flat-square&logo=vitest&logoColor=white" alt="383 Vitest cases">
 
 <br><br>
 
@@ -122,7 +122,7 @@ Keeping up with your own street shouldn't be a part-time job. In Fremont, city d
 <td width="33%" valign="top">
 <img src="docs/readme/icons/groups.svg" width="48" alt=""><br>
 <b>Neighborhood groups</b> · <code>/groups</code><br>
-<sub>Type an address or cross street and Docket matches it to one of 32 official neighborhoods. Join with a 6-digit email code, no password, and see what the group is watching.</sub>
+<sub>Type an address or cross street and Docket matches it to one of 32 official neighborhoods. Create an account, join the conversation, and see what the group is watching.</sub>
 </td>
 <td width="33%" valign="top">
 <img src="docs/readme/icons/places.svg" width="48" alt=""><br>
@@ -261,7 +261,7 @@ flowchart LR
 
   UI --> API
   UI --> GM
-  API --> COG["Amazon Cognito<br/>email one-time codes"]
+  API --> AUTH["Email + password accounts<br/>scrypt + signed sessions"]
   API --> DSQL[("Aurora DSQL<br/>shared source of truth")]
   API --> MEDIA[("Private S3 media bucket<br/>presigned uploads")]
   API --> REK["Amazon Rekognition<br/>photo and video checks"]
@@ -285,7 +285,7 @@ flowchart LR
   class UI,GM sky
   class API,CHAT,PIPE grass
   class DSQL,MEDIA,VEC,RAW stone
-  class COG,REK,LLM,LIVE,NEWS,CIVIC wood
+  class AUTH,REK,LLM,LIVE,NEWS,CIVIC wood
 ```
 
 **Boundaries that matter**
@@ -293,7 +293,7 @@ flowchart LR
 - 🔐 The browser never receives AWS credentials. The Next.js server reaches DSQL, S3, Rekognition and AgentCore with its compute role, and invokes the chat runtime server-side.
 - 🧱 Aurora DSQL is the shared source of truth. The **web app** owns neighborhoods, groups, issues, polls, members, memberships, votes, reviews, posts, likes and media reviews ([`frontend/db/migrations`](frontend/db/migrations)). The **agent** owns `agent_*` tables for sources, documents, chunks, outputs, claims, chat sessions and runs ([`backend/migrations`](backend/migrations)).
 - 🎟️ The pipeline runs in its own runtime with its own least-privilege IAM policy ([`backend/agentcore/policies`](backend/agentcore/policies)). Its Firecrawl key lives in AWS Secrets Manager.
-- 💸 Serverless all the way down (DSQL, S3 Vectors, Cognito Essentials, AgentCore), sized to run on a few dollars a month.
+- 💸 Serverless all the way down (DSQL, S3 Vectors, AgentCore), sized to run on a few dollars a month.
 
 More detail: [architecture notes](docs/architecture.md) · [architecture diagram](docs/architecture.svg).
 
@@ -426,7 +426,7 @@ Full question-by-question results: [`backend/docs/eval-results.md`](backend/docs
 | 🗄️ | **Aurora DSQL** with IAM auth | App data, agent documents, chunks, outputs, chat history |
 | 🧲 | **Amazon S3 Vectors** + BM25 (`rank-bm25`) | Hybrid retrieval |
 | 🪣 | **Amazon S3** | Raw source originals, feed photos and videos |
-| 🔑 | **Amazon Cognito** (Essentials) + SES | Passwordless email one-time codes |
+| 🔑 | **Node.js scrypt** + signed HTTP-only cookies | Email-and-password accounts and sessions |
 | 🛡️ | **Amazon Rekognition** | Photo and video moderation |
 | 🕸️ | **Firecrawl**, trafilatura, pypdf | Polite fetching and text extraction |
 | 🗺️ | **Google Maps JavaScript API** + **Places API (New)** | Places map, search, address autocomplete |
@@ -464,7 +464,6 @@ Open http://localhost:3000. The UI works on its own with sample data; sign-in, p
 | `SESSION_SECRET` | Signs session cookies (32+ random characters) |
 | `APP_URL` | Absolute origin of the site |
 | `DSQL_ENDPOINT`, `DSQL_USER` | Aurora DSQL cluster and role |
-| `COGNITO_USER_POOL_ID`, `COGNITO_CLIENT_ID` | Email one-time code sign-in |
 | `DOCKET_MEDIA_BUCKET` | Private S3 bucket for feed photos and videos (text-only posts without it) |
 | `DOCKET_CHAT_RUNTIME_ARN` | Deployed `docket_chat` AgentCore runtime |
 | `DOCKET_CHAT_URL` | Local fallback, e.g. `http://localhost:8000/chat` |
@@ -480,7 +479,7 @@ Open http://localhost:3000. The UI works on its own with sample data; sign-in, p
 
 ```bash
 cd frontend
-bash scripts/aws-provision.sh          # Cognito user pool and app client, IDs written to .env.local
+bash scripts/aws-provision.sh          # Aurora DSQL cluster, endpoint written to .env.local
 bash scripts/aws-media-bucket.sh       # private S3 bucket for feed media
 bash scripts/aws-media-moderation.sh   # Rekognition permissions for the local dev user
 bash scripts/aws-dev-user.sh           # least-privilege IAM user for the dev server
@@ -651,7 +650,7 @@ DOCKET/
 
 | Area | Endpoints |
 | --- | --- |
-| Auth | `POST /api/auth/start` · `POST /api/auth/verify` · `POST /api/auth/resend` · `POST /api/auth/signout` · `GET /api/auth/me` |
+| Auth | `POST /api/auth/register` · `POST /api/auth/login` · `POST /api/auth/signout` · `GET /api/auth/me` |
 | Groups | `GET /api/find` · `GET /api/groups` · `GET /api/groups/[slug]` · `POST /api/groups/[slug]/join` · `/api/groups/[slug]/membership` |
 | Issues | `GET /api/issues` · `GET /api/issues/[id]` · `/api/issues/[id]/votes` · `/api/issues/[id]/reviews` |
 | Feed | `/api/posts` · `/api/posts/[id]` · `/api/posts/[id]/like` · `/api/posts/[id]/replies` · `POST /api/posts/media` · `POST /api/posts/media/review` |

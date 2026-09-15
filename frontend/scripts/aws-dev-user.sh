@@ -6,7 +6,7 @@
 # The user can only:
 #   - connect to the Docket Aurora DSQL cluster (admin role, for local dev and seeding)
 #   - invoke the docket_chat AgentCore runtime
-# Cognito sign-in uses public APIs and needs no IAM permissions.
+# Account sign-in is handled by the web server and needs no IAM permissions.
 #
 # Keys are written straight into frontend/.env.local (gitignored) and never printed.
 # Rotate:  aws iam delete-access-key --user-name docket-local-dev --access-key-id <id>, then re-run.

@@ -37,7 +37,7 @@ The project deploys two Amazon Bedrock AgentCore runtimes:
 - `docket_chat` answers resident questions with citations from the indexed
   civic corpus.
 
-The Next.js web app provides the resident experience, Cognito sign-in,
+The Next.js web app provides the resident experience, email-and-password sign-in,
 neighborhood membership, reviews, and community voting. Its server route calls
 the AgentCore chat runtime, so AWS credentials never reach the browser.
 

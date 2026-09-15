@@ -3,7 +3,7 @@
 --   kind:    NULL for a neighbor's post; 'docket' for a post by the Docket agent.
 --   sources: for Docket posts, [{ "title": "...", "url": "https://..." }]
 -- DSQL can add nullable columns but not constraints, so the app validates both.
--- The agent posts as one fixed system member, which neighbors can't sign in as (no Cognito user has this id).
+-- The agent posts as one fixed system member, which neighbors can't sign in as.
 
 ALTER TABLE posts ADD COLUMN IF NOT EXISTS kind text;
 
