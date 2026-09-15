@@ -37,7 +37,7 @@ The project deploys two Amazon Bedrock AgentCore runtimes:
 - `docket_chat` answers resident questions with citations from the indexed
   civic corpus.
 
-The Next.js web app provides the resident experience, email-and-password sign-in,
+The Next.js web app provides the resident experience, email and password accounts,
 neighborhood membership, reviews, and community voting. Its server route calls
 the AgentCore chat runtime, so AWS credentials never reach the browser.
 
@@ -52,10 +52,10 @@ AI-generated text is a substitute for the original public record.
 
 ## Links
 
-- Source code: [repository URL]
-- Live demo: [live demo URL]
+- Source code: https://github.com/k1lst1x/DOCKET
+- Live demo: https://main.d2iineib6nghao.amplifyapp.com
 - Demo video: [YouTube or Vimeo URL]
-- Architecture diagram: [`docs/architecture.svg`](architecture.svg)
+- Architecture diagram: [`docs/architecture.png`](architecture.png) ([SVG](architecture.svg))
 
 ## Track
 

@@ -35,12 +35,11 @@
 <img src="https://img.shields.io/badge/Bedrock-AgentCore-232F3E?style=flat-square" alt="Amazon Bedrock AgentCore">
 <img src="https://img.shields.io/badge/Aurora-DSQL-527FFF?style=flat-square" alt="Aurora DSQL">
 <img src="https://img.shields.io/badge/S3-Vectors-569A31?style=flat-square" alt="Amazon S3 Vectors">
-<img src="https://img.shields.io/badge/Auth-scrypt%20sessions-34536A?style=flat-square" alt="scrypt password authentication and signed sessions">
 <img src="https://img.shields.io/badge/Amazon-Rekognition-01A88D?style=flat-square" alt="Amazon Rekognition">
 <img src="https://img.shields.io/badge/AWS-Amplify-FF9900?style=flat-square&logo=awsamplify&logoColor=white" alt="AWS Amplify">
 <img src="https://img.shields.io/badge/Google%20Maps-Places%20API-4285F4?style=flat-square&logo=googlemaps&logoColor=white" alt="Google Maps Platform">
 <img src="https://img.shields.io/badge/uv-managed-DE5FE9?style=flat-square&logo=uv&logoColor=white" alt="uv">
-<img src="https://img.shields.io/badge/Vitest-383%20cases-6E9F18?style=flat-square&logo=vitest&logoColor=white" alt="383 Vitest cases">
+<img src="https://img.shields.io/badge/Vitest-81%20cases-6E9F18?style=flat-square&logo=vitest&logoColor=white" alt="81 Vitest cases">
 
 <br><br>
 
@@ -261,8 +260,7 @@ flowchart LR
 
   UI --> API
   UI --> GM
-  API --> AUTH["Email + password accounts<br/>scrypt + signed sessions"]
-  API --> DSQL[("Aurora DSQL<br/>shared source of truth")]
+  API --> DSQL[("Aurora DSQL<br/>shared source of truth<br/>email + password accounts")]
   API --> MEDIA[("Private S3 media bucket<br/>presigned uploads")]
   API --> REK["Amazon Rekognition<br/>photo and video checks"]
   API --> LIVE["Live feeds<br/>CHP · Caltrans · USGS · CAL FIRE · NWS · outages"]
@@ -285,7 +283,7 @@ flowchart LR
   class UI,GM sky
   class API,CHAT,PIPE grass
   class DSQL,MEDIA,VEC,RAW stone
-  class AUTH,REK,LLM,LIVE,NEWS,CIVIC wood
+  class REK,LLM,LIVE,NEWS,CIVIC wood
 ```
 
 **Boundaries that matter**
@@ -293,7 +291,7 @@ flowchart LR
 - 🔐 The browser never receives AWS credentials. The Next.js server reaches DSQL, S3, Rekognition and AgentCore with its compute role, and invokes the chat runtime server-side.
 - 🧱 Aurora DSQL is the shared source of truth. The **web app** owns neighborhoods, groups, issues, polls, members, memberships, votes, reviews, posts, likes and media reviews ([`frontend/db/migrations`](frontend/db/migrations)). The **agent** owns `agent_*` tables for sources, documents, chunks, outputs, claims, chat sessions and runs ([`backend/migrations`](backend/migrations)).
 - 🎟️ The pipeline runs in its own runtime with its own least-privilege IAM policy ([`backend/agentcore/policies`](backend/agentcore/policies)). Its Firecrawl key lives in AWS Secrets Manager.
-- 💸 Serverless all the way down (DSQL, S3 Vectors, AgentCore), sized to run on a few dollars a month.
+- 💸 Serverless all the way down (DSQL, S3 Vectors, AgentCore, Amplify), sized to run on a few dollars a month.
 
 More detail: [architecture notes](docs/architecture.md) · [architecture diagram](docs/architecture.svg).
 
@@ -426,7 +424,7 @@ Full question-by-question results: [`backend/docs/eval-results.md`](backend/docs
 | 🗄️ | **Aurora DSQL** with IAM auth | App data, agent documents, chunks, outputs, chat history |
 | 🧲 | **Amazon S3 Vectors** + BM25 (`rank-bm25`) | Hybrid retrieval |
 | 🪣 | **Amazon S3** | Raw source originals, feed photos and videos |
-| 🔑 | **Node.js scrypt** + signed HTTP-only cookies | Email-and-password accounts and sessions |
+| 🔑 | **Email + password accounts** (scrypt hashes in Aurora DSQL) | Register and log in, signed httpOnly session cookies |
 | 🛡️ | **Amazon Rekognition** | Photo and video moderation |
 | 🕸️ | **Firecrawl**, trafilatura, pypdf | Polite fetching and text extraction |
 | 🗺️ | **Google Maps JavaScript API** + **Places API (New)** | Places map, search, address autocomplete |
@@ -686,7 +684,7 @@ DOCKET/
 - [x] Automatic content checks for text, photos and videos
 - [x] Fremont news with neighborhood relevance filters
 - [x] Places map with live incidents and local issues
-- [x] Groups, passwordless sign-in, community votes and reviews
+- [x] Groups, email and password accounts, community votes and reviews
 - [x] Context-aware chat with numbered citations
 - [x] Pipeline agent with verified, cited generation
 - [x] Both AgentCore runtimes deployed, groundedness evals passing
@@ -694,7 +692,6 @@ DOCKET/
 - [x] Replace sample groups and agenda items with live agent outputs
 - [x] ArcGIS FeatureServer parser for neighborhood and zoning layers
 - [ ] Production Amplify wiring for chat, media and moderation
-- [ ] Email codes for every resident (SES production access)
 
 <img src="docs/readme/divider.svg" width="100%" alt="">
 

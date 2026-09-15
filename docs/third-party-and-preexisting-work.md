@@ -9,7 +9,7 @@ licenses and terms continue to apply.
 | Next.js, React, TypeScript, Tailwind CSS | Web application framework and presentation layer |
 | FastAPI, Uvicorn, uv | Python API and development tooling |
 | Strands Agents SDK | Agent orchestration and tool-use framework |
-| Amazon Bedrock AgentCore, Aurora DSQL, S3, S3 Vectors, Amplify | Deployment, persistence, retrieval, and hosting services |
+| Amazon Bedrock, Bedrock AgentCore, Aurora DSQL, S3, S3 Vectors, Rekognition, EventBridge Scheduler, Amplify | Models, deployment, persistence, retrieval, moderation, scheduling, and hosting services |
 | Firecrawl | Retrieval of public civic web pages where configured |
 | Google Maps Platform | Neighborhood place discovery and map display where configured |
 | Public Fremont and California civic websites | Source material for the agent's evidence corpus |

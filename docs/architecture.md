@@ -8,9 +8,9 @@
 flowchart LR
   Resident --> UI[Next.js on Amplify]
   UI --> WebAPI[Next.js server routes]
-  WebAPI --> Auth[Email/password accounts and signed sessions]
   WebAPI --> DSQL[Aurora DSQL]
   WebAPI --> Chat[AgentCore chat runtime]
+  Scheduler[EventBridge Scheduler] --> Pipeline
   Pipeline[AgentCore pipeline runtime] --> DSQL
   Pipeline --> S3[S3 and S3 Vectors]
   Pipeline --> Sources[Public civic sources via Firecrawl/HTTP]
@@ -18,8 +18,8 @@ flowchart LR
   Chat --> S3
 ```
 
-The frontend owns browser presentation. Its server routes own password authentication and signed sessions,
-membership, votes and reviews. `backend/` is the only Python backend and owns ingestion,
+The frontend owns browser presentation. Its server routes own email and password accounts
+(scrypt hashes in DSQL), sessions, membership, votes and reviews. `backend/` is the only Python backend and owns ingestion,
 retrieval, cited generation and AgentCore runtimes. Credentials stay server-side.
 
 ## Runtime boundaries
