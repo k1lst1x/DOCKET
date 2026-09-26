@@ -126,7 +126,7 @@ Keeping up with your own street shouldn't be a part-time job. In Fremont, city d
 <td width="33%" valign="top">
 <img src="docs/readme/icons/places.svg" width="48" alt=""><br>
 <b>Places map</b> · <code>/places</code><br>
-<sub>Google Maps with neighborhood outlines, category filters, search suggestions sorted nearest first, and detail cards with photos, hours, ratings and websites.</sub>
+<sub>Google Maps with neighborhood outlines, category filters, search suggestions sorted nearest first, and detail cards with photos, hours, ratings, websites and live incident markers.</sub>
 </td>
 </tr>
 <tr>
@@ -138,7 +138,7 @@ Keeping up with your own street shouldn't be a part-time job. In Fremont, city d
 <td valign="top">
 <img src="docs/readme/icons/alert.svg" width="48" alt=""><br>
 <b>Live incidents</b> · <code>/places</code><br>
-<sub>CHP calls, Caltrans lane closures, earthquakes, CAL FIRE incidents, power outages and National Weather Service alerts, refreshed every minute and pinned on the map.</sub>
+<sub>CHP calls, Caltrans lane closures, earthquakes, CAL FIRE incidents, power outages and National Weather Service alerts, refreshed on their own source schedules and exposed on the places map.</sub>
 </td>
 <td valign="top">
 <img src="docs/readme/icons/votes.svg" width="48" alt=""><br>
